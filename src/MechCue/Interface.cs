@@ -131,6 +131,12 @@ public partial class MainForm
         trackList.SelectedIndex = 2; if (!axis.Enabled) throw new Exception("Direct motion axis disabled");
         trackList.SelectedIndex = 0;
         if (kind.Text != "距離拘束") throw new Exception("Returning to track lost driver kind");
+        if (!plot.Overlay || trackList.CheckedItems.Count != tracks.Count) throw new Exception("Overlay must initially show all tracks");
+        trackList.SetItemChecked(2, false); Commit();
+        if (!plot.Hidden.Contains(tracks[2]) || trackList.GetItemChecked(2)) throw new Exception("Visibility choice lost after commit");
+        trackList.SetItemChecked(2, true);
+        overlay.Checked = false; if (plot.Overlay) throw new Exception("Individual display toggle failed");
+        overlay.Checked = true;
         if (!kind.Items.Contains("部品座標") || collision.Checked) throw new Exception("New mode/options defaults mismatch");
         var doc = new SelfTest.FakeDocument(); var app = new SelfTest.FakeApplication { ActiveDocument = doc }; app.OpenDocuments.Items.Add(doc);
         var part = new SelfTest.FakePart(); doc.Occurrences.Items.Add(part); doc.SelectSet.Items.Add(part);

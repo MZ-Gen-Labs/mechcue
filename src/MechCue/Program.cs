@@ -60,12 +60,14 @@ public partial class MainForm : Form
 {
     readonly List<Track> tracks = [new() { Name = "スライダー" }, new() { Name = "回転軸", Kind = "角度拘束", Points = [new(0, 0), new(2, 90), new(4, 0)] }, new() { Name = "搬送部品", Kind = "部品移動" }];
     readonly Bridge bridge;
-    readonly ListBox trackList = new() { Dock = DockStyle.Fill };
+    readonly CheckedListBox trackList = new() { Dock = DockStyle.Fill };
     readonly ComboBox kind = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
     readonly ComboBox axis = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 60 };
     readonly ComboBox target = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
     readonly TextBox name = new() { Width = 160 };
     readonly DataGridView grid = new() { Dock = DockStyle.Fill, AllowUserToAddRows = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+    readonly CheckBox overlay = new() { Text = "重ねて表示", Checked = true, AutoSize = true };
+    readonly FlowLayoutPanel legend = new() { Dock = DockStyle.Top, Height = 36, AutoScroll = true, WrapContents = false };
     readonly Plot plot = new() { Dock = DockStyle.Fill };
     readonly Label status = new() { Dock = DockStyle.Bottom, Height = 34, Text = "点：時間・変位を編集 / 線分：上下へ移動 / 空白：時刻変更 / Shift：時刻変更 / Esc：取消" };
     readonly Label connection = new() { Dock = DockStyle.Bottom, Height = 30, Text = "未接続：Solid Edgeに接続 → 駆動先を登録 → Solid Edgeへ反映をオン", ForeColor = Color.DarkOrange };
@@ -94,7 +96,7 @@ public partial class MainForm : Form
         top.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true }); top.Controls.Add(time);
         Add(top, "▶ 再生", () => { Commit(); playStart = (double)time.Value; watch.Restart(); timer.Start(); });
         Add(top, "停止", () => timer.Stop());
-        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live); top.Controls.Add(collision);
+        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live); top.Controls.Add(collision); top.Controls.Add(overlay);
         ConfigureModes(top);
         Add(top, "使い方", ShowQuickStart);
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 230 };
@@ -126,7 +128,7 @@ public partial class MainForm : Form
         editor.Controls.Add(axisHelp);
         ConfigurePreset(editor);
         var vertical = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 360 };
-        vertical.Panel1.Controls.Add(plot); vertical.Panel2.Controls.Add(grid);
+        vertical.Panel1.Controls.Add(plot); vertical.Panel1.Controls.Add(legend); vertical.Panel2.Controls.Add(grid);
         vertical.Panel1.Controls.Add(Heading("タイムチャート"));
         vertical.Panel2.Controls.Add(Heading("選択機構の点を数値で編集"));
         var workspace = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel2 };
@@ -135,6 +137,14 @@ public partial class MainForm : Form
         Controls.Add(split); Controls.Add(top); Controls.Add(connection); Controls.Add(status);
         kind.Items.AddRange(["距離拘束", "角度拘束", "部品移動", "部品回転", "部品座標"]); axis.Items.AddRange(["X", "Y", "Z"]);
         grid.Columns.Add("Time", "時間 [s]"); grid.Columns.Add("Value", "変位 [mm] / 角度 [°]");
+        plot.Overlay = overlay.Checked;
+        overlay.CheckedChanged += (_, _) => { timer.Stop(); plot.Overlay = overlay.Checked; plot.Invalidate(); };
+        trackList.ItemCheck += (_, e) =>
+        {
+            if (loading || e.Index >= tracks.Count) return;
+            if (e.NewValue == CheckState.Checked) plot.Hidden.Remove(tracks[e.Index]); else plot.Hidden.Add(tracks[e.Index]);
+            plot.Invalidate();
+        };
         trackList.SelectedIndexChanged += (_, _) => LoadTrack();
         kind.SelectedIndexChanged += (_, _) => { UpdateAxisHelp(); if (!loading) Guard(PopulateTargets); };
         time.ValueChanged += (_, _) => Guard(() => { plot.Time = (double)time.Value; plot.Invalidate(); if (live.Checked) Drive(plot.Time); });
@@ -197,7 +207,18 @@ public partial class MainForm : Form
         connection.ForeColor = live.Checked ? Color.DarkGreen : Color.DarkOrange;
     }
     void Error(Exception ex) { status.Text = "停止：" + (ex.InnerException ?? ex).Message; MessageBox.Show(this, status.Text, "確認", MessageBoxButtons.OK, MessageBoxIcon.Information); }
-    void RefreshTracks(int selected) { loading = true; trackList.Items.Clear(); trackList.Items.AddRange(tracks.Select(t => t.Name).ToArray()); trackList.SelectedIndex = selected; loading = false; LoadTrack(); plot.Tracks = tracks; plot.Invalidate(); }
+    void RefreshTracks(int selected) { loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
+        foreach (var t in tracks) trackList.Items.Add(t.Name, !plot.Hidden.Contains(t));
+        foreach (Control control in legend.Controls.Cast<Control>().ToArray()) control.Dispose();
+        legend.Controls.Clear();
+        for (int n = 0; n < tracks.Count; n++)
+        {
+            int index = n;
+            var label = new Label { AutoSize = true, Text = $"━ {tracks[n].Name} [{(Plot.IsAngle(tracks[n]) ? "°" : "mm")}]", ForeColor = Plot.TrackColor(n), Margin = new Padding(8, 6, 8, 0), Cursor = Cursors.Hand };
+            label.Click += (_, _) => trackList.SelectedIndex = index;
+            legend.Controls.Add(label);
+        }
+        trackList.SelectedIndex = selected; loading = false; LoadTrack(); plot.Tracks = tracks; plot.Invalidate(); }
     void LoadTrack()
     {
         if (loading) return;
@@ -236,6 +257,11 @@ public partial class MainForm : Form
 class Plot : Control
 {
     public bool EditMode = true;
+    public bool Overlay;
+    public HashSet<Track> Hidden = [];
+    IEnumerable<int> VisibleIndices => Enumerable.Range(0, Tracks.Count).Where(i => !Hidden.Contains(Tracks[i]));
+    public static bool IsAngle(Track t) => t.Kind.Contains("角度") || t.Kind == "部品回転";
+    IEnumerable<int> Editable => Overlay ? VisibleIndices.Where(i => i == Selected) : VisibleIndices;
     public Action<int, int>? PointSelected;
     public List<Track> Tracks = [];
     public int Selected;
@@ -253,14 +279,15 @@ class Plot : Control
     Point mouseOrigin;
     bool moved;
     readonly ToolTip hint = new();
-    record PlotScale(double End, double Min, double Max, float Top, float Bottom, int Width)
+    record PlotScale(double End, double Min, double Max, float Top, float Bottom, int Width, int RightMargin = 30)
     {
-        public float X(double time) => (float)(65 + time / End * Math.Max(1, Width - 95));
+        public float X(double time) => (float)(65 + time / End * Math.Max(1, Width - 65 - RightMargin));
         public float Y(double value) => (float)(Bottom - (value - Min) / (Max - Min) * (Bottom - Top));
-        public double Time(float x) => Math.Clamp((x - 65.0) / Math.Max(1, Width - 95), 0, 1) * End;
+        public double Time(float x) => Math.Clamp((x - 65.0) / Math.Max(1, Width - 65 - RightMargin), 0, 1) * End;
         public double Value(float y) => Min + (Bottom - y) / Math.Max(1, Bottom - Top) * (Max - Min);
     }
-    static readonly Color[] Colors = [Color.DodgerBlue, Color.DarkOrange, Color.MediumSeaGreen, Color.MediumPurple];
+    static readonly Color[] Colors = [Color.DodgerBlue, Color.DarkOrange, Color.MediumSeaGreen, Color.MediumPurple, Color.Firebrick, Color.Teal, Color.SaddleBrown, Color.DeepPink];
+    public static Color TrackColor(int index) => Colors[index % Colors.Length];
     public Plot()
     {
         DoubleBuffered = true; BackColor = Color.FromArgb(246, 248, 252); TabStop = true;
@@ -269,17 +296,26 @@ class Plot : Control
     }
     PlotScale GetScale(int index)
     {
-        if (dragViewScale != null && index == dragTrack) return dragViewScale;
+        if (dragViewScale != null && (index == dragTrack || (Overlay && IsAngle(Tracks[index]) == IsAngle(Tracks[dragTrack])))) return dragViewScale;
         var t = Tracks[index];
-        float rowHeight = (Height - 35f) / Tracks.Count;
-        double min = t.Points.Min(p => p.Value), max = t.Points.Max(p => p.Value);
+        var visible = VisibleIndices.ToArray();
+        var values = Overlay ? visible.Where(i => IsAngle(Tracks[i]) == IsAngle(t)).SelectMany(i => Tracks[i].Points).ToArray() : t.Points.ToArray();
+        double min = values.Length == 0 ? 0 : values.Min(p => p.Value), max = values.Length == 0 ? 1 : values.Max(p => p.Value);
         double padding = Math.Max((max - min) * 0.2, Math.Max(Math.Abs(max), Math.Abs(min)) * 0.001);
         padding = Math.Max(padding, 0.1);
-        return new PlotScale(dragScale?.End ?? End, min - padding, max + padding, index * rowHeight + 25, Math.Max(index * rowHeight + 26, (index + 1) * rowHeight - 16), Width);
+        if (Overlay) return new PlotScale(dragScale?.End ?? End, min - padding, max + padding, 32, Math.Max(33, Height - 30), Width, 65);
+        float rowHeight = (Height - 35f) / Math.Max(1, visible.Length);
+        int row = Array.IndexOf(visible, index);
+        return new PlotScale(dragScale?.End ?? End, min - padding, max + padding, row * rowHeight + 25, Math.Max(row * rowHeight + 26, (row + 1) * rowHeight - 16), Width);
+    }
+    internal PointF PointLocation(int track, int point)
+    {
+        var scale = GetScale(track); var key = Tracks[track].Points[point];
+        return new PointF(scale.X(key.Time), scale.Y(key.Value));
     }
     (int Track, int Point) Hit(Point mouse)
     {
-        for (int n = 0; n < Tracks.Count; n++)
+        foreach (int n in Editable)
         {
             var scale = GetScale(n);
             for (int i = 0; i < Tracks[n].Points.Count; i++)
@@ -294,7 +330,7 @@ class Plot : Control
     {
         double nearest = 49;
         (int Track, int Point) result = (-1, -1);
-        for (int n = 0; n < Tracks.Count; n++)
+        foreach (int n in Editable)
         {
             var scale = GetScale(n);
             for (int i = 0; i < Tracks[n].Points.Count - 1; i++)
@@ -330,7 +366,7 @@ class Plot : Control
         }
         else { scrubbing = true; Capture = true; Seek?.Invoke(GetTime(e.X)); }
     }
-    double GetTime(int x) => Math.Clamp((x - 65.0) / Math.Max(1, Width - 95), 0, 1) * End;
+    double GetTime(int x) => Math.Clamp((x - 65.0) / Math.Max(1, Width - (Overlay ? 130 : 95)), 0, 1) * End;
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
@@ -398,18 +434,55 @@ class Plot : Control
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e); var g = e.Graphics; g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        if (Tracks.Count == 0) return;
-        float rowHeight = (Height - 35f) / Tracks.Count;
-        for (int n = 0; n < Tracks.Count; n++)
+        var visible = VisibleIndices.ToArray();
+        if (visible.Length == 0) { g.DrawString("機構一覧のチェックで表示する変数を選んでください。", Font, Brushes.Gray, 65, 35); return; }
+        void Grid(PlotScale scale)
+        {
+            for (int i = 0; i <= 4; i++)
+            {
+                float x = scale.X(scale.End * i / 4);
+                g.DrawLine(Pens.LightGray, x, scale.Top, x, scale.Bottom);
+                g.DrawString($"{scale.End * i / 4:0.##} s", Font, Brushes.Gray, x - 10, scale.Bottom + 3);
+            }
+        }
+        void Axis(PlotScale scale, bool right, string unit)
+        {
+            float x = right ? Width - 61 : 3;
+            g.DrawString(unit, Font, Brushes.DimGray, x, 1);
+            for (int i = 0; i <= 4; i++)
+            {
+                double value = scale.Min + (scale.Max - scale.Min) * i / 4;
+                float y = scale.Y(value);
+                g.DrawString($"{value:0.###}", Font, Brushes.Gray, x, y - 7);
+                if (!right) g.DrawLine(Pens.Gainsboro, scale.X(0), y, scale.X(scale.End), y);
+            }
+        }
+        if (Overlay)
+        {
+            Grid(GetScale(visible[0]));
+            int distance = Array.FindIndex(visible, i => !IsAngle(Tracks[i]));
+            int angle = Array.FindIndex(visible, i => IsAngle(Tracks[i]));
+            if (distance >= 0) Axis(GetScale(visible[distance]), false, "mm");
+            if (angle >= 0) Axis(GetScale(visible[angle]), true, "°");
+            if (visible.Contains(Selected))
+            {
+                using var brush = new SolidBrush(TrackColor(Selected));
+                g.DrawString($"編集対象：{Tracks[Selected].Name}   {Tracks[Selected].At(Time):0.###} {(IsAngle(Tracks[Selected]) ? "°" : "mm")}", Font, brush, 65, 2);
+            }
+        }
+        foreach (int n in visible.OrderBy(i => i == Selected ? 1 : 0))
         {
             var t = Tracks[n]; var scale = GetScale(n); float top = scale.Top, bottom = scale.Bottom;
-            double min = scale.Min, max = scale.Max;
             float X(double x) => scale.X(x);
             float Y(double y) => scale.Y(y);
-            g.DrawString($"{t.Name}   {t.At(Time):0.###} {(t.Kind.Contains("角度") || t.Kind == "部品回転" ? "°" : "mm")}", Font, Brushes.DimGray, 65, n * rowHeight + 2);
-            for (int i = 0; i <= 4; i++) { float x = X(scale.End * i / 4); g.DrawLine(Pens.LightGray, x, top, x, bottom); if (n == Tracks.Count - 1) g.DrawString($"{scale.End * i / 4:0.##} s", Font, Brushes.Gray, x - 10, bottom + 3); }
-            g.DrawString($"{max:0.###}", Font, Brushes.Gray, 3, top); g.DrawString($"{min:0.###}", Font, Brushes.Gray, 3, bottom - 12);
-            using var pen = new Pen(Colors[n % Colors.Length], n == Selected ? 3 : 2);
+            if (!Overlay)
+            {
+                g.DrawString($"{t.Name}   {t.At(Time):0.###} {(IsAngle(t) ? "°" : "mm")}", Font, Brushes.DimGray, 65, top - 23);
+                Grid(scale);
+                g.DrawString($"{scale.Max:0.###}", Font, Brushes.Gray, 3, top);
+                g.DrawString($"{scale.Min:0.###}", Font, Brushes.Gray, 3, bottom - 12);
+            }
+            using var pen = new Pen(TrackColor(n), n == Selected ? 3.5f : 1.5f);
             g.DrawLines(pen, t.Points.Select(p => new PointF(X(p.Time), Y(p.Value))).ToArray());
             if (dragTrack == n && draggingSegment)
             {
@@ -417,13 +490,15 @@ class Plot : Control
                 var a = t.Points[dragPoint]; var b = t.Points[dragPoint + 1];
                 g.DrawLine(selectedPen, X(a.Time), Y(a.Value), X(b.Time), Y(b.Value));
             }
-            foreach (var p in t.Points) { g.FillEllipse(Brushes.White, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); g.DrawEllipse(pen, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); }
+            if (!Overlay || n == Selected)
+                foreach (var p in t.Points) { g.FillEllipse(Brushes.White, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); g.DrawEllipse(pen, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); }
             if (dragTrack == n && dragPoint >= 0)
             {
-                var p = t.Points[dragPoint]; string text = $"{p.Time:0.###} s / {p.Value:0.###}";
-                g.DrawString(text, Font, Brushes.Black, Math.Clamp(X(p.Time) + 12, 65, Math.Max(65, Width - 190)), Math.Max(top, Y(p.Value) - 24));
+                var p = t.Points[dragPoint];
+                g.DrawString($"{p.Time:0.###} s / {p.Value:0.###}", Font, Brushes.Black, Math.Clamp(X(p.Time) + 12, 65, Math.Max(65, Width - 190)), Math.Max(top, Y(p.Value) - 24));
             }
-            float cursor = X(Time); g.DrawLine(Pens.Crimson, cursor, top, cursor, bottom); g.FillEllipse(Brushes.Crimson, cursor - 4, Y(t.At(Time)) - 4, 8, 8);
+            float cursor = X(Time); g.DrawLine(Pens.Crimson, cursor, top, cursor, bottom);
+            g.FillEllipse(Brushes.Crimson, cursor - 4, Y(t.At(Time)) - 4, 8, 8);
         }
     }
 }

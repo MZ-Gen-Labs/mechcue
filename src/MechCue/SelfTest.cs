@@ -17,6 +17,7 @@ static class SelfTest
         editable = new Track(); editable.ShiftSegment(0, 25);
         Assert(editable.Points.SequenceEqual(new[] { new KeyPoint(0, 25), new KeyPoint(2, 125), new KeyPoint(4, 0) }), "Segment keeps times, slope, and other endpoint");
         TestDrag();
+        TestOverlay();
         TestConnectionRecovery();
         TestReassignment();
         TestCoordinateAndCollision();
@@ -207,6 +208,32 @@ static class SelfTest
         public void Down(int x, int y) => OnMouseDown(new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
         public void DragTo(int x, int y) => OnMouseMove(new MouseEventArgs(MouseButtons.Left, 0, x, y, 0));
         public void Up(int x, int y) => OnMouseUp(new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
+    }
+    static void TestOverlay()
+    {
+        void Assert(bool ok, string message) { if (!ok) throw new Exception(message); }
+        using var host = new Form { ClientSize = new(495, 335) };
+        using var p = new TestPlot { Size = new(495, 335), Overlay = true, Tracks = [new Track(), new Track(), new Track { Kind = "角度拘束", Points = [new(0, 0), new(2, 9000), new(4, 0)] }] };
+        host.Controls.Add(p); host.Show(); Application.DoEvents();
+        var original = p.Tracks[1].Points.ToArray();
+        var point = p.PointLocation(0, 1); var anglePoint = p.PointLocation(2, 1);
+        Assert(Math.Abs(point.Y - anglePoint.Y) < 1, "Mixed units have independent axes");
+        p.Down((int)point.X, (int)point.Y); p.DragTo((int)point.X, (int)point.Y + 20); p.Up((int)point.X, (int)point.Y + 20);
+        Assert(p.Tracks[0].Points[1].Value < 100 && p.Tracks[1].Points.SequenceEqual(original), "Overlapping curves edit selected track only");
+        p.Selected = 1; p.Hidden.Add(p.Tracks[1]);
+        point = p.PointLocation(1, 1); p.Down((int)point.X, (int)point.Y); p.DragTo((int)point.X, (int)point.Y + 20); p.Up((int)point.X, (int)point.Y + 20);
+        Assert(p.Tracks[1].Points.SequenceEqual(original), "Hidden selection cannot be edited");
+        p.Hidden.Clear(); p.Selected = 0;
+        p.Tracks[1].Points = [new(0, 0), new(2, 20000), new(4, 0)];
+        float compressed = p.PointLocation(0, 1).Y;
+        p.Hidden.Add(p.Tracks[1]);
+        Assert(Math.Abs(p.PointLocation(0, 1).Y - compressed) > 30, "Hidden tracks excluded from shared axis range");
+        var before = p.PointLocation(0, 1); p.Tracks.AddRange(Enumerable.Range(0, 30).Select(i => new Track { Kind = "角度拘束" }));
+        Assert(p.PointLocation(0, 1) == before, "Overlay height independent of variable count");
+        p.Overlay = false;
+        Assert(p.PointLocation(0, 1).Y != before.Y, "Individual view remains available");
+        host.Close();
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "overlay-test-result.txt"), "PASS: independent mm/degree axes, selected-only overlapping drag, hidden editing rejection, visible-only scale, fixed plot height, individual view");
     }
     static void TestDrag()
     {
