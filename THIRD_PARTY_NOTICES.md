@@ -11,3 +11,7 @@ installed Solid Edge application. COM interface identifiers remain those of Soli
 
 .NET and Windows Forms are Microsoft technologies, distributed under their own
 terms. The .NET Desktop Runtime is installed separately; it is not bundled here.
+
+Installers are built with Inno Setup by JRSoftware. Inno Setup license and source:
+https://jrsoftware.org/files/is/license.txt
+https://github.com/jrsoftware/issrc

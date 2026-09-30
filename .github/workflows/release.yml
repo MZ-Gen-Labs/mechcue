@@ -14,6 +14,9 @@ jobs:
       - uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: '8.0.x'
+      - name: Prepare Inno Setup compiler
+        shell: pwsh
+        run: ./scripts/Setup-InnoCI.ps1
       - name: Validate version tag
         id: version
         shell: pwsh

@@ -39,7 +39,7 @@ Windows x64、Solid Edge 2026、.NET 8 Desktop Runtime（x64）が必要です�
 補間、単位、XYZ移動・回転、ドラッグ、接続喪失、再割り当てを自動テストしています。
 従来の付属DLL参照版では、Solid Edge 2026でアドインの表示・操作と距離拘束の駆動を確認しました。
 公開準備で付属DLLを不要にしたCOM定義へ変更し、2026の定義との署名照合とビルドを確認しています。
-Solid Edge 2026の実機で、新インストーラーによる導入、簡単なアドイン動作、アンインストールを利用者が確認しました。角度拘束・自由部品の各軸など、個別機能の実機確認は継続中です。
+Solid Edge 2026の実機で、従来形式のインストーラーによる導入、簡単なアドイン動作、アンインストールを利用者が確認しました。角度拘束・自由部品の各軸など、個別機能の実機確認は継続中です。
 
 距離拘束は絶対値（mm）、角度拘束は絶対値（度）です。
 部品の直接移動・回転は登録時からの変化量で、アセンブリ座標のX/Y/Zを使います。
@@ -50,13 +50,13 @@ CADは自動保存しません。切断・終了時は基準状態への復元�
 
 ## 開発・自動ビルド
 
-Windowsと.NET 8 SDKがあれば、Solid Edge本体・付属DLLなしで両版をビルドできます。
+Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLLなしで両版をビルドできます。
 
 ```powershell
 ./scripts/Build.ps1 -WithAddIn
 ```
 
-成果物は`artifacts/0.1.0-alpha.3/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、SHA256を出力します。
+成果物は`artifacts/0.1.0-alpha.4/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
@@ -73,3 +73,5 @@ ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrerelease�
 
 製品名・ファイル名・プロジェクト名・ProgIDをMechCueへ統一しています。CLSIDは既存のものを使用します。
 [MIT License](LICENSE)。Solid Edgeは別途ライセンスが必要です。[第三者情報](THIRD_PARTY_NOTICES.md)を参照してください。
+
+0.1.0-alpha.4はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
