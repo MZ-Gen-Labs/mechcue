@@ -21,7 +21,7 @@ PLC接続・プログラム読み込み、加減速モデル、干渉判定、�
 Windows x64、Solid Edge 2026、.NET 8 Desktop Runtime（x64）が必要です。
 グラフ編集だけならSolid Edgeに接続せず試せます。
 
-1. Releasesの`MechCue-<version>-Setup.exe`を実行します。Solid Edgeは終了しておきます。
+1. [Releases](https://github.com/MZ-Gen-Labs/mechcue/releases)の`MechCue-<version>-Setup.exe`を実行します。Solid Edgeは終了しておきます。
 2. アセンブリ環境のMechCueコマンドから開きます。
 3. グラフを選び、駆動先を確認して登録します。
 4. 「Solid Edgeへ反映」をオンにして時間カーソルを動かします。

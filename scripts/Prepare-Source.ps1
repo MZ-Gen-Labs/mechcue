@@ -5,7 +5,7 @@ $taskTarget = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) }
 if (Test-Path -LiteralPath $taskTarget) { throw 'Use a new source output directory' }
 $taskRoots = @('src','AddIn','Installer','scripts','tools','docs','examples','.github')
 $taskExtensions = @('.cs','.csproj','.ps1','.bat','.md','.manifest','.yml','.json')
-$taskSources = @('README.md','LICENSE','THIRD_PARTY_NOTICES.md','CONTRIBUTING.md','.gitignore','Directory.Build.props','MechCue.csproj','NuGet.Config') | ForEach-Object { Get-Item -LiteralPath (Join-Path $taskRoot $_) }
+$taskSources = @('README.md','LICENSE','THIRD_PARTY_NOTICES.md','CONTRIBUTING.md','.gitignore','.gitattributes','Directory.Build.props','MechCue.csproj','NuGet.Config') | ForEach-Object { Get-Item -LiteralPath (Join-Path $taskRoot $_) }
 foreach ($taskDirectory in $taskRoots) {
     $taskSources += Get-ChildItem -LiteralPath (Join-Path $taskRoot $taskDirectory) -File -Recurse -Force | Where-Object {
         $_.FullName -notmatch '[\\/](bin|obj)[\\/]' -and $_.Extension -in $taskExtensions
