@@ -81,8 +81,8 @@
   ],
   "駆動先を登録・変更": [
     "登録・変更",
-    "この機構の駆動先を登録または変更します。",
-    "Assign or change this track target."
+    "この機構の駆動先を登録または変更し、CADの部品選択を解除します。",
+    "Assign or change this track target, then clear the CAD selection."
   ],
   "この機構の割り当てを解除": [
     "解除",
@@ -103,5 +103,15 @@
     "CAD保存",
     "グラフ・駆動先・再生設定をアセンブリ内へ保存します。再生を止め、基準姿勢と固定拘束を戻してファイルを保存します。",
     "Save charts, targets and playback settings inside the assembly. Stop playback, restore the reference pose and grounds, then save the CAD file."
+  ],
+  "表を書き出し": [
+    "表出力",
+    "全機構の時間と値をCSV・Excelへ書き出します。",
+    "Export all track keyframes to CSV or Excel."
+  ],
+  "表を読み込み": [
+    "表読込",
+    "CSV・Excelを読み込みます。接続中は同じIDの駆動先を保持します。",
+    "Import CSV or Excel; retain matching target assignments when connected."
   ]
 }

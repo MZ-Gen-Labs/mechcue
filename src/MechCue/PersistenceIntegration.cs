@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace MechCue;
 public sealed partial class Bridge
@@ -93,6 +93,11 @@ public sealed partial class Bridge
             testBridge = new Bridge(application); testBridge.Connect();
             var coordinate = new Track { Name = "Persistent part", Kind = "部品座標", Axis = "X" };
             var partTarget = testBridge.Targets(coordinate.Kind).Single();
+            testBridge.Highlight(partTarget);
+            Assert(Convert.ToInt32(Get(Get(testDocument,"SelectSet"),"Count")) == 1,"Native CAD part selection created");
+            Assert(testBridge.TargetsFromSelection(coordinate.Kind).Count == 1,"Candidate lookup retains native selection");
+            testBridge.ClearSelection();
+            Assert(Convert.ToInt32(Get(Get(testDocument,"SelectSet"),"Count")) == 0,"Native CAD selection cleared");
             double x = testBridge.CurrentValue(coordinate, partTarget);
             coordinate.Points = [new(0,x),new(1,x + 10)];
             var before = Matrix(part); testBridge.Bind(coordinate, partTarget);

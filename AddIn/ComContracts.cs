@@ -50,3 +50,9 @@ public interface ISEAddInEx
         [In, Out, MarshalAs(UnmanagedType.SafeArray, SafeArraySubType = VarEnum.VT_I4)] ref Array ids);
     object AddInEdgeBarEvents { [return: MarshalAs(UnmanagedType.IUnknown)] get; }
 }
+
+[ComImport, Guid("1D3DA505-9BFF-11D1-BA96-080036230602"), InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
+public interface ICommandButtonStyle
+{
+    [DispId(268632071)] int Style { [PreserveSig] get; [PreserveSig] set; }
+}

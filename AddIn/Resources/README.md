@@ -1,1 +1,3 @@
-MechCue.res contains Win32 RT_BITMAP resources 101/102 (16/32 pixel color) and 103/104 (monochrome). The original MechCue chart/cursor artwork is MIT licensed. These native resources are embedded in MechCue.AddIn.dll and verified by ComContractCheck; no extra runtime file or resource compiler is required.
+MechCue.res contains seven-command horizontal bitmap strips. Resources 101/102 are 16/32 pixel color icons and 103/104 are monochrome equivalents. Commands: open chart, play, stop, maximize, minimize, compact view, save to CAD. Ribbon buttons use Solid Edge icon-and-caption-below style for large icons. The original artwork is MIT licensed.
+
+Build-Icons.py regenerates the resource using Python and Pillow. The checked-in .res is embedded in MechCue.AddIn.dll; builds and installations require neither Python nor a resource compiler. ComContractCheck verifies all four strip dimensions.

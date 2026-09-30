@@ -1,4 +1,4 @@
-﻿namespace MechCue;
+namespace MechCue;
 public static partial class SelfTest
 {
     public static void Run()
@@ -23,6 +23,7 @@ public static partial class SelfTest
         TestCoordinateAndCollision();
         TestNativeInterferenceArray();
         TestDocumentPersistence();
+        TestChartTables();
         var preset = MotionPreset.OutAndBack(10, 50, 2, 1);
         var presetTrack = new Track { Points = preset };
         Assert(presetTrack.At(0) == 10 && presetTrack.At(2.5) == 60 && presetTrack.At(5) == 10, "Preset origin, hold, and return");
@@ -43,6 +44,7 @@ public static partial class SelfTest
     {
         public List<object> Items = [];
         public int Count => Items.Count;
+        public void RemoveAll() => Items.Clear();
         public object Item(int index) => Items[index - 1];
     }
     public class FakeDocument

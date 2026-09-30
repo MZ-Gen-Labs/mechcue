@@ -1,4 +1,4 @@
-﻿# MechCue
+# MechCue
 
 **時間と変位のグラフで、Solid Edgeのアセンブリを動かす。**
 
@@ -16,6 +16,8 @@ MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート�
 - 現在値を読み込んで選択グラフの全点へ設定。
 - 干渉・解析失敗時の停止と直前の姿勢への復元（オン／オフ）。
 - 基準状態への復元、JSONの保存・読み込み。
+- CSV・Excel（.xlsx）での全機構の表出力・表読込。接続中の同一IDはCADの駆動先を維持。
+- 大きなアイコンのアドインメニュー：開く、再生、停止、最大化、最小化、最小表示、CAD保存。
 - アセンブリ内へのグラフ・駆動先・再生設定の保存と、接続時の自動復元。
 
 PLC接続・プログラム読み込み、加減速モデル、負荷計算は未対応です。
@@ -65,7 +67,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 ./scripts/Build.ps1 -WithAddIn
 ```
 
-成果物は`artifacts/0.1.0-alpha.13/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、SHA256を出力します。
+成果物は`artifacts/0.1.0-alpha.14/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
@@ -83,4 +85,4 @@ ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrerelease�
 製品名・ファイル名・プロジェクト名・ProgIDをMechCueへ統一しています。CLSIDは既存のものを使用します。
 [MIT License](LICENSE)。Solid Edgeは別途ライセンスが必要です。[第三者情報](THIRD_PARTY_NOTICES.md)を参照してください。
 
-0.1.0-alpha.13はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
+0.1.0-alpha.14はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。

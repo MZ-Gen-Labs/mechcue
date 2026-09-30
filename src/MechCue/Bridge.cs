@@ -36,6 +36,7 @@ public sealed partial class Bridge
         for (int i = 1; i <= Convert.ToInt32(Get(related, "Count")); i++) relations.Add(GetItem(related, i));
         return Targets(kind).Where(t => relations.Any(r => Equals(r, t.Com))).ToList();
     }
+    public void ClearSelection() { Check(); Call(Get(doc!, "SelectSet"), "RemoveAll"); }
     public void Highlight(Target target)
     {
         Check();

@@ -142,5 +142,19 @@
   "設定をアセンブリへ反映しました。Solid Edgeでファイルを保存してください。": "Settings written to the assembly. Save the file in Solid Edge.",
   "設定を保存できませんでした：": "Could not save settings: ",
   "保存せずに閉じますか？": "Close without saving?",
-  " / 設定変更あり：CAD保存": " / Settings changed: Save to CAD"
+  " / 設定変更あり：CAD保存": " / Settings changed: Save to CAD",
+  "表出力": "Export table",
+  "表読込": "Import table",
+  "最大化": "Maximize",
+  "最小化": "Minimize",
+  "タイムチャートを開きます。": "Open the time chart.",
+  "現在のCAD反映設定で再生します。": "Play using the current CAD reflection setting.",
+  "再生を停止します。": "Stop playback.",
+  "MechCueの画面を最大化します。": "Maximize the MechCue window.",
+  "MechCueの画面を最小化します。": "Minimize the MechCue window.",
+  "編集画面と最小表示を切り替えます。": "Toggle the edit and compact views.",
+  "設定をアセンブリへ保存します。": "Save settings inside the assembly.",
+  "CSV・Excelへグラフを書き出しました。": "Charts exported to CSV / Excel.",
+  "グラフを読み込みました。一致するIDの割り当てと、ファイルにない機構は保持しています。": "Charts imported. Matching target assignments and omitted tracks were retained.",
+  "割り当て済みの機構の駆動方法・軸は変更できません。先に解除してください。": "Unassign the target before changing its drive mode or axis."
 }

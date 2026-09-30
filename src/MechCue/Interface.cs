@@ -1,4 +1,4 @@
-﻿namespace MechCue;
+namespace MechCue;
 
 public partial class MainForm
 {
@@ -219,7 +219,25 @@ public partial class MainForm
         form.grid.Rows[1].Cells[1].Value = 25d; form.Commit(); form.ReadCurrentValues();
         if (form.Current.Points.Any(p => p.Value != 12.5)) throw new Exception("Explicit current value read mismatch");
         form.Undo(); if (form.Current.Points[1].Value != 25) throw new Exception("Current value fill must be undoable");
-        form.bridge.Bind(form.Current, form.bridge.Targets(form.Current.Kind).Single()); form.MarkDocumentSettingsChanged();
+        if (doc.SelectSet.Count != 1) throw new Exception("Candidate lookup cleared CAD selection too early");
+        form.target.SelectedItem=form.bridge.Targets(form.Current.Kind).Single();
+        IEnumerable<Control> Descendants(Control control) => control.Controls.Cast<Control>().SelectMany(c => new[] { c }.Concat(Descendants(c)));
+        var assignButton=Descendants(form).OfType<Button>().Single(b => Equals(b.Tag,"駆動先を登録・変更"));
+        assignButton.PerformClick();
+        if(doc.SelectSet.Count!=0 || form.bridge.BindingCount!=1)throw new Exception("Registration must clear CAD selection after binding");
+        var bound=form.Current;var label=form.bridge.BoundLabel(bound);
+        var replacement=new Track { Id=bound.Id,Name="Externally edited",Kind=bound.Kind,Axis=bound.Axis,Points=[new(0,10),new(2,25),new(4,10)] };
+        form.ImportTableData([replacement]);
+        if(!ReferenceEquals(form.Current,bound) || form.bridge.BoundLabel(bound)!=label || form.bridge.BindingCount!=1 || form.tracks.Count!=3 || form.live.Checked || form.timer.Enabled)throw new Exception("Connected table import lost assignment or omitted tracks");
+        bool metadataRejected=false;try { form.ImportTableData([new Track { Id=bound.Id,Kind="部品座標",Axis="Y" }]); }catch(InvalidOperationException){ metadataRejected=true; }
+        if(!metadataRejected || bound.Kind!="距離拘束" || bound.Points[1].Value!=25)throw new Exception("Bound target metadata must reject before modification");
+        form.ExecuteHostAction(HostAction.Play);if(!form.timer.Enabled)throw new Exception("Ribbon play action");
+        form.ExecuteHostAction(HostAction.Stop);if(form.timer.Enabled)throw new Exception("Ribbon stop action");
+        form.ExecuteHostAction(HostAction.Compact);if(!form.compact)throw new Exception("Ribbon compact action");
+        form.ExecuteHostAction(HostAction.Compact);if(form.compact)throw new Exception("Ribbon edit action");
+        form.ExecuteHostAction(HostAction.Maximize);if(form.WindowState!=FormWindowState.Maximized)throw new Exception("Ribbon maximize action");
+        form.ExecuteHostAction(HostAction.Minimize);if(form.WindowState!=FormWindowState.Minimized)throw new Exception("Ribbon minimize action");
+        form.WindowState=FormWindowState.Normal;
         form.Close();
         using var reopened = new MainForm(hostedApplication: app);
         reopened.Show(); Application.DoEvents();

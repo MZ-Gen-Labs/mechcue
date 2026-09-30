@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 
@@ -106,7 +106,7 @@ public partial class MainForm : Form
         Add(top, "Solid Edgeに接続", ConnectDocument);
         Add(top, "基準状態に戻す", () => { live.Checked = false; timer.Stop(); bridge.Restore(); status.Text = "接続時の基準状態に戻しました。"; });
         Add(top, "切断", () => { live.Checked = false; timer.Stop(); StageOnClose(); status.Text = bridge.Disconnect() ?? "切断しました。グラフは保持しています。"; target.Items.Clear(); });
-        Add(top, "開く", LoadFile); Add(top, "保存", SaveFile); Add(top, "CADに保存", SaveToDocument);
+        Add(top, "開く", LoadFile); Add(top, "保存", SaveFile); Add(top, "CADに保存", SaveToDocument); Add(top, "表を書き出し", ExportTable); Add(top, "表を読み込み", ImportTable);
         top.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true }); top.Controls.Add(time);
         Add(top, "▶ 再生", StartPlayback);
         Add(top, "停止", () => timer.Stop());
@@ -135,7 +135,7 @@ public partial class MainForm : Form
         Add(editor, "駆動先を登録・変更", () =>
         {
             if (target.SelectedItem is not Target t) throw new InvalidOperationException("駆動先を選んでください。");
-            timer.Stop(); live.Checked = false; Commit(); bridge.Bind(Current, t); lastCheckedTime = null; MarkDocumentSettingsChanged();
+            timer.Stop(); live.Checked = false; Commit(); bridge.Bind(Current, t); lastCheckedTime = null; MarkDocumentSettingsChanged(); bridge.ClearSelection();
             PopulateTargets(); status.Text = $"登録：{Current.Name} → {t.Label}。固定拘束は直接駆動の登録中だけ抑制し、解除・切断時に復元します。";
         });
         Add(editor, "この機構の割り当てを解除", () =>
@@ -279,6 +279,7 @@ public partial class MainForm : Form
         using var d = new OpenFileDialog { Filter = UiText.Text("タイムチャート|*.json") }; if (d.ShowDialog() != DialogResult.OK) return;
         var loaded = JsonSerializer.Deserialize<List<Track>>(File.ReadAllText(d.FileName)) ?? throw new InvalidOperationException("ファイルが空です。");
         if (loaded.Count == 0) throw new InvalidOperationException("グラフがありません。");
+        if (loaded.Any(t => t == null || t.Id == Guid.Empty) || loaded.Select(t => t.Id).Distinct().Count() != loaded.Count) throw new InvalidDataException("Invalid track IDs");
         foreach (var t in loaded) { t.Validate(); if (!kind.Items.Contains(t.Kind) || !axis.Items.Contains(t.Axis)) throw new InvalidOperationException("駆動方法または軸が不正です。"); }
         timer.Stop(); history.Clear(); tracks.Clear(); tracks.AddRange(loaded); RefreshTracks(0);
     }

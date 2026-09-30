@@ -1,8 +1,9 @@
-namespace MechCue;
+﻿namespace MechCue;
 
 public record KeyPoint(double Time, double Value);
 public class Track
 {
+    public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "軸";
     public string Kind { get; set; } = "距離拘束";
     public string Axis { get; set; } = "X";

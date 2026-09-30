@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Runtime.InteropServices;
 using MechCue.AddIn.Interop;
 
@@ -63,11 +63,11 @@ static class BitmapResources
                 var resource = FindResource(module, new IntPtr(id), new IntPtr(2));
                 if (resource == IntPtr.Zero) throw new Exception("Missing Win32 bitmap resource: " + id);
                 var data = LockResource(LoadResource(module, resource));
-                if (data == IntPtr.Zero || Marshal.ReadInt32(data) != 40 || Marshal.ReadInt32(data,4) != size || Marshal.ReadInt32(data,8) != size)
+                if (data == IntPtr.Zero || Marshal.ReadInt32(data) != 40 || Marshal.ReadInt32(data,4) != 7 * size || Marshal.ReadInt32(data,8) != size)
                     throw new Exception("Invalid command bitmap: " + id);
             }
         }
         finally { FreeLibrary(module); }
-        Console.WriteLine("PASS: command bitmap resources 101-104, medium/large color and monochrome");
+        Console.WriteLine("PASS: command bitmap resources 101-104, seven command strips, medium/large color and monochrome");
     }
 }
