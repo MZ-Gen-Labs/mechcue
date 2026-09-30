@@ -8,16 +8,16 @@ public partial class MainForm
             "① グラフを編集\n点をドラッグ：時間と値を変更。線分をドラッグ：上下移動。Shift：時刻変更。Esc：取消。\n\n" +
             "② Solid Edgeに接続し、機構ごとに駆動先を登録\nCADで部品を選択して候補を表示し、対象を強調して確認します。割り当て変更は、その機構の解除だけで行えます。\n\n" +
             "③『Solid Edgeへ反映』をオンにして動作確認\n時間カーソルを動かすか再生します。反映がオフならCADは動きません。\n\n" +
-            "値：距離はmm、角度は度。拘束は絶対値、部品の直接移動・回転は登録時からの変化量です。\n\n" +
+            "値：距離はmm、角度は度。拘束は絶対値、部品移動・回転は登録時からの変化量、部品座標はアセンブリ内の絶対座標です。\n\n" +
             "保存されるのはグラフです。駆動先は接続ごとに登録します。PLC読み込みは未対応です。",
             "MechCue — はじめての操作", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
-    readonly Label axisHelp = new() { Width = 255, Height = 75, ForeColor = Color.FromArgb(80, 100, 125) };
+    readonly Label axisHelp = new() { Width = 255, Height = 110, ForeColor = Color.FromArgb(80, 100, 125) };
     void UpdateAxisHelp()
     {
         bool direct = kind.Text.StartsWith("部品");
         axis.Enabled = direct;
-        axisHelp.Text = direct ? "X/Y/Zはアセンブリ座標の方向です。回転は部品原点を中心に行います。"
+        axisHelp.Text = kind.Text == "部品座標" ? "グラフは選択軸の絶対座標 [mm]。他の座標・姿勢は登録時の値を保持します。固定拘束は登録中だけ抑制し、割り当て解除時に復元します。" : direct ? "X/Y/Zはアセンブリ座標の方向です。回転は部品原点を中心に行います。"
             : "拘束の向きは選んだ面・拘束で決まります。X/Y/Zの選択は拘束駆動には使いません。候補をCADで強調して確認してください。";
     }
     readonly RadioButton editMode = new() { Text = "編集", Checked = true, AutoSize = true };
@@ -66,7 +66,7 @@ public partial class MainForm
         int index = tracks.IndexOf(change.Track); RefreshTracks(Math.Max(0, index)); ApplyPreview();
         status.Text = "グラフの編集を元に戻しました。";
     }
-    void ApplyPreview() { if (live.Checked) bridge.Apply((double)time.Value); }
+    void ApplyPreview() { if (live.Checked) Drive((double)time.Value); }
     void ConfigurePreset(FlowLayoutPanel panel)
     {
         AddField(panel, "原点 [mm / °]", origin); AddField(panel, "移動量 [mm / °]", stroke);
@@ -78,13 +78,39 @@ public partial class MainForm
             LoadTrack(); plot.Invalidate(); ApplyPreview(); status.Text = "選択機構に往復動作を設定しました。元に戻す操作ができます。";
         });
     }
+    double? lastCheckedTime;
+    void Drive(double requestedTime)
+    {
+        if (!collision.Checked) { lastCheckedTime = null; bridge.Apply(requestedTime); return; }
+        try { bridge.ApplyChecked(requestedTime); lastCheckedTime = requestedTime; }
+        catch
+        {
+            if (lastCheckedTime is double previous)
+            {
+                // Restore the cursor without triggering a second CAD write.
+                live.Checked = false; time.Value = (decimal)previous;
+            }
+            throw;
+        }
+    }
+    void ReadCurrentValues()
+    {
+        if (target.SelectedItem is not Target chosen) throw new InvalidOperationException("駆動先を選んでください。");
+        timer.Stop(); live.Checked = false; Commit();
+        double value = bridge.CurrentValue(Current, chosen);
+        Remember(Current);
+        Current.Points = Current.Points.Select(p => p with { Value = value }).ToList();
+        LoadTrack(); plot.Invalidate();
+        status.Text = $"現在値 {value:0.###} をこのグラフの全点へ設定しました。時刻は保持しています。";
+    }
     void FromCadSelection()
     {
-        Commit();
+        timer.Stop(); live.Checked = false; Commit();
         var candidates = bridge.TargetsFromSelection(Current.Kind);
         target.Items.Clear(); target.Items.AddRange(candidates.ToArray());
         if (candidates.Count > 0) target.SelectedIndex = 0;
-        status.Text = $"選択部品に関連する候補：{candidates.Count}件。対象を確認して登録してください。";
+        if (candidates.Count == 1) ReadCurrentValues();
+        else status.Text = $"選択部品に関連する候補：{candidates.Count}件。対象を選び『現在値を読み込み全点に設定』を押してください。";
     }
     void HighlightTarget()
     {
@@ -104,6 +130,23 @@ public partial class MainForm
         editMode.Checked = true; if (!plot.EditMode) throw new Exception("Edit mode did not resume");
         trackList.SelectedIndex = 2; if (!axis.Enabled) throw new Exception("Direct motion axis disabled");
         trackList.SelectedIndex = 0;
+        if (kind.Text != "距離拘束") throw new Exception("Returning to track lost driver kind");
+        if (!kind.Items.Contains("部品座標") || collision.Checked) throw new Exception("New mode/options defaults mismatch");
+        var doc = new SelfTest.FakeDocument(); var app = new SelfTest.FakeApplication { ActiveDocument = doc }; app.OpenDocuments.Items.Add(doc);
+        var part = new SelfTest.FakePart(); doc.Occurrences.Items.Add(part); doc.SelectSet.Items.Add(part);
+        using var form = new MainForm(hostedApplication: app);
+        form.Show(); Application.DoEvents();
+        form.kind.SelectedItem = "部品座標"; form.axis.SelectedItem = "Y"; form.Commit();
+        form.FromCadSelection();
+        if (form.Current.Points.Any(p => p.Value != 600) || form.Current.Points.Select(p => p.Time).SequenceEqual(new[] { 0d,2d,4d }) == false)
+            throw new Exception("CAD coordinate read must fill values and preserve times");
+        var relation = new SelfTest.FakeRelation { Offset = 0.0125 }; part.Relations3d.Items.Add(relation); doc.Relations3d.Items.Add(relation);
+        form.kind.SelectedItem = "距離拘束"; form.Commit(); form.FromCadSelection();
+        if (form.Current.Points.Any(p => p.Value != 12.5)) throw new Exception("CAD distance read must fill all values");
+        form.grid.Rows[1].Cells[1].Value = 25d; form.Commit(); form.ReadCurrentValues();
+        if (form.Current.Points.Any(p => p.Value != 12.5)) throw new Exception("Explicit current value read mismatch");
+        form.Undo(); if (form.Current.Points[1].Value != 25) throw new Exception("Current value fill must be undoable");
+        form.Close();
     }
 }
 

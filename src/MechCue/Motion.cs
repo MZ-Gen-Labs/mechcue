@@ -49,6 +49,7 @@ public static class Transform
     {
         var m = (double[])basis.Clone();
         int a = axis == "X" ? 0 : axis == "Y" ? 1 : 2;
+        if (kind == "部品座標") { m[12 + a] = value / 1000; return m; }
         if (kind == "部品移動") { m[12 + a] += value / 1000; return m; }
         double c = Math.Cos(value * Math.PI / 180), s = Math.Sin(value * Math.PI / 180);
         int u = (a + 1) % 3, v = (a + 2) % 3;

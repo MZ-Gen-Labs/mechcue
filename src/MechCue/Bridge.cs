@@ -13,7 +13,8 @@ public sealed class Bridge
     [DllImport("oleaut32.dll", PreserveSig = false)] static extern void GetActiveObject(ref Guid clsid, IntPtr reserved, [MarshalAs(UnmanagedType.IUnknown)] out object app);
     object? app, doc;
     readonly object? hostedApplication;
-    readonly Dictionary<Track, (Target Target, object Original)> bindings = new();
+    sealed record Binding(Target Target, object Original, List<(object Relation, bool Suppress)> Grounds);
+    readonly Dictionary<Track, Binding> bindings = new();
     public Bridge() { }
     public Bridge(object hostedApplication) { this.hostedApplication = hostedApplication; }
     internal Bridge(object application, object document) { app = application; doc = document; }
@@ -167,18 +168,47 @@ public sealed class Bridge
         if (target.Property != expected) throw new InvalidOperationException("駆動方法と選択した対象が一致しません。");
         if (bindings.TryGetValue(track, out var old) && Equals(old.Target.Com, target.Com)) return;
         if (bindings.Any(pair => !ReferenceEquals(pair.Key, track) && Equals(pair.Value.Target.Com, target.Com))) throw new InvalidOperationException("この対象は別の機構に登録済みです。既存の割り当ては維持しています。");
-        if (target.Property == "Matrix" && Convert.ToInt32(Get(Get(target.Com, "Relations3d"), "Count")) > 0)
-            throw new InvalidOperationException("拘束がある部品は直接駆動できません。拘束駆動を選ぶか、Solid Edgeで直接駆動用の自由な部品を用意してください。");
+        var grounds = new List<(object Relation, bool Suppress)>();
+        if (target.Property == "Matrix")
+        {
+            var relations = Get(target.Com, "Relations3d");
+            for (int i = 1; i <= Convert.ToInt32(Get(relations, "Count")); i++)
+            {
+                var relation = GetItem(relations, i);
+                // SolidEdgeFramework.ObjectType.igGroundRelation3d (Siemens API).
+                if (Convert.ToInt32(Get(relation, "Type")) != 1959028688)
+                    throw new InvalidOperationException("固定以外の拘束がある部品は直接駆動できません。拘束駆動を選んでください。");
+                grounds.Add((relation, Convert.ToBoolean(Get(relation, "Suppress"))));
+            }
+        }
         // Validate the new target before changing the previous driver.
         if (target.Property == "Matrix") Matrix(target.Com); else Get(target.Com, target.Property);
-        if (bindings.ContainsKey(track)) RestoreBinding(old);
+        if (old != null) RestoreBinding(old);
         var original = target.Property == "Matrix" ? (object)Matrix(target.Com) : Get(target.Com, target.Property);
-        bindings[track] = (target, original);
+        try
+        {
+            foreach (var g in grounds) Set(g.Relation, "Suppress", true);
+            bindings[track] = new Binding(target, original, grounds);
+        }
+        catch
+        {
+            foreach (var g in grounds) Set(g.Relation, "Suppress", g.Suppress);
+            if (old != null) foreach (var g in old.Grounds) Set(g.Relation, "Suppress", true);
+            throw;
+        }
     }
-    void RestoreBinding((Target Target, object Original) binding)
+    void RestoreBinding(Binding binding)
     {
-        if (binding.Target.Property == "Matrix") Call(binding.Target.Com, "PutMatrix", binding.Original, true);
-        else Set(binding.Target.Com, binding.Target.Property, binding.Original);
+        var errors = new List<Exception>();
+        try
+        {
+            if (binding.Target.Property == "Matrix") Call(binding.Target.Com, "PutMatrix", binding.Original, true);
+            else Set(binding.Target.Com, binding.Target.Property, binding.Original);
+        }
+        catch (Exception ex) { errors.Add(ex); }
+        foreach (var g in binding.Grounds)
+            try { Set(g.Relation, "Suppress", g.Suppress); } catch (Exception ex) { errors.Add(ex); }
+        if (errors.Count > 0) throw new AggregateException("基準姿勢または固定拘束を復元できませんでした。", errors);
     }
     public void Unbind(Track track)
     {
@@ -219,6 +249,71 @@ public sealed class Bridge
         return ex is InvalidComObjectException || ex is COMException com &&
             com.HResult != unchecked((int)0x80010001) && com.HResult != unchecked((int)0x8001010A);
     }
+    public double CurrentValue(Track track, Target target)
+    {
+        Check();
+        if (target.Property != "Matrix")
+            return Convert.ToDouble(Get(target.Com, target.Property)) * (target.Property == "Angle" ? 180 / Math.PI : 1000);
+        if (track.Kind == "部品座標") return Matrix(target.Com)[12 + (track.Axis == "X" ? 0 : track.Axis == "Y" ? 1 : 2)] * 1000;
+        // Existing relative modes use the registered pose as their zero.
+        if (bindings.TryGetValue(track, out var binding) && Equals(binding.Target.Com, target.Com))
+        {
+            var current = Matrix(target.Com); var basis = (double[])binding.Original;
+            int a = track.Axis == "X" ? 0 : track.Axis == "Y" ? 1 : 2;
+            if (track.Kind == "部品移動") return (current[12 + a] - basis[12 + a]) * 1000;
+            int u = (a + 1) % 3, v = (a + 2) % 3;
+            double sine = 0, cosine = 0;
+            for (int row = 0; row < 3; row++)
+            {
+                int offset = row * 4;
+                sine += basis[offset + u] * current[offset + v] - basis[offset + v] * current[offset + u];
+                cosine += basis[offset + u] * current[offset + u] + basis[offset + v] * current[offset + v];
+            }
+            return Math.Atan2(sine, cosine) * 180 / Math.PI;
+        }
+        return 0;
+    }
+    public void ApplyChecked(double time)
+    {
+        Check();
+        var before = bindings.Values.Select(b => (b.Target, Value: b.Target.Property == "Matrix" ? (object)Matrix(b.Target.Com) : Get(b.Target.Com, b.Target.Property))).ToList();
+        // Refuse to start from an interfering or unverified position.
+        EnsureNoInterference();
+        try { Apply(time); EnsureNoInterference(); }
+        catch (Exception failure)
+        {
+            try
+            {
+                foreach (var b in before)
+                    if (b.Target.Property == "Matrix") Call(b.Target.Com, "PutMatrix", b.Value, true);
+                    else Set(b.Target.Com, b.Target.Property, b.Value);
+                Call(Get(Get(app!, "ActiveWindow"), "View"), "Update");
+            }
+            catch (Exception rollback) { throw new InvalidOperationException("停止しましたが直前の姿勢へ戻せませんでした。Solid Edgeを確認してください。 " + failure.Message, rollback); }
+            throw;
+        }
+    }
+    void EnsureNoInterference()
+    {
+        var occurrences = Get(doc!, "Occurrences");
+        var parts = Enumerable.Range(1, Convert.ToInt32(Get(occurrences, "Count"))).Select(i => GetItem(occurrences, i)).ToArray();
+        if (parts.Length == 0) throw new InvalidOperationException("干渉チェック対象の部品がありません。");
+        object[] args = [parts.Length, parts, 0, Type.Missing, Type.Missing, Type.Missing, false, Type.Missing, Type.Missing, 0, null!, null!, null!, null!, Type.Missing];
+        var modifier = new ParameterModifier(args.Length);
+        foreach (int i in new[] { 1, 2, 9, 10, 11, 12, 13 }) modifier[i] = true;
+        doc!.GetType().InvokeMember("CheckInterference", BindingFlags.InvokeMethod, null, doc, args, [modifier], null, null);
+        int status = Convert.ToInt32(args[2]);
+        if (status == 1) return;
+        if (status is 2 or 3 or 4)
+        {
+            var names = new List<string>();
+            foreach (int index in new[] { 10, 11 })
+                if (args[index] is Array array)
+                    foreach (var part in array) { try { names.Add(Convert.ToString(Get(part!, "Name")) ?? "部品"); } catch { names.Add("名称取得不可"); } }
+            throw new InvalidOperationException("干渉または干渉の可能性を検出したため停止しました。 " + string.Join(" / ", names.Distinct().Take(8)));
+        }
+        throw new InvalidOperationException("干渉チェックを完了できなかったため停止しました。解析状態: " + status);
+    }
     public void Apply(double time)
     {
         Check();
@@ -235,14 +330,25 @@ public sealed class Bridge
     {
         Check(false);
         foreach (var b in bindings.Values)
+        {
             if (b.Target.Property == "Matrix") Call(b.Target.Com, "PutMatrix", b.Original, true);
             else Set(b.Target.Com, b.Target.Property, b.Original);
+        }
         Call(Get(Get(app!, "ActiveWindow"), "View"), "Update");
     }
     public string? Disconnect()
     {
         if (!Connected) return null;
-        try { Restore(); return null; }
+        try
+        {
+            Check(false);
+            var errors = new List<Exception>();
+            foreach (var b in bindings.Values)
+                try { RestoreBinding(b); } catch (Exception ex) { errors.Add(ex); }
+            if (errors.Count > 0) throw new AggregateException("基準姿勢または固定拘束の復元に失敗しました。", errors);
+            Call(Get(Get(app!, "ActiveWindow"), "View"), "Update");
+            return null;
+        }
         catch (Exception ex) { return "接続は解除しました。基準状態の復元は確認できませんでした：" + (ex.InnerException ?? ex).Message; }
         finally { ForgetConnection(); }
     }

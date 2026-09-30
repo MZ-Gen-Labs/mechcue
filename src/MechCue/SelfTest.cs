@@ -19,6 +19,7 @@ static class SelfTest
         TestDrag();
         TestConnectionRecovery();
         TestReassignment();
+        TestCoordinateAndCollision();
         var preset = MotionPreset.OutAndBack(10, 50, 2, 1);
         var presetTrack = new Track { Points = preset };
         Assert(presetTrack.At(0) == 10 && presetTrack.At(2.5) == 60 && presetTrack.At(5) == 10, "Preset origin, hold, and return");
@@ -43,12 +44,45 @@ static class SelfTest
     }
     public class FakeDocument
     {
+        public string Name => "Test.asm";
         public FakeCollection Occurrences { get; } = new();
         public FakeCollection Relations3d { get; } = new();
         public FakeCollection SelectSet { get; } = new();
     }
-    public class FakePart { public string Name { get; set; } = "Part"; public FakeCollection Relations3d { get; } = new(); }
-    public class FakeRelation { public double Offset { get; set; } }
+    public class FakePart
+    {
+        public string Name { get; set; } = "Part";
+        public FakeCollection Relations3d { get; } = new();
+        public double[] Pose = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0.5,0.6,0.7,1];
+        public void GetMatrix(ref double[] matrix) => matrix = (double[])Pose.Clone();
+        public void PutMatrix(double[] matrix, bool replace) => Pose = (double[])matrix.Clone();
+    }
+    public class FakeGround { public int Type => 1959028688; public bool Suppress { get; set; } }
+    public class FakeOtherConstraint { public int Type => 123; public bool Suppress { get; set; } }
+    public class FakeCollisionDocument : FakeDocument
+    {
+        public int ForcedStatus;
+        public bool FailCheck;
+        public int ChecksUntilFailure;
+        public void CheckInterference(int count, ref object[] parts, ref int status,
+            [System.Runtime.InteropServices.Optional] object? comparison, [System.Runtime.InteropServices.Optional] object? count2, [System.Runtime.InteropServices.Optional] object? set2,
+            [System.Runtime.InteropServices.Optional] object? addOccurrence, [System.Runtime.InteropServices.Optional] object? report, [System.Runtime.InteropServices.Optional] object? reportType,
+            [System.Runtime.InteropServices.Optional] ref object number,
+            [System.Runtime.InteropServices.Optional] ref object first,
+            [System.Runtime.InteropServices.Optional] ref object second,
+            [System.Runtime.InteropServices.Optional] ref object confirmed,
+            [System.Runtime.InteropServices.Optional] ref object occurrence,
+            object? ignoreThreads = null)
+        {
+            if (ChecksUntilFailure > 0 && --ChecksUntilFailure == 0) throw new InvalidOperationException("Fake post-update API failure");
+            if (FailCheck) throw new InvalidOperationException("Fake API failure");
+            if (addOccurrence is not false) throw new Exception("Interference geometry creation must be disabled");
+            status = ForcedStatus != 0 ? ForcedStatus : ((FakePart)parts[0]).Pose[12] > 0.55 ? 2 : 1;
+            number = status == 1 ? 0 : 1;
+            first = new object[] { parts[0] }; second = new object[] { parts[^1] }; confirmed = new bool[] { status == 2 };
+        }
+    }
+    public class FakeRelation { public double Offset { get; set; } public double Angle { get; set; } }
     public class FakeApplication
     {
         public bool Dead;
@@ -59,6 +93,57 @@ static class SelfTest
     }
     public class FakeWindow { public FakeView View { get; } = new(); }
     public class FakeView { public void Update() { } }
+    static void TestCoordinateAndCollision()
+    {
+        void Assert(bool ok, string message) { if (!ok) throw new Exception(message); }
+        var doc = new FakeCollisionDocument(); var app = new FakeApplication { ActiveDocument = doc }; app.OpenDocuments.Items.Add(doc);
+        var bridge = new Bridge(app, doc); var part = new FakePart { Name = "Moving" }; var ground = new FakeGround();
+        part.Relations3d.Items.Add(ground); doc.Occurrences.Items.AddRange([part, new FakePart { Name = "Obstacle" }]);
+        var target = new Target("Moving", part, "Matrix");
+        var track = new Track { Kind = "部品座標", Axis = "X", Points = [new(0, 500), new(1, 600)] };
+        Assert(bridge.CurrentValue(track, target) == 500, "Absolute current coordinate uses mm");
+        bridge.Bind(track, target); Assert(ground.Suppress, "Ground suppressed during registered direct drive");
+        bridge.ApplyChecked(0.25); Assert(Math.Abs(part.Pose[12] - 0.525) < 1e-10 && part.Pose[13] == 0.6, "Checked absolute drive preserves other axes");
+        try { bridge.ApplyChecked(1); throw new Exception("Collision accepted"); } catch (InvalidOperationException) { }
+        Assert(Math.Abs(part.Pose[12] - 0.525) < 1e-10, "Collision restores last checked pose");
+        doc.ForcedStatus = 5;
+        try { bridge.ApplyChecked(0); throw new Exception("Incomplete analysis accepted"); } catch (InvalidOperationException) { }
+        Assert(Math.Abs(part.Pose[12] - 0.525) < 1e-10, "Incomplete check cannot move CAD");
+        doc.ForcedStatus = 3;
+        try { bridge.ApplyChecked(0); throw new Exception("Probable interference accepted"); } catch (InvalidOperationException) { }
+        doc.ForcedStatus = 0; doc.FailCheck = true;
+        try { bridge.ApplyChecked(0); throw new Exception("Check failure accepted"); } catch (System.Reflection.TargetInvocationException) { }
+        doc.FailCheck = false; doc.ChecksUntilFailure = 2;
+        try { bridge.ApplyChecked(0); throw new Exception("Post-update failure accepted"); } catch (System.Reflection.TargetInvocationException) { }
+        Assert(Math.Abs(part.Pose[12] - 0.525) < 1e-10, "Post-update API failure rolls back pose");
+        bridge.Unbind(track); Assert(!ground.Suppress && part.Pose[12] == 0.5, "Unbind restores original pose and ground");
+        part.Relations3d.Items.Clear(); part.Relations3d.Items.Add(new FakeOtherConstraint());
+        try { bridge.Bind(track, target); throw new Exception("Non-ground constraint accepted"); } catch (InvalidOperationException) { }
+        part.Relations3d.Items.Clear();
+        foreach (var axis in new[] { "X", "Y", "Z" })
+        {
+            track.Axis = axis;
+            bridge.Bind(track, target); bridge.Apply(0);
+            int index = axis == "X" ? 12 : axis == "Y" ? 13 : 14;
+            Assert(part.Pose[index] == 0.5 && bridge.CurrentValue(track, target) == 500, "Absolute axis and readback " + axis);
+            bridge.Unbind(track);
+        }
+        track.Kind = "部品移動"; track.Axis = "X"; track.Points = [new(0, 20), new(1, 20)];
+        bridge.Bind(track, target); bridge.Apply(0);
+        Assert(Math.Abs(bridge.CurrentValue(track, target) - 20) < 1e-8, "Registered relative translation current value");
+        bridge.Unbind(track);
+        track.Kind = "部品回転"; track.Axis = "Z"; track.Points = [new(0, 45), new(1, 45)];
+        bridge.Bind(track, target); bridge.Apply(0);
+        Assert(Math.Abs(bridge.CurrentValue(track, target) - 45) < 1e-8, "Registered relative rotation current value");
+        bridge.Unbind(track);
+        var distance = new FakeRelation { Offset = 0.0125 };
+        Assert(bridge.CurrentValue(new Track(), new Target("Distance", distance, "Offset")) == 12.5, "Distance current units");
+        Assert(Math.Abs(bridge.CurrentValue(new Track { Kind = "角度拘束" }, new Target("Angle", new FakeRelation { Angle = Math.PI / 4 }, "Angle")) - 45) < 1e-8, "Angle current units");
+        part.Relations3d.Items.Add(ground); track.Kind = "部品座標";
+        bridge.Bind(track, target); bridge.Apply(0);
+        Assert(bridge.Disconnect() == null && !ground.Suppress && part.Pose[12] == 0.5, "Disconnect restores grounding");
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "coordinate-collision-test-result.txt"), "PASS: XYZ absolute/readback, relative readback, ground restoration, constraint rejection, confirmed/probable interference, incomplete/API failure stop, collision rollback");
+    }
     static void TestReassignment()
     {
         void Assert(bool ok, string error) { if (!ok) throw new Exception(error); }

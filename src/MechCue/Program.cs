@@ -72,6 +72,7 @@ public partial class MainForm : Form
     readonly NumericUpDown time = new() { DecimalPlaces = 3, Increment = 0.01m, Maximum = 100000, Width = 100 };
     readonly NumericUpDown speed = new() { DecimalPlaces = 1, Increment = 0.1m, Minimum = 0.1m, Maximum = 10, Value = 1, Width = 65 };
     readonly CheckBox live = new() { Text = "Solid Edgeへ反映", AutoSize = true };
+    readonly CheckBox collision = new() { Text = "干渉したら停止", AutoSize = true };
     readonly CheckBox loop = new() { Text = "繰り返し", AutoSize = true };
     readonly System.Windows.Forms.Timer timer = new() { Interval = 50 };
     readonly Stopwatch watch = new();
@@ -85,7 +86,7 @@ public partial class MainForm : Form
         Width = 1440; Height = 900; MinimumSize = new(1180, 740);
         BackColor = Color.FromArgb(239, 243, 248);
         Font = new Font("Yu Gothic UI", 10);
-        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(10), BackColor = Color.White };
+        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 125, Padding = new Padding(10), BackColor = Color.White };
         Add(top, "Solid Edgeに接続", () => { status.Text = "接続：" + bridge.Connect(); PopulateTargets(); });
         Add(top, "基準状態に戻す", () => { live.Checked = false; timer.Stop(); bridge.Restore(); status.Text = "接続時の基準状態に戻しました。"; });
         Add(top, "切断", () => { live.Checked = false; timer.Stop(); status.Text = bridge.Disconnect() ?? "切断しました。グラフは保持しています。"; target.Items.Clear(); });
@@ -93,7 +94,7 @@ public partial class MainForm : Form
         top.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true }); top.Controls.Add(time);
         Add(top, "▶ 再生", () => { Commit(); playStart = (double)time.Value; watch.Restart(); timer.Start(); });
         Add(top, "停止", () => timer.Stop());
-        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live);
+        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live); top.Controls.Add(collision);
         ConfigureModes(top);
         Add(top, "使い方", ShowQuickStart);
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 230 };
@@ -109,12 +110,13 @@ public partial class MainForm : Form
         AddField(editor, "駆動先", target);
         Add(editor, "CADで選んだ部品から候補表示", FromCadSelection);
         Add(editor, "すべての候補を表示", PopulateTargets);
+        Add(editor, "現在値を読み込み全点に設定", ReadCurrentValues);
         Add(editor, "対象をCADで強調", HighlightTarget);
         Add(editor, "駆動先を登録・変更", () =>
         {
             if (target.SelectedItem is not Target t) throw new InvalidOperationException("駆動先を選んでください。");
-            timer.Stop(); live.Checked = false; Commit(); bridge.Bind(Current, t);
-            PopulateTargets(); status.Text = $"登録：{Current.Name} → {t.Label}。他の機構の登録は保持しています。";
+            timer.Stop(); live.Checked = false; Commit(); bridge.Bind(Current, t); lastCheckedTime = null;
+            PopulateTargets(); status.Text = $"登録：{Current.Name} → {t.Label}。固定拘束は直接駆動の登録中だけ抑制し、解除・切断時に復元します。";
         });
         Add(editor, "この機構の割り当てを解除", () =>
         {
@@ -131,11 +133,11 @@ public partial class MainForm : Form
         workspace.Panel1.Controls.Add(vertical); workspace.Panel2.Controls.Add(editor); workspace.Panel2.Controls.Add(Heading("選択中の設定"));
         split.Panel2.Controls.Add(workspace);
         Controls.Add(split); Controls.Add(top); Controls.Add(connection); Controls.Add(status);
-        kind.Items.AddRange(["距離拘束", "角度拘束", "部品移動", "部品回転"]); axis.Items.AddRange(["X", "Y", "Z"]);
+        kind.Items.AddRange(["距離拘束", "角度拘束", "部品移動", "部品回転", "部品座標"]); axis.Items.AddRange(["X", "Y", "Z"]);
         grid.Columns.Add("Time", "時間 [s]"); grid.Columns.Add("Value", "変位 [mm] / 角度 [°]");
         trackList.SelectedIndexChanged += (_, _) => LoadTrack();
         kind.SelectedIndexChanged += (_, _) => { UpdateAxisHelp(); if (!loading) Guard(PopulateTargets); };
-        time.ValueChanged += (_, _) => Guard(() => { plot.Time = (double)time.Value; plot.Invalidate(); if (live.Checked) bridge.Apply(plot.Time); });
+        time.ValueChanged += (_, _) => Guard(() => { plot.Time = (double)time.Value; plot.Invalidate(); if (live.Checked) Drive(plot.Time); });
         plot.Seek = t => { timer.Stop(); time.Value = (decimal)Math.Clamp(t, 0, (double)time.Maximum); };
         plot.EditStarting = index =>
         {
@@ -149,7 +151,8 @@ public partial class MainForm : Form
             ApplyPreview();
             status.Text = "点を変更しました。下の表にも反映済みです。";
         });
-        live.CheckedChanged += (_, _) => { if (live.Checked) Guard(() => { Commit(); bridge.Apply((double)time.Value); }); UpdateConnection(); };
+        live.CheckedChanged += (_, _) => { if (live.Checked) Guard(() => { Commit(); Drive((double)time.Value); }); UpdateConnection(); };
+        collision.CheckedChanged += (_, _) => { timer.Stop(); lastCheckedTime = null; };
         timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; if (t >= end) { if (loop.Checked && end > 0) t %= end; else { t = end; timer.Stop(); } } time.Value = (decimal)t; });
         FormClosing += (_, _) =>
         {
