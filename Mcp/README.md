@@ -4,10 +4,10 @@ MechCueをAIから操作するローカルMCPサーバーです。独立版・�
 
 ## 導入
 
-1. alpha.16以降のMechCueをインストールします。Solid Edgeは終了して更新してください。
-2. `MechCue-<version>-MCP-win-x64.zip`を任意のフォルダへ展開します。EXEだけ移動せず、DLLなどを同じフォルダに保持します。
+1. alpha.17以降のインストーラーを実行し、コンポーネント選択で「MCPサーバー（AIからの操作）」をチェックします。標準では未選択です。Solid Edgeは終了して更新してください。
+2. MCPサーバーは通常 `C:\Program Files\MechCue\MCP\MechCue.Mcp.exe` に配置されます。スタートメニューの「MechCue MCP」からガイドとフォルダーを開けます。ZIPを使用する場合は任意のフォルダーへ展開し、EXEだけ移動せず全ファイルを保持してください。
 3. MechCueを開き「AI接続」をオンにします。独立版は `MechCue.exe --enable-ai` でも有効にできます。
-4. 使用するAIアプリのローカルMCP（stdio）設定に `MechCue.Mcp.exe` のフルパスを登録します。設定例は `mcp-config.example.json` です。設定の形式はAIアプリにより異なります。
+4. 使用するAIアプリのローカルMCP（stdio）設定に `MechCue.Mcp.exe` のフルパスを登録します。設定例は `mcp-config.example.json` です。設定の形式はAIアプリにより異なります。設定例はインストーラーの標準配置先を使っています。配置先を変えた場合やZIPを使う場合は `command` を実際のパスに変更してください。
 5. Solid Edgeの直接読み取り・部品選択も使う場合は起動引数 `--allow-solidedge` を追加します。MechCueのグラフ操作だけなら引数は不要です。
 
 Windows x64、.NET 8 Desktop Runtime x64が必要です。Solid Edge用の操作には起動中のSolid Edgeが必要です。同じユーザーで実行してください。MechCue側の「AI接続」は毎回オフから始まります。最小表示にする前に有効にしてください。

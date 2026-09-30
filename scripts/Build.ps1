@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.1.0-alpha.16',
+    [string]$Version = '0.1.0-alpha.17',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -26,23 +26,7 @@ Get-ChildItem -LiteralPath $taskStandalone -File | Where-Object { $_.Extension -
 Copy-Item -LiteralPath (Join-Path $taskRoot 'LICENSE'),(Join-Path $taskRoot 'THIRD_PARTY_NOTICES.md'),(Join-Path $taskRoot 'README.md') -Destination $taskPortable
 Copy-Item -LiteralPath (Join-Path $taskRoot 'examples') -Destination $taskPortable -Recurse
 Compress-Archive -Path (Join-Path $taskPortable '*') -DestinationPath (Join-Path $taskDistribution "MechCue-$Version-win-x64.zip")
-if ($WithAddIn) {
-    $taskAddIn = Join-Path $taskOutput 'addin'
-    & dotnet publish (Join-Path $taskRoot 'AddIn\MechCue.AddIn.csproj') -c Release --self-contained false "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$Version" -o $taskAddIn
-    if ($LASTEXITCODE -ne 0) { throw 'Add-in build failed' }
-    & dotnet run --project (Join-Path $taskRoot 'tools\ComContractCheck\ComContractCheck.csproj') -c Release "-p:RestoreConfigFile=$taskRoot\NuGet.Config"
-    if ($LASTEXITCODE -ne 0) { throw 'COM contract checks failed' }
-    $taskInstaller = Join-Path $taskOutput 'installer'
-    & (Join-Path $taskRoot 'Installer\Build-Installer.ps1') -PayloadDirectory $taskAddIn -OutputDirectory $taskInstaller -Version $Version
-    & powershell.exe -NoProfile -STA -File (Join-Path $PSScriptRoot 'Test-Installer.ps1') -Path (Join-Path $taskInstaller 'MechCue-Setup.exe')
-    if ($LASTEXITCODE -ne 0) { throw 'Installer package checks failed' }
-    Copy-Item -LiteralPath (Join-Path $taskInstaller 'MechCue-Setup.exe') -Destination (Join-Path $taskDistribution "MechCue-$Version-Setup.exe")
-    $taskAddInInstaller = Join-Path $taskOutput 'installer-addin'
-    & (Join-Path $taskRoot 'Installer\Build-Installer.ps1') -PayloadDirectory $taskAddIn -OutputDirectory $taskAddInInstaller -Version $Version -AddInOnly
-    & powershell.exe -NoProfile -STA -File (Join-Path $PSScriptRoot 'Test-Installer.ps1') -Path (Join-Path $taskAddInInstaller 'MechCue-AddIn-Setup.exe')
-    if ($LASTEXITCODE -ne 0) { throw 'Add-in-only installer package checks failed' }
-    Copy-Item -LiteralPath (Join-Path $taskAddInInstaller 'MechCue-AddIn-Setup.exe') -Destination (Join-Path $taskDistribution "MechCue-$Version-AddIn-Setup.exe")
-}
+$taskMcp = $null
 if ($WithMcp) {
     $taskMcp = Join-Path $taskOutput 'mcp'
     & dotnet restore (Join-Path $taskRoot 'Mcp/MechCue.Mcp.csproj') --configfile (Join-Path $taskRoot 'Mcp/NuGet.Config') --locked-mode
@@ -54,6 +38,23 @@ if ($WithMcp) {
     & $PythonPath (Join-Path $PSScriptRoot 'Test-Mcp.py') --mechcue (Join-Path $taskStandalone 'MechCue.exe') --mcp (Join-Path $taskMcp 'MechCue.Mcp.exe') --report (Join-Path $taskOutput 'mcp-test-result.txt')
     if ($LASTEXITCODE -ne 0) { throw 'MCP protocol and UI integration test failed' }
     Compress-Archive -Path (Join-Path $taskMcp '*') -DestinationPath (Join-Path $taskDistribution "MechCue-$Version-MCP-win-x64.zip")
+}
+if ($WithAddIn) {
+    $taskAddIn = Join-Path $taskOutput 'addin'
+    & dotnet publish (Join-Path $taskRoot 'AddIn\MechCue.AddIn.csproj') -c Release --self-contained false "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$Version" -o $taskAddIn
+    if ($LASTEXITCODE -ne 0) { throw 'Add-in build failed' }
+    & dotnet run --project (Join-Path $taskRoot 'tools\ComContractCheck\ComContractCheck.csproj') -c Release "-p:RestoreConfigFile=$taskRoot\NuGet.Config"
+    if ($LASTEXITCODE -ne 0) { throw 'COM contract checks failed' }
+    $taskInstaller = Join-Path $taskOutput 'installer'
+    & (Join-Path $taskRoot 'Installer\Build-Installer.ps1') -PayloadDirectory $taskAddIn -McpDirectory $taskMcp -OutputDirectory $taskInstaller -Version $Version
+    & powershell.exe -NoProfile -STA -File (Join-Path $PSScriptRoot 'Test-Installer.ps1') -Path (Join-Path $taskInstaller 'MechCue-Setup.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Installer package checks failed' }
+    Copy-Item -LiteralPath (Join-Path $taskInstaller 'MechCue-Setup.exe') -Destination (Join-Path $taskDistribution "MechCue-$Version-Setup.exe")
+    $taskAddInInstaller = Join-Path $taskOutput 'installer-addin'
+    & (Join-Path $taskRoot 'Installer\Build-Installer.ps1') -PayloadDirectory $taskAddIn -McpDirectory $taskMcp -OutputDirectory $taskAddInInstaller -Version $Version -AddInOnly
+    & powershell.exe -NoProfile -STA -File (Join-Path $PSScriptRoot 'Test-Installer.ps1') -Path (Join-Path $taskAddInInstaller 'MechCue-AddIn-Setup.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Add-in-only installer package checks failed' }
+    Copy-Item -LiteralPath (Join-Path $taskAddInInstaller 'MechCue-AddIn-Setup.exe') -Destination (Join-Path $taskDistribution "MechCue-$Version-AddIn-Setup.exe")
 }
 Get-ChildItem -LiteralPath $taskDistribution -File | Sort-Object Name | ForEach-Object {
     '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name

@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "mechcue": {
-      "command": "C:/Tools/MechCueMCP/MechCue.Mcp.exe",
+      "command": "C:/Program Files/MechCue/MCP/MechCue.Mcp.exe",
       "args": ["--allow-solidedge"]
     }
   }

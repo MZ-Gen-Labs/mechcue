@@ -1,4 +1,4 @@
-﻿#ifndef AppVersion
+#ifndef AppVersion
   #error AppVersion is required
 #endif
 #ifndef BinaryVersion
@@ -12,6 +12,9 @@
 #endif
 #ifndef ProjectRoot
   #error ProjectRoot is required
+#endif
+#ifndef HasMcp
+  #define HasMcp "0"
 #endif
 #ifndef AddInOnly
   #define AddInOnly "0"
@@ -62,6 +65,30 @@ SetupLogging=yes
 Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+#if HasMcp == "1"
+[CustomMessages]
+japanese.StandardInstall=標準（MechCue）
+english.StandardInstall=Standard (MechCue)
+japanese.CustomInstall=カスタム
+english.CustomInstall=Custom
+japanese.CoreComponent=MechCue（必須）
+english.CoreComponent=MechCue (required)
+japanese.McpComponent=MCPサーバー（AIからの操作）
+english.McpComponent=MCP server (AI control)
+japanese.McpGuide=MCP接続ガイド
+english.McpGuide=MCP connection guide
+japanese.McpFolder=MCPサーバーのフォルダー
+english.McpFolder=MCP server folder
+
+[Types]
+Name: "standard"; Description: "{cm:StandardInstall}"
+Name: "custom"; Description: "{cm:CustomInstall}"; Flags: iscustom
+
+[Components]
+Name: "core"; Description: "{cm:CoreComponent}"; Types: standard custom; Flags: fixed
+Name: "mcp"; Description: "{cm:McpComponent}"
+#endif
+
 [Files]
 Source: "{#PayloadDir}\MechCue.AddIn.comhost.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\MechCue.AddIn.dll"; DestDir: "{app}"; Flags: ignoreversion
@@ -76,6 +103,11 @@ Source: "{#PayloadDir}\MechCue.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectRoot}\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectRoot}\examples\sequence.json"; DestDir: "{app}"; DestName: "Example-Sequence.json"; Flags: onlyifdoesntexist
+
+#if HasMcp == "1"
+Source: "{#McpDir}\*"; DestDir: "{app}\MCP"; Excludes: "MechCue.exe,*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: mcp
+Source: "{#ProjectRoot}\Installer\MCP-Guide.html"; DestDir: "{app}\MCP"; Flags: ignoreversion; Components: mcp
+#endif
 
 [Registry]
 Root: HKLM; Subkey: "Software\Classes\CLSID\{{79B86022-7C7D-4768-A3A7-CF8EBD1F7826}"; ValueType: string; ValueName: ""; ValueData: "MechCue Time Chart"; Flags: uninsdeletekey
@@ -93,9 +125,13 @@ Root: HKLM; Subkey: "Software\Classes\MechCue.TimeChartAddIn"; ValueType: none; 
 Root: HKLM; Subkey: "Software\Classes\MechCue.TimeChartAddIn\CLSID"; ValueType: string; ValueName: ""; ValueData: "{code:AddInClsid}"
 Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\MechCue.TimeChart_is1"; ValueType: string; ValueName: "InstallMode"; ValueData: "{#InstallMode}"
 
-#if AddInOnly == "0"
 [Icons]
+#if AddInOnly == "0"
 Name: "{autoprograms}\MechCue"; Filename: "{app}\MechCue.exe"
+#endif
+#if HasMcp == "1"
+Name: "{autoprograms}\MechCue MCP\{cm:McpGuide}"; Filename: "{app}\MCP\MCP-Guide.html"; Components: mcp
+Name: "{autoprograms}\MechCue MCP\{cm:McpFolder}"; Filename: "{app}\MCP"; Components: mcp
 #endif
 
 [Code]

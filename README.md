@@ -24,7 +24,7 @@ MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート�
 
 PLC接続・プログラム読み込み、加減速モデル、負荷計算は未対応です。
 
-MCPを使う場合は追加の `MechCue-<version>-MCP-win-x64.zip` を展開し、MechCueの「AI接続」をオンにします。[MCP導入・接続設定](Mcp/README.md)を参照してください。
+MCPを使う場合はインストーラーで「MCPサーバー」をチェックし、MechCueの「AI接続」をオンにします。追加のMCP ZIPでの配布も継続します。[MCP導入・接続設定](Mcp/README.md)を参照してください。
 
 ## はじめる
 
@@ -71,7 +71,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 ./scripts/Build.ps1 -WithAddIn -WithMcp
 ```
 
-成果物は`artifacts/0.1.0-alpha.16/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
+成果物は`artifacts/0.1.0-alpha.17/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
@@ -89,4 +89,4 @@ ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrerelease�
 製品名・ファイル名・プロジェクト名・ProgIDをMechCueへ統一しています。CLSIDは既存のものを使用します。
 [MIT License](LICENSE)。Solid Edgeは別途ライセンスが必要です。[第三者情報](THIRD_PARTY_NOTICES.md)を参照してください。
 
-0.1.0-alpha.16はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
+0.1.0-alpha.17はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
