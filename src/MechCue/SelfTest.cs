@@ -1,5 +1,5 @@
-namespace MechCue;
-public static class SelfTest
+﻿namespace MechCue;
+public static partial class SelfTest
 {
     public static void Run()
     {
@@ -22,6 +22,7 @@ public static class SelfTest
         TestReassignment();
         TestCoordinateAndCollision();
         TestNativeInterferenceArray();
+        TestDocumentPersistence();
         var preset = MotionPreset.OutAndBack(10, 50, 2, 1);
         var presetTrack = new Track { Points = preset };
         Assert(presetTrack.At(0) == 10 && presetTrack.At(2.5) == 60 && presetTrack.At(5) == 10, "Preset origin, hold, and return");
@@ -47,6 +48,16 @@ public static class SelfTest
     public class FakeDocument
     {
         public string Name => "Test.asm";
+        public bool ReadOnly { get; set; }
+        public bool Dirty { get; set; }
+        public string StoragePath { get; } = Path.Combine(AppContext.BaseDirectory, "fake-document-" + Guid.NewGuid() + ".storage");
+        [System.Runtime.CompilerServices.IndexerName("AddInsStorage")]
+        public object this[string name, int mode] => StorageTestFactory.Open(StoragePath, mode);
+        public void BindKeyToObject(ref byte[] key, out object value)
+        {
+            var sought = key;
+            value = Occurrences.Items.OfType<FakePart>().Single(p => p.PersistentId.ToByteArray().SequenceEqual(sought));
+        }
         public FakeCollection Occurrences { get; } = new();
         public FakeCollection Relations3d { get; } = new();
         public FakeCollection SelectSet { get; } = new();
@@ -56,12 +67,15 @@ public static class SelfTest
     public class FakePart
     {
         public string Name { get; set; } = "Part";
+        public int Type => 54;
+        public Guid PersistentId = Guid.NewGuid();
+        public void GetReferenceKey(ref byte[] key, ref object size) { key = PersistentId.ToByteArray(); size = key.Length; }
         public FakeCollection Relations3d { get; } = new();
         public double[] Pose = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0.5,0.6,0.7,1];
         public void GetMatrix(ref double[] matrix) => matrix = (double[])Pose.Clone();
         public void PutMatrix(double[] matrix, bool replace) => Pose = (double[])matrix.Clone();
     }
-    public class FakeGround { public int Type => 1959028688; public bool Suppress { get; set; } }
+    public class FakeGround { public FakeAttributes AttributeSets { get; } = new(); public int Type => 1959028688; public bool Suppress { get; set; } }
     public class FakeOtherConstraint { public int Type => 123; public bool Suppress { get; set; } }
     public class FakeCollisionDocument : FakeDocument
     {
@@ -89,7 +103,7 @@ public static class SelfTest
             first = new object[] { Part(1) }; second = new object[] { Part(count) }; confirmed = new bool[] { status == 2 };
         }
     }
-    public class FakeRelation { public double Offset { get; set; } public double Angle { get; set; } }
+    public class FakeRelation { public int Type => 55; public FakeAttributes AttributeSets { get; set; } = new(); public double Offset { get; set; } public double Angle { get; set; } }
     public class FakeApplication
     {
         public bool Dead;

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace MechCue;
@@ -7,13 +7,13 @@ public sealed record Target(string Label, object Com, string Property, string? D
 {
     public override string ToString() => Display ?? Label;
 }
-public sealed class Bridge
+public sealed partial class Bridge
 {
     [DllImport("ole32.dll", CharSet = CharSet.Unicode)] static extern int CLSIDFromProgID(string id, out Guid clsid);
     [DllImport("oleaut32.dll", PreserveSig = false)] static extern void GetActiveObject(ref Guid clsid, IntPtr reserved, [MarshalAs(UnmanagedType.IUnknown)] out object app);
     object? app, doc;
     readonly object? hostedApplication;
-    sealed record Binding(Target Target, object Original, List<(object Relation, bool Suppress)> Grounds);
+    sealed record Binding(Target Target, object Original, List<(object Relation, bool Suppress)> Grounds) { public bool Active { get; set; } = true; }
     readonly Dictionary<Track, Binding> bindings = new();
     public Bridge() { }
     public Bridge(object hostedApplication) { this.hostedApplication = hostedApplication; }
@@ -160,7 +160,7 @@ public sealed class Bridge
         o.GetType().InvokeMember("GetMatrix", BindingFlags.InvokeMethod, null, o, args, [modifier], null, null);
         return ((Array)args[0]).Cast<double>().ToArray();
     }
-    public void Bind(Track track, Target target)
+    public void Bind(Track track, Target target, bool activate = true)
     {
         Check();
         track.Validate();
@@ -190,18 +190,20 @@ public sealed class Bridge
         var original = target.Property == "Matrix" ? (object)Matrix(target.Com) : Get(target.Com, target.Property);
         try
         {
-            foreach (var g in grounds) Set(g.Relation, "Suppress", true);
-            bindings[track] = new Binding(target, original, grounds);
+            if (activate) foreach (var g in grounds) Set(g.Relation, "Suppress", true);
+            bindings[track] = new Binding(target, original, grounds) { Active = activate };
+            unresolved.Remove(track);
         }
         catch
         {
             foreach (var g in grounds) Set(g.Relation, "Suppress", g.Suppress);
-            if (old != null) foreach (var g in old.Grounds) Set(g.Relation, "Suppress", true);
+            if (old is { Active: true }) foreach (var g in old.Grounds) Set(g.Relation, "Suppress", true);
             throw;
         }
     }
     void RestoreBinding(Binding binding)
     {
+        if (!binding.Active) return;
         var errors = new List<Exception>();
         try
         {
@@ -216,12 +218,13 @@ public sealed class Bridge
     public void Unbind(Track track)
     {
         Check(false);
+        unresolved.Remove(track);
         if (!bindings.TryGetValue(track, out var binding)) return;
         RestoreBinding(binding);
         bindings.Remove(track);
         Call(Get(Get(app!, "ActiveWindow"), "View"), "Update");
     }
-    void ForgetConnection() { bindings.Clear(); doc = null; app = null; }
+    void ForgetConnection() { DetachDocumentEvents(); bindings.Clear(); unresolved.Clear(); doc = null; app = null; }
     void Check(bool requireActive = true)
     {
         if (doc == null || app == null) throw new InvalidOperationException("先にSolid Edgeに接続してください。");
@@ -230,14 +233,14 @@ public sealed class Bridge
             var documents = Get(app, "Documents");
             bool open = false;
             for (int i = 1; i <= Convert.ToInt32(Get(documents, "Count")); i++)
-                if (Equals(GetItem(documents, i), doc)) { open = true; break; }
+                if (ApplicationEventSink.SameDocument(GetItem(documents, i), doc)) { open = true; break; }
             if (!open)
             {
                 ForgetConnection();
                 throw new InvalidOperationException("接続していたアセンブリが閉じられました。古い接続を解除しました。アセンブリを開いて再接続・駆動先の再登録をしてください。");
             }
             Get(doc, "Occurrences");
-            if (requireActive && !Equals(Get(app, "ActiveDocument"), doc))
+            if (requireActive && !ApplicationEventSink.SameDocument(Get(app, "ActiveDocument"), doc))
                 throw new InvalidOperationException("接続時のアセンブリをアクティブにしてください。切断・終了はそのまま行えます。");
         }
         catch (Exception ex) when (IsLostConnection(ex))
@@ -336,6 +339,8 @@ public sealed class Bridge
         foreach (var (track, b) in bindings)
         {
             double value = track.At(time);
+            b.Active = true;
+            foreach (var ground in b.Grounds) Set(ground.Relation, "Suppress", true);
             if (b.Target.Property == "Matrix") Call(b.Target.Com, "PutMatrix", Transform.Apply((double[])b.Original, track.Kind, track.Axis, value), true);
             else Set(b.Target.Com, b.Target.Property, value * (b.Target.Property == "Angle" ? Math.PI / 180 : 0.001));
         }
@@ -346,6 +351,8 @@ public sealed class Bridge
         Check(false);
         foreach (var b in bindings.Values)
         {
+            b.Active = true;
+            foreach (var ground in b.Grounds) Set(ground.Relation, "Suppress", true);
             if (b.Target.Property == "Matrix") Call(b.Target.Com, "PutMatrix", b.Original, true);
             else Set(b.Target.Com, b.Target.Property, b.Original);
         }

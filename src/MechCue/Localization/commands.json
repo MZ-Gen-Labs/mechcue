@@ -20,7 +20,7 @@
     "Open a saved time-chart JSON file."
   ],
   "保存": [
-    "保存",
+    "JSON保存",
     "タイムチャートをJSONへ保存します。",
     "Save the time chart as JSON."
   ],
@@ -98,5 +98,10 @@
     "往復動作",
     "原点・移動量・時間から往復グラフを作成します。",
     "Create a move-hold-return chart from the preset values."
+  ],
+  "CADに保存": [
+    "CAD保存",
+    "グラフ・駆動先・再生設定をアセンブリ内へ保存します。再生を止め、基準姿勢と固定拘束を戻してファイルを保存します。",
+    "Save charts, targets and playback settings inside the assembly. Stop playback, restore the reference pose and grounds, then save the CAD file."
   ]
 }

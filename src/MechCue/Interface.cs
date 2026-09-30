@@ -39,8 +39,8 @@ public partial class MainForm
             "② Solid Edgeに接続し、機構ごとに駆動先を登録\nCADで部品を選択して候補を表示し、対象を強調して確認します。割り当て変更は、その機構の解除だけで行えます。\n\n" +
             "③『Solid Edgeへ反映』をオンにして動作確認\n時間カーソルを動かすか再生します。反映がオフならCADは動きません。\n\n" +
             "値：距離はmm、角度は度。拘束は絶対値、部品移動・回転は登録時からの変化量、部品座標はアセンブリ内の絶対座標です。\n\n" +
-            "保存されるのはグラフです。駆動先は接続ごとに登録します。PLC読み込みは未対応です。" :
-            "1. Edit keyframes: drag vertically; Ctrl also moves time. Shift seeks; Esc cancels.\n\n2. Connect and assign a target to each track. Select a CAD part to find targets.\n\n3. Enable Apply to Solid Edge and play or move the time cursor.\n\nDistances use mm; angles use degrees. Constraints and Absolute position use absolute values. Relative translation/rotation use changes from the assigned pose.\n\nSave charts as JSON. Targets must be reassigned after reconnecting. PLC input is not supported.",
+            "CAD保存でグラフ・駆動先・再生設定をアセンブリ内へ保存できます。保存時は基準姿勢へ戻ります。次回接続時に復元し、反映はオフで開始します。JSON保存はグラフの書き出しです。PLC読み込みは未対応です。" :
+            "1. Edit keyframes: drag vertically; Ctrl also moves time. Shift seeks; Esc cancels.\n\n2. Connect and assign a target to each track. Select a CAD part to find targets.\n\n3. Enable Apply to Solid Edge and play or move the time cursor.\n\nDistances use mm; angles use degrees. Constraints and Absolute position use absolute values. Relative translation/rotation use changes from the assigned pose.\n\nSave to CAD stores charts, targets and playback settings inside the assembly and restores the reference pose. Reconnect to restore settings with CAD reflection off. JSON Save exports charts only. PLC input is not supported.",
             "MechCue — Quick start", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
     readonly Label axisHelp = new() { Width = 255, Height = 150, ForeColor = Color.FromArgb(80, 100, 125) };
@@ -94,7 +94,7 @@ public partial class MainForm
         timer.Stop();
         if (history.Count == 0) { status.Text = "戻せる編集はありません。"; return; }
         var change = history.Pop(); change.Track.Points = change.Points;
-        int index = tracks.IndexOf(change.Track); RefreshTracks(Math.Max(0, index)); ApplyPreview();
+        int index = tracks.IndexOf(change.Track); RefreshTracks(Math.Max(0, index)); ApplyPreview(); MarkDocumentSettingsChanged();
         status.Text = "グラフの編集を元に戻しました。";
     }
     void ApplyPreview() { if (live.Checked) Drive((double)time.Value); }
@@ -106,7 +106,7 @@ public partial class MainForm
         {
             Commit(); Remember(Current);
             Current.Points = MotionPreset.OutAndBack((double)origin.Value, (double)stroke.Value, (double)moveSeconds.Value, (double)holdSeconds.Value);
-            LoadTrack(); plot.Invalidate(); ApplyPreview(); status.Text = "選択機構に往復動作を設定しました。元に戻す操作ができます。";
+            LoadTrack(); plot.Invalidate(); ApplyPreview(); MarkDocumentSettingsChanged(); status.Text = "選択機構に往復動作を設定しました。元に戻す操作ができます。";
         });
     }
     double? lastCheckedTime;
@@ -131,7 +131,7 @@ public partial class MainForm
         double value = bridge.CurrentValue(Current, chosen);
         Remember(Current);
         Current.Points = Current.Points.Select(p => p with { Value = value }).ToList();
-        LoadTrack(); plot.Invalidate();
+        LoadTrack(); plot.Invalidate(); MarkDocumentSettingsChanged();
         status.Text = $"現在値 {value:0.###} をこのグラフの全点へ設定しました。時刻は保持しています。";
     }
     void FromCadSelection()
@@ -219,7 +219,12 @@ public partial class MainForm
         form.grid.Rows[1].Cells[1].Value = 25d; form.Commit(); form.ReadCurrentValues();
         if (form.Current.Points.Any(p => p.Value != 12.5)) throw new Exception("Explicit current value read mismatch");
         form.Undo(); if (form.Current.Points[1].Value != 25) throw new Exception("Current value fill must be undoable");
+        form.bridge.Bind(form.Current, form.bridge.Targets(form.Current.Kind).Single()); form.MarkDocumentSettingsChanged();
         form.Close();
+        using var reopened = new MainForm(hostedApplication: app);
+        reopened.Show(); Application.DoEvents();
+        if (reopened.Current.Kind != "距離拘束" || reopened.Current.Axis != "Y" || reopened.Current.Points[1].Value != 25 || reopened.live.Checked || reopened.timer.Enabled || reopened.bridge.BindingCount != 1) throw new Exception($"Embedded chart did not restore safely on reconnect: Kind={reopened.Current.Kind}, Axis={reopened.Current.Axis}, Value={reopened.Current.Points[1].Value}, Live={reopened.live.Checked}, Timer={reopened.timer.Enabled}, Ready={reopened.documentReady}, Dirty={form.documentSettingsDirty}, Status={reopened.status.Text}");
+        reopened.Close();
     }
 }
 

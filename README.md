@@ -1,4 +1,4 @@
-# MechCue
+﻿# MechCue
 
 **時間と変位のグラフで、Solid Edgeのアセンブリを動かす。**
 
@@ -16,6 +16,7 @@ MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート�
 - 現在値を読み込んで選択グラフの全点へ設定。
 - 干渉・解析失敗時の停止と直前の姿勢への復元（オン／オフ）。
 - 基準状態への復元、JSONの保存・読み込み。
+- アセンブリ内へのグラフ・駆動先・再生設定の保存と、接続時の自動復元。
 
 PLC接続・プログラム読み込み、加減速モデル、負荷計算は未対応です。
 
@@ -35,7 +36,7 @@ Windows x64、Solid Edge 2026、.NET 8 Desktop Runtime（x64）が必要です�
 画面の「使い方」、[操作ガイド](docs/USER_GUIDE.md)、[セットアップ手順](Installer/README.md)を参照してください。
 
 [examples/sequence.json](examples/sequence.json)を「開く」で読み込むと複数動作を試せます。
-サンプルの値は任意の例です。CADモデルに適した値へ変更し、駆動先は接続ごとに登録してください。
+サンプルの値は任意の例です。CADモデルに適した値へ変更し、初回は駆動先を登録してください。CAD保存後は次回接続時に復元します。
 
 ## 検証範囲と制限
 
@@ -54,7 +55,7 @@ Solid Edge 2026の実機で、従来形式のインストーラーによる導�
 干渉は各更新姿勢で判定します。更新間の干渉は保証せず、大規模モデルでは再生が遅くなります。
 固定部品駆動・干渉API呼び出しのSolid Edge 2026実機確認は必要です。
 接続中の拘束追加・削除・部品入れ替えには対応しません。複数機構は順次更新します。
-CADは自動保存しません。切断・終了時は基準状態への復元を試みます。確認はモデルのコピーで行ってください。
+再生中はCADファイルを自動保存しません。「CAD保存」は設定を埋め込み、基準姿勢・固定状態へ戻してCADファイルを保存します。Solid Edge側の保存操作にも連動します。アドインの切断・終了時は変更設定をファイル内へ反映しますが、ディスクへの確定にはSolid Edgeで保存が必要です。確認はモデルのコピーで行ってください。
 
 ## 開発・自動ビルド
 
@@ -64,7 +65,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 ./scripts/Build.ps1 -WithAddIn
 ```
 
-成果物は`artifacts/0.1.0-alpha.12/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、SHA256を出力します。
+成果物は`artifacts/0.1.0-alpha.13/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
@@ -82,4 +83,4 @@ ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrerelease�
 製品名・ファイル名・プロジェクト名・ProgIDをMechCueへ統一しています。CLSIDは既存のものを使用します。
 [MIT License](LICENSE)。Solid Edgeは別途ライセンスが必要です。[第三者情報](THIRD_PARTY_NOTICES.md)を参照してください。
 
-0.1.0-alpha.12はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
+0.1.0-alpha.13はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。

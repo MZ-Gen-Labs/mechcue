@@ -8,6 +8,12 @@ static class Program
 {
     [STAThread] static void Main(string[] args)
     {
+        if (args.Contains("--persistence-integration-test"))
+        {
+            try { ApplicationConfiguration.Initialize(); Application.OleRequired(); Bridge.VerifyDocumentPersistenceInSolidEdge(); }
+            catch { Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Contains("--self-test")) { SelfTest.Run(); return; }
         if (args.Contains("--inspect-addins"))
         {
@@ -97,10 +103,10 @@ public partial class MainForm : Form
         BackColor = Color.FromArgb(239, 243, 248);
         Font = new Font("Yu Gothic UI", 10);
         top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 125, Padding = new Padding(10), BackColor = Color.White };
-        Add(top, "Solid Edgeに接続", () => { status.Text = "接続：" + bridge.Connect(); PopulateTargets(); });
+        Add(top, "Solid Edgeに接続", ConnectDocument);
         Add(top, "基準状態に戻す", () => { live.Checked = false; timer.Stop(); bridge.Restore(); status.Text = "接続時の基準状態に戻しました。"; });
-        Add(top, "切断", () => { live.Checked = false; timer.Stop(); status.Text = bridge.Disconnect() ?? "切断しました。グラフは保持しています。"; target.Items.Clear(); });
-        Add(top, "開く", LoadFile); Add(top, "保存", SaveFile);
+        Add(top, "切断", () => { live.Checked = false; timer.Stop(); StageOnClose(); status.Text = bridge.Disconnect() ?? "切断しました。グラフは保持しています。"; target.Items.Clear(); });
+        Add(top, "開く", LoadFile); Add(top, "保存", SaveFile); Add(top, "CADに保存", SaveToDocument);
         top.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true }); top.Controls.Add(time);
         Add(top, "▶ 再生", StartPlayback);
         Add(top, "停止", () => timer.Stop());
@@ -111,7 +117,7 @@ public partial class MainForm : Form
         split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 230 };
         split.Panel1.Controls.Add(trackList);
         var trackButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 42 };
-        Add(trackButtons, "＋ 機構を追加", () => { Commit(); tracks.Add(new() { Name = $"機構 {tracks.Count + 1}" }); RefreshTracks(tracks.Count - 1); });
+        Add(trackButtons, "＋ 機構を追加", () => { Commit(); tracks.Add(new() { Name = $"機構 {tracks.Count + 1}" }); RefreshTracks(tracks.Count - 1); MarkDocumentSettingsChanged(); });
         split.Panel1.Controls.Add(trackButtons);
         split.Panel1.Controls.Add(Heading("機構一覧"));
         trackList.BorderStyle = BorderStyle.None; trackList.ItemHeight = 32; trackList.IntegralHeight = false;
@@ -129,12 +135,12 @@ public partial class MainForm : Form
         Add(editor, "駆動先を登録・変更", () =>
         {
             if (target.SelectedItem is not Target t) throw new InvalidOperationException("駆動先を選んでください。");
-            timer.Stop(); live.Checked = false; Commit(); bridge.Bind(Current, t); lastCheckedTime = null;
+            timer.Stop(); live.Checked = false; Commit(); bridge.Bind(Current, t); lastCheckedTime = null; MarkDocumentSettingsChanged();
             PopulateTargets(); status.Text = $"登録：{Current.Name} → {t.Label}。固定拘束は直接駆動の登録中だけ抑制し、解除・切断時に復元します。";
         });
         Add(editor, "この機構の割り当てを解除", () =>
         {
-            timer.Stop(); live.Checked = false; bridge.Unbind(Current);
+            timer.Stop(); live.Checked = false; bridge.Unbind(Current); MarkDocumentSettingsChanged();
             PopulateTargets(); status.Text = "この機構を基準状態に戻して解除しました。接続・他の登録・グラフは保持しています。";
         });
         editor.Controls.Add(axisHelp);
@@ -160,7 +166,7 @@ public partial class MainForm : Form
         {
             if (loading || e.Index >= tracks.Count) return;
             if (e.NewValue == CheckState.Checked) plot.Hidden.Remove(tracks[e.Index]); else plot.Hidden.Add(tracks[e.Index]);
-            plot.Invalidate();
+            plot.Invalidate(); MarkDocumentSettingsChanged();
         };
         trackList.SelectedIndexChanged += (_, _) => LoadTrack();
         kind.SelectedIndexChanged += (_, _) => { UpdateAxisHelp(); if (!loading) Guard(PopulateTargets); };
@@ -175,27 +181,29 @@ public partial class MainForm : Form
         plot.Edited = index => Guard(() =>
         {
             trackList.SelectedIndex = index; LoadTrack();
-            ApplyPreview();
+            ApplyPreview(); MarkDocumentSettingsChanged();
             status.Text = "点を変更しました。下の表にも反映済みです。";
         });
         live.CheckedChanged += (_, _) => { if (live.Checked) Guard(() => { Commit(); Drive((double)time.Value); }); UpdateConnection(); };
         collision.CheckedChanged += (_, _) => { timer.Stop(); lastCheckedTime = null; };
         timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; if (t >= end) { if (loop.Checked && end > 0) t %= end; else { t = end; timer.Stop(); } } time.Value = (decimal)t; });
-        FormClosing += (_, _) =>
+        FormClosing += (_, e) =>
         {
             timer.Stop(); live.Checked = false;
+            try { StageOnClose(); } catch (Exception ex) { if (MessageBox.Show(this, UiText.Text("設定を保存できませんでした：") + (ex.InnerException ?? ex).Message + "\n" + UiText.Text("保存せずに閉じますか？"), "MechCue", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) { e.Cancel = true; return; } }
             string? warning = bridge.Disconnect();
             if (warning != null) MessageBox.Show(this, UiText.Text(warning), UiText.Text("切断"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
         RefreshTracks(0);
         ConfigureLanguage();
+        ConfigureDocumentPersistence();
         Shown += (_, _) =>
         {
             split.SplitterDistance = 200;
             workspace.SplitterDistance = Math.Max(400, workspace.Width - 310);
             vertical.SplitterDistance = Math.Max(200, vertical.Height - 230);
             if (hostedApplication != null && !fourbarDemo)
-                Guard(() => { status.Text = "接続：" + bridge.Connect(); PopulateTargets(); });
+                Guard(ConnectDocument);
             if (fourbarDemo) Guard(() =>
             {
                 var title = bridge.Connect();
@@ -210,7 +218,9 @@ public partial class MainForm : Form
     }
     public void ShutdownFromHost()
     {
-        timer.Stop(); live.Checked = false; bridge.Disconnect(); Dispose();
+        timer.Stop(); live.Checked = false;
+        try { StageOnClose(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine(ex); }
+        bridge.Disconnect(); Dispose();
     }
     void Add(Control parent, string label, Action action)
     {
@@ -221,7 +231,8 @@ public partial class MainForm : Form
     {
         string? bound = bridge.BoundLabel(Current);
         connection.Text = !bridge.Connected ? "未接続：Solid Edgeに接続 → 駆動先を登録 → Solid Edgeへ反映をオン"
-            : $"接続済み / 登録 {bridge.BindingCount} 軸 / このグラフ：{bound ?? "未登録"} / {(live.Checked ? "Solid Edgeへ反映中（現在時刻の値）" : "反映オフ：グラフ編集のみ")}";
+            : $"接続済み / 登録 {bridge.BindingCount} 軸 / このグラフ：{bound ?? (bridge.PendingLabel(Current) is string pending ? "要再割り当て：" + pending : "未登録")} / {(live.Checked ? "Solid Edgeへ反映中（現在時刻の値）" : "反映オフ：グラフ編集のみ")}";
+        if (documentSettingsDirty && bridge.Connected) connection.Text += " / 設定変更あり：CAD保存";
         connection.ForeColor = live.Checked ? Color.DarkGreen : Color.DarkOrange;
     }
     void Error(Exception ex) { status.Text = "停止：" + (ex.InnerException ?? ex).Message; MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
