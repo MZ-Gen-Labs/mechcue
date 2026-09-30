@@ -3,11 +3,13 @@ from PIL import Image, ImageDraw
 import io, struct
 root=Path(__file__).resolve().parent
 entries=[]
-for rid,size,mono in [(101,16,False),(102,32,False),(103,16,True),(104,32,True)]:
+for command in range(7):
+ for base,size,mono in [(101,16,False),(102,32,False),(103,16,True),(104,32,True)]:
+    rid=base+command*10
     scale=4
     bg=(255,255,255) if mono else (255,0,255)
-    strip=Image.new('RGB',(7*size,size),bg)
-    for k in range(7):
+    strip=Image.new('RGB',(size,size),bg)
+    for k in [command]:
         im=Image.new('RGB',(size*scale,size*scale),bg)
         d=ImageDraw.Draw(im)
         blue=(0,0,0) if mono else (26,93,165)
@@ -27,7 +29,7 @@ for rid,size,mono in [(101,16,False),(102,32,False),(103,16,True),(104,32,True)]
         else:box((4,3,28,29),blue);box((8,3,22,12),bg);box((9,19,23,29),bg)
         if mono:im=im.resize((size,size)).convert('L').point(lambda x:255 if x>128 else 0).convert('RGB')
         else:im=im.resize((size,size),Image.Resampling.LANCZOS)
-        strip.paste(im,(k*size,0))
+        strip.paste(im,(0,0))
     if mono:strip=strip.convert('1')
     stream=io.BytesIO();strip.save(stream,format='BMP');dib=stream.getvalue()[14:]
     header=struct.pack('<IIHHHHIHHII',len(dib),32,0xffff,2,0xffff,rid,0,0x1030,0,0,0)
