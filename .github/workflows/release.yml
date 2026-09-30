@@ -30,11 +30,11 @@ jobs:
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: release-assets
-          path: artifacts/*/release/*
+          path: artifacts/${{ steps.version.outputs.version }}/release/*
           if-no-files-found: error
   release:
     needs: package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -49,4 +49,17 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_VERSION: ${{ needs.package.outputs.version }}
         run: |
-          gh release create "$RELEASE_TAG" release/* --verify-tag --draft --prerelease --title "MechCue $RELEASE_VERSION" --generate-notes
+          mapfile -d '' assets < <(find release -type f -print0)
+          if [ "${#assets[@]}" -ne 3 ]; then
+            echo "Expected setup, portable ZIP and SHA256SUMS.txt"
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > release-state.txt 2>/dev/null; then
+            if [ "$(cat release-state.txt)" != "true" ]; then
+              echo "Refusing to modify a published release"
+              exit 1
+            fi
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --draft --prerelease --title "MechCue $RELEASE_VERSION" --generate-notes
+          fi

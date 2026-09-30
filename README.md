@@ -54,7 +54,7 @@ Windowsと.NET 8 SDKがあれば、Solid Edge本体・付属DLLなしで両版�
 ./scripts/Build.ps1 -WithAddIn
 ```
 
-成果物は`artifacts/0.1.0-alpha.1/release`です。独立版ZIP、セットアップEXE、SHA256を出力します。
+成果物は`artifacts/0.1.0-alpha.2/release`です。独立版ZIP、セットアップEXE、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
