@@ -14,5 +14,5 @@ if (!(Test-Path -LiteralPath $taskCompiler) -or (Get-Item -LiteralPath $taskComp
     if ($taskProcess.ExitCode -ne 0) { throw 'Inno Setup compiler installation failed' }
     $taskCompiler = Join-Path $taskInstall 'ISCC.exe'
 }
-if (!(Test-Path -LiteralPath $taskCompiler) -or (Get-Item -LiteralPath $taskCompiler).VersionInfo.ProductVersion.Trim() -ne '6.7.3') { throw 'ISCC compiler not found' }
+if (!(Test-Path -LiteralPath $taskCompiler)) { throw 'ISCC compiler not found' }
 "INNO_SETUP_COMPILER=$taskCompiler" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append

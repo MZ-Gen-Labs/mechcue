@@ -3,7 +3,7 @@
 - `MechCue-<version>-Setup.exe`：アドインと独立版。
 - `MechCue-<version>-AddIn-Setup.exe`：アドインのみ。共通DLL・COMホスト・設定ファイルを含みます。
 
-0.1.0-alpha.4からInno Setupを使用します。旧形式のインストーラーで導入した版は、
+0.1.0-alpha.5からInno Setupを使用します。旧形式のインストーラーで導入した版は、
 先にWindowsのアプリ一覧から削除してください。構成を切り替える場合も先に削除します。
 新形式同士で同じ構成を更新する場合は、そのまま実行できます。
 
