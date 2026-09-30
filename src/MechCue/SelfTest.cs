@@ -302,11 +302,16 @@ public static class SelfTest
         var position = p.PointLocation(0, 1);
         p.Down((int)position.X, (int)position.Y); p.DragTo((int)position.X + 30, (int)position.Y - 30); p.Up((int)position.X + 30, (int)position.Y - 30);
         Assert(p.Tracks[0].Points[1].Value > 219 && p.Tracks[0].Points[1].Time == 2, "Constant graph has useful vertical editing range");
+        p.Tracks = [new Track()]; p.ValueStep = 0.1;
+        position = p.PointLocation(0,1);
+        p.Down((int)position.X, (int)position.Y); p.DragTo((int)position.X, (int)position.Y+23); p.Up((int)position.X, (int)position.Y+23);
+        Assert(Math.Abs(p.Tracks[0].Points[1].Value*10-Math.Round(p.Tracks[0].Points[1].Value*10)) < 1e-8, "Point respects 0.1 drag step");
         p.Tracks = [new Track { Points = [new(0,0),new(1,50),new(3,50),new(4,0)] }];
         p.TestModifiers = Keys.Control;
         var a = p.PointLocation(0,1); var b = p.PointLocation(0,2);
         p.Down((int)((a.X+b.X)/2), (int)a.Y); p.DragTo((int)((a.X+b.X)/2)+20, (int)a.Y-20); p.Up((int)((a.X+b.X)/2)+20, (int)a.Y-20);
         Assert(p.Tracks[0].Points[1].Time > 1 && Math.Abs(p.Tracks[0].Points[2].Time-p.Tracks[0].Points[1].Time-2) < 1e-9 && p.Tracks[0].Points[1].Value > 50, "Ctrl segment translates time and value preserving duration");
+        Assert(Math.Abs(p.Tracks[0].Points[1].Value*10-Math.Round(p.Tracks[0].Points[1].Value*10)) < 1e-8, "Segment respects drag step");
         host.Close();
     }
 }

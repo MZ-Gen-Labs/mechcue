@@ -2,6 +2,36 @@ namespace MechCue;
 
 public partial class MainForm
 {
+    void SetCompact(bool enabled)
+    {
+        if (compact == enabled) return;
+        timer.Stop(); Commit(); compact = enabled;
+        var playback = new Control[] { time, speed, loop, live, collision };
+        if (enabled)
+        {
+            editBounds = Bounds; editWindowState = WindowState;
+            playbackPositions.Clear();
+            foreach (var control in playback) playbackPositions[control] = top.Controls.GetChildIndex(control);
+            compactBar.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true, Name = "compactTime" });
+            compactBar.Controls.Add(time);
+            compactBar.Controls.Add(new Label { Text = "速度", AutoSize = true, Name = "compactSpeed" });
+            compactBar.Controls.Add(speed); compactBar.Controls.Add(loop); compactBar.Controls.Add(live); compactBar.Controls.Add(collision);
+            WindowState = FormWindowState.Normal; MinimumSize = new(650, 400); Size = new(900, 550);
+        }
+        else
+        {
+            foreach (var control in playback.OrderBy(c => playbackPositions[c]))
+            {
+                top.Controls.Add(control); top.Controls.SetChildIndex(control, playbackPositions[control]);
+            }
+            foreach (Control label in compactBar.Controls.Cast<Control>().Where(c => c.Name.StartsWith("compact")).ToArray()) label.Dispose();
+            MinimumSize = new(1180, 740); Bounds = editBounds; WindowState = editWindowState;
+        }
+        split.Panel1Collapsed = enabled; workspace.Panel2Collapsed = enabled; vertical.Panel2Collapsed = enabled;
+        top.Visible = !enabled; compactBar.Visible = enabled; status.Visible = connection.Visible = !enabled;
+        plot.EditMode = !enabled && !reviewMode.Checked;
+        plot.Invalidate();
+    }
     void ShowQuickStart()
     {
         MessageBox.Show(this,
@@ -135,6 +165,22 @@ public partial class MainForm
         trackList.SetItemChecked(2, false); Commit();
         if (!plot.Hidden.Contains(tracks[2]) || trackList.GetItemChecked(2)) throw new Exception("Visibility choice lost after commit");
         trackList.SetItemChecked(2, true);
+        var checkbox = trackList.GetItemRectangle(2);
+        trackList.ClickAt(new Point(5, checkbox.Top + checkbox.Height / 2));
+        if (trackList.SelectedIndex != 0 || trackList.GetItemChecked(2)) throw new Exception("Checkbox must toggle without changing edit selection");
+        trackList.ClickAt(new Point(45, checkbox.Top + checkbox.Height / 2));
+        if (trackList.SelectedIndex != 2 || trackList.GetItemChecked(2)) throw new Exception("Name click must select without toggling visibility");
+        trackList.SetItemChecked(2, true); trackList.SelectedIndex = 0;
+        SetCompact(true);
+        if (!split.Panel1Collapsed || !workspace.Panel2Collapsed || !vertical.Panel2Collapsed || plot.EditMode || time.Parent != compactBar) throw new Exception("Compact graph/playback layout failed");
+        Application.DoEvents();
+        using (var snapshot = new Bitmap(Width, Height))
+        {
+            DrawToBitmap(snapshot, new Rectangle(Point.Empty, Size));
+            snapshot.Save(Path.Combine(AppContext.BaseDirectory, "compact-preview.png"));
+        }
+        SetCompact(false);
+        if (split.Panel1Collapsed || workspace.Panel2Collapsed || vertical.Panel2Collapsed || time.Parent != top || !plot.EditMode) throw new Exception("Edit layout restoration failed");
         overlay.Checked = false; if (plot.Overlay) throw new Exception("Individual display toggle failed");
         overlay.Checked = true;
         if (!kind.Items.Contains("部品座標") || collision.Checked) throw new Exception("New mode/options defaults mismatch");

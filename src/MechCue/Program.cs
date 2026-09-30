@@ -49,7 +49,7 @@ static class Program
         if (args.Contains("--smoke-test"))
         {
             using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface();
-            using var image = new Bitmap(form.ClientSize.Width, form.ClientSize.Height); form.DrawToBitmap(image, form.ClientRectangle);
+            using var image = new Bitmap(form.Width, form.Height); form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size));
             image.Save(Path.Combine(AppContext.BaseDirectory, "preview.png")); form.Close(); return;
         }
         Application.Run(new MainForm(args.Contains("--fourbar-demo")));
@@ -60,7 +60,7 @@ public partial class MainForm : Form
 {
     readonly List<Track> tracks = [new() { Name = "スライダー" }, new() { Name = "回転軸", Kind = "角度拘束", Points = [new(0, 0), new(2, 90), new(4, 0)] }, new() { Name = "搬送部品", Kind = "部品移動" }];
     readonly Bridge bridge;
-    readonly CheckedListBox trackList = new() { Dock = DockStyle.Fill };
+    readonly MechanismList trackList = new() { Dock = DockStyle.Fill };
     readonly ComboBox kind = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
     readonly ComboBox axis = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 60 };
     readonly ComboBox target = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
@@ -68,6 +68,14 @@ public partial class MainForm : Form
     readonly DataGridView grid = new() { Dock = DockStyle.Fill, AllowUserToAddRows = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
     readonly CheckBox overlay = new() { Text = "重ねて表示", Checked = true, AutoSize = true };
     readonly FlowLayoutPanel legend = new() { Dock = DockStyle.Top, Height = 36, AutoScroll = true, WrapContents = false };
+    readonly NumericUpDown dragStep = new() { DecimalPlaces = 4, Minimum = 0, Maximum = 10000, Increment = 0.1m, Value = 0.1m };
+    SplitContainer split = null!, workspace = null!, vertical = null!;
+    FlowLayoutPanel top = null!;
+    readonly FlowLayoutPanel compactBar = new() { Dock = DockStyle.Top, Height = 80, Padding = new Padding(8), Visible = false, AutoScroll = true };
+    readonly Dictionary<Control, int> playbackPositions = new();
+    bool compact;
+    Rectangle editBounds;
+    FormWindowState editWindowState;
     readonly Plot plot = new() { Dock = DockStyle.Fill };
     readonly Label status = new() { Dock = DockStyle.Bottom, Height = 34, Text = "点・線分：上下へ移動 / Ctrl＋ドラッグ：時間も移動 / 空白・Shift：時刻変更 / Esc：取消" };
     readonly Label connection = new() { Dock = DockStyle.Bottom, Height = 30, Text = "未接続：Solid Edgeに接続 → 駆動先を登録 → Solid Edgeへ反映をオン", ForeColor = Color.DarkOrange };
@@ -88,7 +96,7 @@ public partial class MainForm : Form
         Width = 1440; Height = 900; MinimumSize = new(1180, 740);
         BackColor = Color.FromArgb(239, 243, 248);
         Font = new Font("Yu Gothic UI", 10);
-        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 125, Padding = new Padding(10), BackColor = Color.White };
+        top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 125, Padding = new Padding(10), BackColor = Color.White };
         Add(top, "Solid Edgeに接続", () => { status.Text = "接続：" + bridge.Connect(); PopulateTargets(); });
         Add(top, "基準状態に戻す", () => { live.Checked = false; timer.Stop(); bridge.Restore(); status.Text = "接続時の基準状態に戻しました。"; });
         Add(top, "切断", () => { live.Checked = false; timer.Stop(); status.Text = bridge.Disconnect() ?? "切断しました。グラフは保持しています。"; target.Items.Clear(); });
@@ -99,7 +107,8 @@ public partial class MainForm : Form
         top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live); top.Controls.Add(collision); top.Controls.Add(overlay);
         ConfigureModes(top);
         Add(top, "使い方", ShowQuickStart);
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 230 };
+        Add(top, "最小表示", () => SetCompact(true));
+        split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 230 };
         split.Panel1.Controls.Add(trackList);
         var trackButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 42 };
         Add(trackButtons, "＋ 機構を追加", () => { Commit(); tracks.Add(new() { Name = $"機構 {tracks.Count + 1}" }); RefreshTracks(tracks.Count - 1); });
@@ -109,6 +118,9 @@ public partial class MainForm : Form
         var editor = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = Color.White };
         AddField(editor, "機構名", name); AddField(editor, "駆動方法", kind); AddField(editor, "移動方向・回転軸", axis);
         Add(editor, "グラフを更新", Commit);
+        AddField(editor, "ドラッグ変更単位 [mm / °]（0＝自由）", dragStep);
+        plot.ValueStep = (double)dragStep.Value;
+        dragStep.ValueChanged += (_, _) => plot.ValueStep = (double)dragStep.Value;
         AddField(editor, "駆動先", target);
         Add(editor, "CADで選んだ部品から候補表示", FromCadSelection);
         Add(editor, "すべての候補を表示", PopulateTargets);
@@ -127,16 +139,21 @@ public partial class MainForm : Form
         });
         editor.Controls.Add(axisHelp);
         ConfigurePreset(editor);
-        var vertical = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 360 };
+        vertical = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 360 };
         vertical.Panel1.Controls.Add(plot); vertical.Panel1.Controls.Add(legend); vertical.Panel2.Controls.Add(grid);
         vertical.Panel1.Controls.Add(Heading("タイムチャート"));
         vertical.Panel2.Controls.Add(Heading("選択機構の点を数値で編集"));
-        var workspace = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel2 };
+        workspace = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel2 };
         workspace.Panel1.Controls.Add(vertical); workspace.Panel2.Controls.Add(editor); workspace.Panel2.Controls.Add(Heading("選択中の設定"));
         split.Panel2.Controls.Add(workspace);
-        Controls.Add(split); Controls.Add(top); Controls.Add(connection); Controls.Add(status);
+        Add(compactBar, "編集画面へ戻る", () => SetCompact(false));
+        Add(compactBar, "▶ 再生", () => { Commit(); playStart = (double)time.Value; watch.Restart(); timer.Start(); });
+        Add(compactBar, "停止", () => timer.Stop());
+        Controls.Add(split); Controls.Add(top); Controls.Add(compactBar); Controls.Add(connection); Controls.Add(status);
         kind.Items.AddRange(["距離拘束", "角度拘束", "部品移動", "部品回転", "部品座標"]); axis.Items.AddRange(["X", "Y", "Z"]);
         grid.Columns.Add("Time", "時間 [s]"); grid.Columns.Add("Value", "変位 [mm] / 角度 [°]");
+        grid.Columns[0].DefaultCellStyle.Format = "0.####";
+        grid.Columns[1].DefaultCellStyle.Format = "0.####";
         plot.Overlay = overlay.Checked;
         overlay.CheckedChanged += (_, _) => { timer.Stop(); plot.Overlay = overlay.Checked; plot.Invalidate(); };
         trackList.ItemCheck += (_, e) =>
@@ -257,6 +274,8 @@ public partial class MainForm : Form
 class Plot : Control
 {
     public bool EditMode = true;
+    public double ValueStep;
+    double Snap(double value) => ValueStep > 0 ? Math.Round(value / ValueStep, MidpointRounding.AwayFromZero) * ValueStep : value;
     public bool Overlay;
     public HashSet<Track> Hidden = [];
     IEnumerable<int> VisibleIndices => Enumerable.Range(0, Tracks.Count).Where(i => !Hidden.Contains(Tracks[i]));
@@ -386,7 +405,7 @@ class Plot : Control
             double value = originalPoint.Value + dragScale.Value(e.Y) - dragScale.Value(mouseOrigin.Y);
             if (draggingSegment && originalEndPoint != null)
             {
-                double delta = value - originalPoint.Value;
+                double delta = Snap(value - originalPoint.Value);
                 // Always calculate from the mouse-down values; motion must not accumulate.
                 track.Points[dragPoint] = originalPoint;
                 track.Points[dragPoint + 1] = originalEndPoint;
@@ -401,7 +420,7 @@ class Plot : Control
                     track.Points[dragPoint + 1] = track.Points[dragPoint + 1] with { Time = originalEndPoint.Time + dt };
                 }
             }
-            else track.MovePoint(dragPoint, time, value, dragScale.End);
+            else track.MovePoint(dragPoint, time, Snap(value), dragScale.End);
             // Keep the mouse-to-value conversion fixed during the gesture, while
             // extending the visible range so points beyond the old limits stay visible.
             double low = track.Points.Min(p => p.Value), high = track.Points.Max(p => p.Value);
@@ -515,5 +534,28 @@ class Plot : Control
             float cursor = X(Time); g.DrawLine(Pens.Crimson, cursor, top, cursor, bottom);
             g.FillEllipse(Brushes.Crimson, cursor - 4, Y(t.At(Time)) - 4, 8, 8);
         }
+    }
+}
+
+class MechanismList : CheckedListBox
+{
+    internal void ClickAt(Point point)
+    {
+        int index = IndexFromPoint(point);
+        if (index < 0) return;
+        Focus();
+        if (point.X < SystemInformation.MenuCheckSize.Width + 8)
+            SetItemChecked(index, !GetItemChecked(index));
+        else SelectedIndex = index;
+    }
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg is 0x201 or 0x203)
+        {
+            long position = m.LParam.ToInt64();
+            ClickAt(new Point((short)(position & 0xffff), (short)((position >> 16) & 0xffff)));
+            return;
+        }
+        base.WndProc(ref m);
     }
 }
