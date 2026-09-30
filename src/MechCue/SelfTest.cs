@@ -119,6 +119,18 @@ static class SelfTest
         bridge.Unbind(track); Assert(!ground.Suppress && part.Pose[12] == 0.5, "Unbind restores original pose and ground");
         part.Relations3d.Items.Clear(); part.Relations3d.Items.Add(new FakeOtherConstraint());
         try { bridge.Bind(track, target); throw new Exception("Non-ground constraint accepted"); } catch (InvalidOperationException) { }
+        var otherConstraint = (FakeOtherConstraint)part.Relations3d.Items[0];
+        part.Relations3d.Items.Add(ground);
+        bridge.Bind(track, target);
+        Assert(ground.Suppress && !otherConstraint.Suppress, "Coordinate registration suppresses only ground, retaining other constraints");
+        bridge.Apply(0);
+        Assert(part.Pose[12] == 0.5 && !otherConstraint.Suppress, "Coordinate drive retains other constraints");
+        bridge.Unbind(track);
+        Assert(!ground.Suppress && !otherConstraint.Suppress, "Unbind restores ground without changing other constraints");
+        otherConstraint.Suppress = true;
+        bridge.Bind(track, target); bridge.Apply(1);
+        Assert(otherConstraint.Suppress && bridge.Disconnect() == null && !ground.Suppress && otherConstraint.Suppress, "Disconnect retains initially suppressed other constraint");
+        bridge = new Bridge(app, doc);
         part.Relations3d.Items.Clear();
         foreach (var axis in new[] { "X", "Y", "Z" })
         {
@@ -142,7 +154,7 @@ static class SelfTest
         part.Relations3d.Items.Add(ground); track.Kind = "部品座標";
         bridge.Bind(track, target); bridge.Apply(0);
         Assert(bridge.Disconnect() == null && !ground.Suppress && part.Pose[12] == 0.5, "Disconnect restores grounding");
-        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "coordinate-collision-test-result.txt"), "PASS: XYZ absolute/readback, relative readback, ground restoration, constraint rejection, confirmed/probable interference, incomplete/API failure stop, collision rollback");
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "coordinate-collision-test-result.txt"), "PASS: XYZ absolute/readback, relative readback, ground restoration, grounded coordinate drive with other constraints preserved, ungrounded constraint rejection, confirmed/probable interference, incomplete/API failure stop, collision rollback");
     }
     static void TestReassignment()
     {

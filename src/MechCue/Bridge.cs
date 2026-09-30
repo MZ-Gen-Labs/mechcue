@@ -171,15 +171,18 @@ public sealed class Bridge
         var grounds = new List<(object Relation, bool Suppress)>();
         if (target.Property == "Matrix")
         {
+            bool hasOtherConstraints = false;
             var relations = Get(target.Com, "Relations3d");
             for (int i = 1; i <= Convert.ToInt32(Get(relations, "Count")); i++)
             {
                 var relation = GetItem(relations, i);
                 // SolidEdgeFramework.ObjectType.igGroundRelation3d (Siemens API).
-                if (Convert.ToInt32(Get(relation, "Type")) != 1959028688)
-                    throw new InvalidOperationException("固定以外の拘束がある部品は直接駆動できません。拘束駆動を選んでください。");
-                grounds.Add((relation, Convert.ToBoolean(Get(relation, "Suppress"))));
+                if (Convert.ToInt32(Get(relation, "Type")) == 1959028688)
+                    grounds.Add((relation, Convert.ToBoolean(Get(relation, "Suppress"))));
+                else hasOtherConstraints = true;
             }
+            if (hasOtherConstraints && !(track.Kind == "部品座標" && grounds.Count > 0))
+                throw new InvalidOperationException("固定拘束がある部品は『部品座標』で登録できます。固定拘束がない部品の他の拘束は、拘束駆動を選んでください。");
         }
         // Validate the new target before changing the previous driver.
         if (target.Property == "Matrix") Matrix(target.Com); else Get(target.Com, target.Property);
