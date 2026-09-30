@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 
@@ -58,7 +58,7 @@ static class Program
 }
 public partial class MainForm : Form
 {
-    readonly List<Track> tracks = [new() { Name = "スライダー" }, new() { Name = "回転軸", Kind = "角度拘束", Points = [new(0, 0), new(2, 90), new(4, 0)] }, new() { Name = "搬送部品", Kind = "部品移動" }];
+    readonly List<Track> tracks = [new() { Name = UiText.Text("スライダー") }, new() { Name = UiText.Text("回転軸"), Kind = "角度拘束", Points = [new(0, 0), new(2, 90), new(4, 0)] }, new() { Name = UiText.Text("搬送部品"), Kind = "部品移動" }];
     readonly Bridge bridge;
     readonly MechanismList trackList = new() { Dock = DockStyle.Fill };
     readonly ComboBox kind = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
@@ -102,7 +102,7 @@ public partial class MainForm : Form
         Add(top, "切断", () => { live.Checked = false; timer.Stop(); status.Text = bridge.Disconnect() ?? "切断しました。グラフは保持しています。"; target.Items.Clear(); });
         Add(top, "開く", LoadFile); Add(top, "保存", SaveFile);
         top.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true }); top.Controls.Add(time);
-        Add(top, "▶ 再生", () => { Commit(); playStart = (double)time.Value; watch.Restart(); timer.Start(); });
+        Add(top, "▶ 再生", StartPlayback);
         Add(top, "停止", () => timer.Stop());
         top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live); top.Controls.Add(collision); top.Controls.Add(overlay);
         ConfigureModes(top);
@@ -147,7 +147,7 @@ public partial class MainForm : Form
         workspace.Panel1.Controls.Add(vertical); workspace.Panel2.Controls.Add(editor); workspace.Panel2.Controls.Add(Heading("選択中の設定"));
         split.Panel2.Controls.Add(workspace);
         Add(compactBar, "編集画面へ戻る", () => SetCompact(false));
-        Add(compactBar, "▶ 再生", () => { Commit(); playStart = (double)time.Value; watch.Restart(); timer.Start(); });
+        Add(compactBar, "▶ 再生", StartPlayback);
         Add(compactBar, "停止", () => timer.Stop());
         Controls.Add(split); Controls.Add(top); Controls.Add(compactBar); Controls.Add(connection); Controls.Add(status);
         kind.Items.AddRange(["距離拘束", "角度拘束", "部品移動", "部品回転", "部品座標"]); axis.Items.AddRange(["X", "Y", "Z"]);
@@ -185,9 +185,10 @@ public partial class MainForm : Form
         {
             timer.Stop(); live.Checked = false;
             string? warning = bridge.Disconnect();
-            if (warning != null) MessageBox.Show(this, warning, "切断", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (warning != null) MessageBox.Show(this, UiText.Text(warning), UiText.Text("切断"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
         RefreshTracks(0);
+        ConfigureLanguage();
         Shown += (_, _) =>
         {
             split.SplitterDistance = 200;
@@ -213,7 +214,7 @@ public partial class MainForm : Form
     }
     void Add(Control parent, string label, Action action)
     {
-        var b = new Button { Text = label, AutoSize = true }; b.Click += (_, _) => Guard(action); parent.Controls.Add(b);
+        var b = new Button { Text = UiText.CommandLabel(label), Tag = label, Image = CommandIcons.Create(label), TextImageRelation = TextImageRelation.ImageBeforeText, AutoSize = true }; commandHints.SetToolTip(b, UiText.CommandHint(label)); b.Click += (_, _) => Guard(action); b.Disposed += (_, _) => b.Image?.Dispose(); parent.Controls.Add(b);
     }
     void Guard(Action action) { try { action(); } catch (Exception ex) { timer.Stop(); live.Checked = false; Error(ex); } finally { if (!bridge.Connected) target.Items.Clear(); UpdateConnection(); } }
     void UpdateConnection()
@@ -223,7 +224,7 @@ public partial class MainForm : Form
             : $"接続済み / 登録 {bridge.BindingCount} 軸 / このグラフ：{bound ?? "未登録"} / {(live.Checked ? "Solid Edgeへ反映中（現在時刻の値）" : "反映オフ：グラフ編集のみ")}";
         connection.ForeColor = live.Checked ? Color.DarkGreen : Color.DarkOrange;
     }
-    void Error(Exception ex) { status.Text = "停止：" + (ex.InnerException ?? ex).Message; MessageBox.Show(this, status.Text, "確認", MessageBoxButtons.OK, MessageBoxIcon.Information); }
+    void Error(Exception ex) { status.Text = "停止：" + (ex.InnerException ?? ex).Message; MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
     void RefreshTracks(int selected) { loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
         foreach (var t in tracks) trackList.Items.Add(t.Name, !plot.Hidden.Contains(t));
         foreach (Control control in legend.Controls.Cast<Control>().ToArray()) control.Dispose();
@@ -247,7 +248,7 @@ public partial class MainForm : Form
     {
         string? previous = bridge.BoundLabel(Current) ?? (target.SelectedItem as Target)?.Label;
         target.Items.Clear();
-        if (bridge.Connected) target.Items.AddRange(bridge.Targets(kind.Text).ToArray());
+        if (bridge.Connected) target.Items.AddRange(bridge.Targets(CurrentKind).ToArray());
         if (previous != null) target.SelectedItem = target.Items.Cast<Target>().FirstOrDefault(t => t.Label == previous);
     }
     void Commit()
@@ -255,16 +256,16 @@ public partial class MainForm : Form
         grid.EndEdit();
         var points = grid.Rows.Cast<DataGridViewRow>().Where(r => !r.IsNewRow).Select(r => new KeyPoint(double.Parse(Convert.ToString(r.Cells[0].Value)!, CultureInfo.CurrentCulture), double.Parse(Convert.ToString(r.Cells[1].Value)!, CultureInfo.CurrentCulture))).ToList();
         var candidate = new Track { Points = points }; candidate.Validate();
-        if (bridge.BoundLabel(Current) != null && (kind.Text != Current.Kind || axis.Text != Current.Axis)) throw new InvalidOperationException("この機構の割り当てを解除してから、駆動方法・軸を変更してください。全体の切断は不要です。");
+        if (bridge.BoundLabel(Current) != null && (CurrentKind != Current.Kind || axis.Text != Current.Axis)) throw new InvalidOperationException("この機構の割り当てを解除してから、駆動方法・軸を変更してください。全体の切断は不要です。");
         if (!Current.Points.SequenceEqual(points)) Remember(Current);
-        Current.Name = name.Text; Current.Kind = kind.Text; Current.Axis = axis.Text; Current.Points = points;
+        Current.Name = name.Text; Current.Kind = CurrentKind; Current.Axis = axis.Text; Current.Points = points;
         int i = trackList.SelectedIndex; RefreshTracks(i); status.Text = "グラフを更新しました。";
     }
-    void SaveFile() { Commit(); using var d = new SaveFileDialog { Filter = "タイムチャート|*.json", FileName = "motion.json" }; if (d.ShowDialog() == DialogResult.OK) File.WriteAllText(d.FileName, JsonSerializer.Serialize(tracks, new JsonSerializerOptions { WriteIndented = true })); }
+    void SaveFile() { Commit(); using var d = new SaveFileDialog { Filter = UiText.Text("タイムチャート|*.json"), FileName = "motion.json" }; if (d.ShowDialog() == DialogResult.OK) File.WriteAllText(d.FileName, JsonSerializer.Serialize(tracks, new JsonSerializerOptions { WriteIndented = true })); }
     void LoadFile()
     {
         if (bridge.Connected) throw new InvalidOperationException("ファイルを開く前に切断してください。");
-        using var d = new OpenFileDialog { Filter = "タイムチャート|*.json" }; if (d.ShowDialog() != DialogResult.OK) return;
+        using var d = new OpenFileDialog { Filter = UiText.Text("タイムチャート|*.json") }; if (d.ShowDialog() != DialogResult.OK) return;
         var loaded = JsonSerializer.Deserialize<List<Track>>(File.ReadAllText(d.FileName)) ?? throw new InvalidOperationException("ファイルが空です。");
         if (loaded.Count == 0) throw new InvalidOperationException("グラフがありません。");
         foreach (var t in loaded) { t.Validate(); if (!kind.Items.Contains(t.Kind) || !axis.Items.Contains(t.Axis)) throw new InvalidOperationException("駆動方法または軸が不正です。"); }
@@ -312,8 +313,12 @@ class Plot : Control
     public Plot()
     {
         DoubleBuffered = true; BackColor = Color.FromArgb(246, 248, 252); TabStop = true;
-        AccessibleName = "タイムチャート：点をドラッグして編集、線分を上下に移動、空白で時刻変更";
-        hint.SetToolTip(this, "点・線分：上下移動 / Ctrl＋ドラッグ：時間も移動 / 空白・Shift＋ドラッグ：時刻変更 / Esc：編集取消");
+        RefreshLanguage();
+    }
+    public void RefreshLanguage()
+    {
+        AccessibleName = UiText.Text("タイムチャート：点をドラッグして編集、線分を上下に移動、空白で時刻変更");
+        hint.SetToolTip(this, UiText.Text("点・線分：上下移動 / Ctrl＋ドラッグ：時間も移動 / 空白・Shift＋ドラッグ：時刻変更 / Esc：編集取消"));
     }
     PlotScale GetScale(int index)
     {
@@ -469,7 +474,7 @@ class Plot : Control
     {
         base.OnPaint(e); var g = e.Graphics; g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         var visible = VisibleIndices.ToArray();
-        if (visible.Length == 0) { g.DrawString("機構一覧のチェックで表示する変数を選んでください。", Font, Brushes.Gray, 65, 35); return; }
+        if (visible.Length == 0) { g.DrawString(UiText.Text("機構一覧のチェックで表示する変数を選んでください。"), Font, Brushes.Gray, 65, 35); return; }
         void Grid(PlotScale scale)
         {
             for (int i = 0; i <= 4; i++)
@@ -501,7 +506,7 @@ class Plot : Control
             if (visible.Contains(Selected))
             {
                 using var brush = new SolidBrush(TrackColor(Selected));
-                g.DrawString($"編集対象：{Tracks[Selected].Name}   {Tracks[Selected].At(Time):0.###} {(IsAngle(Tracks[Selected]) ? "°" : "mm")}", Font, brush, 65, 2);
+                g.DrawString($"{UiText.Text("編集対象：")}{Tracks[Selected].Name}   {Tracks[Selected].At(Time):0.###} {(IsAngle(Tracks[Selected]) ? "°" : "mm")}", Font, brush, 65, 2);
             }
         }
         foreach (int n in visible.OrderBy(i => i == Selected ? 1 : 0))

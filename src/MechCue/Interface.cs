@@ -1,4 +1,4 @@
-namespace MechCue;
+﻿namespace MechCue;
 
 public partial class MainForm
 {
@@ -34,20 +34,21 @@ public partial class MainForm
     }
     void ShowQuickStart()
     {
-        MessageBox.Show(this,
+        MessageBox.Show(this, UiText.IsJapanese ?
             "① グラフを編集\n点・線分をドラッグ：上下移動。Ctrl＋ドラッグ：時間と値を変更。Shift：時刻変更。Esc：取消。\n\n" +
             "② Solid Edgeに接続し、機構ごとに駆動先を登録\nCADで部品を選択して候補を表示し、対象を強調して確認します。割り当て変更は、その機構の解除だけで行えます。\n\n" +
             "③『Solid Edgeへ反映』をオンにして動作確認\n時間カーソルを動かすか再生します。反映がオフならCADは動きません。\n\n" +
             "値：距離はmm、角度は度。拘束は絶対値、部品移動・回転は登録時からの変化量、部品座標はアセンブリ内の絶対座標です。\n\n" +
-            "保存されるのはグラフです。駆動先は接続ごとに登録します。PLC読み込みは未対応です。",
-            "MechCue — はじめての操作", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            "保存されるのはグラフです。駆動先は接続ごとに登録します。PLC読み込みは未対応です。" :
+            "1. Edit keyframes: drag vertically; Ctrl also moves time. Shift seeks; Esc cancels.\n\n2. Connect and assign a target to each track. Select a CAD part to find targets.\n\n3. Enable Apply to Solid Edge and play or move the time cursor.\n\nDistances use mm; angles use degrees. Constraints and Absolute position use absolute values. Relative translation/rotation use changes from the assigned pose.\n\nSave charts as JSON. Targets must be reassigned after reconnecting. PLC input is not supported.",
+            "MechCue — Quick start", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
-    readonly Label axisHelp = new() { Width = 255, Height = 110, ForeColor = Color.FromArgb(80, 100, 125) };
+    readonly Label axisHelp = new() { Width = 255, Height = 150, ForeColor = Color.FromArgb(80, 100, 125) };
     void UpdateAxisHelp()
     {
-        bool direct = kind.Text.StartsWith("部品");
+        bool direct = CurrentKind.StartsWith("部品");
         axis.Enabled = direct;
-        axisHelp.Text = kind.Text == "部品座標" ? "グラフは選択軸の絶対座標 [mm]。他の座標・姿勢は登録時の値を保持します。固定拘束は登録中だけ抑制し、割り当て解除時に復元します。" : direct ? "X/Y/Zはアセンブリ座標の方向です。回転は部品原点を中心に行います。"
+        axisHelp.Text = CurrentKind == "部品座標" ? "グラフは選択軸の絶対座標 [mm]。他の座標・姿勢は登録時の値を保持します。固定拘束は登録中だけ抑制し、割り当て解除時に復元します。" : direct ? "X/Y/Zはアセンブリ座標の方向です。回転は部品原点を中心に行います。"
             : "拘束の向きは選んだ面・拘束で決まります。X/Y/Zの選択は拘束駆動には使いません。候補をCADで強調して確認してください。";
     }
     readonly RadioButton editMode = new() { Text = "編集", Checked = true, AutoSize = true };
@@ -149,18 +150,18 @@ public partial class MainForm
     }
     internal void VerifyInterface()
     {
-        if (kind.Text != "距離拘束" || axis.Text != "X") throw new Exception("Initial mechanism settings were not loaded");
+        if (CurrentKind != "距離拘束" || axis.Text != "X") throw new Exception("Initial mechanism settings were not loaded");
         if (axis.Enabled) throw new Exception("Constraint mode must not expose direct motion axis");
         grid.Rows[1].Cells[1].Value = 75d; Commit();
         if (Current.Points[1].Value != 75) throw new Exception("Table edit did not commit");
         Undo(); if (Current.Points[1].Value != 100) throw new Exception("Undo did not restore graph");
         trackList.SelectedIndex = 1;
-        if (kind.Text != "角度拘束" || Current.Name != "回転軸") throw new Exception("Mechanism selection settings mismatch");
+        if (CurrentKind != "角度拘束" || Current.Name != UiText.Text("回転軸")) throw new Exception("Mechanism selection settings mismatch");
         reviewMode.Checked = true; if (plot.EditMode) throw new Exception("Review mode still permits edit");
         editMode.Checked = true; if (!plot.EditMode) throw new Exception("Edit mode did not resume");
         trackList.SelectedIndex = 2; if (!axis.Enabled) throw new Exception("Direct motion axis disabled");
         trackList.SelectedIndex = 0;
-        if (kind.Text != "距離拘束") throw new Exception("Returning to track lost driver kind");
+        if (CurrentKind != "距離拘束") throw new Exception("Returning to track lost driver kind");
         if (!plot.Overlay || trackList.CheckedItems.Count != tracks.Count) throw new Exception("Overlay must initially show all tracks");
         trackList.SetItemChecked(2, false); Commit();
         if (!plot.Hidden.Contains(tracks[2]) || trackList.GetItemChecked(2)) throw new Exception("Visibility choice lost after commit");
@@ -184,6 +185,26 @@ public partial class MainForm
         overlay.Checked = false; if (plot.Overlay) throw new Exception("Individual display toggle failed");
         overlay.Checked = true;
         if (!kind.Items.Contains("部品座標") || collision.Checked) throw new Exception("New mode/options defaults mismatch");
+        time.Value = (decimal)tracks.Max(t => t.Points[^1].Time);
+        StartPlayback(); timer.Stop();
+        if (time.Value != 0 || playStart != 0) throw new Exception("Play at end must restart at beginning");
+        time.Value = 1; StartPlayback(); timer.Stop();
+        if (playStart != 1) throw new Exception("Play before end must retain current time");
+        var savedLanguage = UiText.Mode;
+        try
+        {
+            UiText.SetMode("en", false); Commit();
+            if (kind.Text != "Distance constraint") throw new Exception("Driver display did not change to English");
+            if (Current.Kind != "距離拘束" || CurrentKind != "距離拘束") throw new Exception("Language changed internal driver identifiers");
+            var connectButton = top.Controls.OfType<Button>().Single(b => Equals(b.Tag, "Solid Edgeに接続"));
+            if (connectButton.Text != "Connect" || !(commandHints.GetToolTip(connectButton) ?? "").StartsWith("Connect")) throw new Exception("English command/hint mismatch");
+            if (grid.Columns[0].HeaderText != "Time [s]") throw new Exception("English column header missing");
+            using (var snapshot = new Bitmap(Width, Height)) { DrawToBitmap(snapshot, new Rectangle(Point.Empty, Size)); snapshot.Save(Path.Combine(AppContext.BaseDirectory, "english-preview.png")); }
+            UiText.SetMode("ja", false);
+            if (connectButton.Text != "接続") throw new Exception("Japanese switch did not restore short label");
+            if (UiText.Resolve("auto", new System.Globalization.CultureInfo("ja-JP")) != "ja" || UiText.Resolve("auto", new System.Globalization.CultureInfo("de-DE")) != "en" || UiText.Resolve("en", new System.Globalization.CultureInfo("ja-JP")) != "en") throw new Exception("Automatic/manual language resolution mismatch");
+        }
+        finally { UiText.SetMode(savedLanguage, false); }
         var doc = new SelfTest.FakeDocument(); var app = new SelfTest.FakeApplication { ActiveDocument = doc }; app.OpenDocuments.Items.Add(doc);
         var part = new SelfTest.FakePart(); doc.Occurrences.Items.Add(part); doc.SelectSet.Items.Add(part);
         using var form = new MainForm(hostedApplication: app);

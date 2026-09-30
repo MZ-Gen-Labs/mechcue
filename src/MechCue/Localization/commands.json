@@ -1,0 +1,102 @@
+{
+  "Solid Edgeに接続": [
+    "接続",
+    "開いているSolid Edgeのアセンブリへ接続します。",
+    "Connect to the active Solid Edge assembly."
+  ],
+  "基準状態に戻す": [
+    "基準に戻す",
+    "登録時の基準姿勢へ戻します。",
+    "Restore the assigned reference pose."
+  ],
+  "切断": [
+    "切断",
+    "基準状態を復元して接続を解除します。グラフは保持します。",
+    "Restore and disconnect; retain charts."
+  ],
+  "開く": [
+    "開く",
+    "保存したタイムチャートJSONを開きます。",
+    "Open a saved time-chart JSON file."
+  ],
+  "保存": [
+    "保存",
+    "タイムチャートをJSONへ保存します。",
+    "Save the time chart as JSON."
+  ],
+  "▶ 再生": [
+    "▶ 再生",
+    "現在時刻から再生します。終点なら先頭から再生します。",
+    "Play from the current time; restart from the beginning at the end."
+  ],
+  "停止": [
+    "停止",
+    "現在位置で再生を停止します。",
+    "Stop playback at the current position."
+  ],
+  "使い方": [
+    "使い方",
+    "操作ガイドを表示します。",
+    "Show the quick-start guide."
+  ],
+  "最小表示": [
+    "最小表示",
+    "グラフと再生操作だけの画面へ切り替えます。",
+    "Switch to the compact graph and playback view."
+  ],
+  "編集画面へ戻る": [
+    "編集へ戻る",
+    "機構一覧・設定・数値表を再表示します。",
+    "Return to tracks, settings and the keyframe table."
+  ],
+  "＋ 機構を追加": [
+    "＋ 追加",
+    "新しい機構のグラフを追加します。",
+    "Add a new motion track."
+  ],
+  "グラフを更新": [
+    "更新",
+    "数値表と設定をグラフへ反映します。",
+    "Commit table values and settings to the chart."
+  ],
+  "CADで選んだ部品から候補表示": [
+    "選択部品",
+    "Solid Edgeで選択した部品から駆動先を探し、候補が1つなら現在値を読み込みます。",
+    "Find targets for the selected CAD part; read its current value if unique."
+  ],
+  "すべての候補を表示": [
+    "全候補",
+    "選んだ駆動方法の全対象を一覧表示します。",
+    "List all targets for this drive mode."
+  ],
+  "現在値を読み込み全点に設定": [
+    "現在値",
+    "選択した駆動先の現在値をグラフの全点へ設定します。時刻は保持します。",
+    "Set every keyframe to the selected target current value; retain times."
+  ],
+  "対象をCADで強調": [
+    "強調",
+    "選択した駆動先をSolid Edge上で強調します。",
+    "Highlight the selected target in Solid Edge."
+  ],
+  "駆動先を登録・変更": [
+    "登録・変更",
+    "この機構の駆動先を登録または変更します。",
+    "Assign or change this track target."
+  ],
+  "この機構の割り当てを解除": [
+    "解除",
+    "この機構を基準状態へ戻して割り当てを解除します。",
+    "Restore and unassign this track only."
+  ],
+  "元に戻す": [
+    "元に戻す",
+    "直前のグラフ編集を取り消します。",
+    "Undo the last chart edit."
+  ],
+  "移動 → 保持 → 戻る を挿入": [
+    "往復動作",
+    "原点・移動量・時間から往復グラフを作成します。",
+    "Create a move-hold-return chart from the preset values."
+  ]
+}

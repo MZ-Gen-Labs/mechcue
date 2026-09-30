@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using SE = MechCue.AddIn.Interop;
 
@@ -23,7 +23,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
     {
         application = Application;
         addIn = (SE.ISEAddInEx)AddInInstance;
-        addIn.GuiVersion = 3;
+        addIn.GuiVersion = 4;
         addIn.Description = "\nMechCue";
         var container = (IConnectionPointContainer)addIn.AddInEvents;
         var eventsId = typeof(SE.ISEAddInEvents).GUID;
@@ -37,7 +37,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
         if (!string.Equals(EnvCatID, AssemblyEnvironment, StringComparison.OrdinalIgnoreCase) || addIn == null || !configured.Add(EnvCatID)) return;
         try
         {
-            Array names = new[] { "タイムチャート\n時間と変位を編集\nタイムチャート" };
+            Array names = new[] { UiText.IsJapanese ? "タイムチャート\n時間と変位を編集\nタイムチャート" : "Time chart\nEdit time and displacement\nTime chart" };
             Array ids = new[] { OpenChart };
             addIn.SetAddInInfoEx(typeof(TimeChartAddIn).Assembly.Location, EnvCatID, "MechCue", 101, 102, 103, 104, 1, ref names, ref ids);
             if (bFirstTime) addIn.AddCommandBarButton(EnvCatID, "MechCue", OpenChart);
@@ -64,7 +64,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
     public void OnCommandHelp(int hFrameWnd, int HelpCommandID, int CommandID) { }
     public void OnCommandUpdateUI(int CommandID, ref int CommandFlags, out string MenuItemText, ref int BitmapID)
     {
-        MenuItemText = "タイムチャート";
+        MenuItemText = UiText.Text("タイムチャート");
         // Solid Edge's default command state is retained.
     }
     public void OnDisconnection(SE.SeDisconnectMode DisconnectMode)
@@ -78,7 +78,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
     sealed record HostWindow(IntPtr Handle) : IWin32Window;
     static void Report(Exception ex)
     {
-        Log(ex.ToString()); MessageBox.Show(ex.Message, "MechCue アドイン", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        Log(ex.ToString()); MessageBox.Show(UiText.Text(ex.Message), UiText.Text("MechCue アドイン"), MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
     static void Log(string message)
     {

@@ -4,6 +4,7 @@
     <UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="src/MechCue/Localization/*.json" />
     <Compile Remove="**/*.cs" />
     <Compile Include="src/MechCue/**/*.cs" />
   </ItemGroup>
