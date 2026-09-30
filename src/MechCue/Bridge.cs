@@ -296,15 +296,27 @@ public sealed class Bridge
             throw;
         }
     }
+    internal static Array InterferenceSet(object[] parts)
+    {
+        // VB Object() is SAFEARRAY(IDispatch), not SAFEARRAY(VARIANT).
+        // Solid Edge also supports non-zero-based automation arrays.
+        var set = Array.CreateInstance(typeof(DispatchWrapper), [parts.Length], [1]);
+        for (int i = 0; i < parts.Length; i++) set.SetValue(new DispatchWrapper(parts[i]), i + 1);
+        return set;
+    }
     void EnsureNoInterference()
     {
         var occurrences = Get(doc!, "Occurrences");
         var parts = Enumerable.Range(1, Convert.ToInt32(Get(occurrences, "Count"))).Select(i => GetItem(occurrences, i)).ToArray();
         if (parts.Length == 0) throw new InvalidOperationException("干渉チェック対象の部品がありません。");
-        object[] args = [parts.Length, parts, 0, Type.Missing, Type.Missing, Type.Missing, false, Type.Missing, Type.Missing, 0, null!, null!, null!, null!, Type.Missing];
+        object[] args = [parts.Length, InterferenceSet(parts), 0, Type.Missing, Type.Missing, Type.Missing, false, Type.Missing, Type.Missing, 0, null!, null!, null!, null!, Type.Missing];
         var modifier = new ParameterModifier(args.Length);
         foreach (int i in new[] { 1, 2, 9, 10, 11, 12, 13 }) modifier[i] = true;
-        doc!.GetType().InvokeMember("CheckInterference", BindingFlags.InvokeMethod, null, doc, args, [modifier], null, null);
+        try { doc!.GetType().InvokeMember("CheckInterference", BindingFlags.InvokeMethod, null, doc, args, [modifier], null, null); }
+        catch (Exception ex) when ((ex.InnerException ?? ex).HResult == unchecked((int)0x80020005))
+        {
+            throw new InvalidOperationException("干渉チェックを実行できませんでした（Solid Edge APIの引数型不一致）。干渉の有無は未確認です。", ex);
+        }
         int status = Convert.ToInt32(args[2]);
         if (status == 1) return;
         if (status is 2 or 3 or 4)

@@ -1,5 +1,5 @@
 namespace MechCue;
-static class SelfTest
+public static class SelfTest
 {
     public static void Run()
     {
@@ -21,6 +21,7 @@ static class SelfTest
         TestConnectionRecovery();
         TestReassignment();
         TestCoordinateAndCollision();
+        TestNativeInterferenceArray();
         var preset = MotionPreset.OutAndBack(10, 50, 2, 1);
         var presetTrack = new Track { Points = preset };
         Assert(presetTrack.At(0) == 10 && presetTrack.At(2.5) == 60 && presetTrack.At(5) == 10, "Preset origin, hold, and return");
@@ -50,6 +51,8 @@ static class SelfTest
         public FakeCollection Relations3d { get; } = new();
         public FakeCollection SelectSet { get; } = new();
     }
+    [System.Runtime.InteropServices.ComVisible(true)]
+    [System.Runtime.InteropServices.ClassInterface(System.Runtime.InteropServices.ClassInterfaceType.AutoDispatch)]
     public class FakePart
     {
         public string Name { get; set; } = "Part";
@@ -65,7 +68,7 @@ static class SelfTest
         public int ForcedStatus;
         public bool FailCheck;
         public int ChecksUntilFailure;
-        public void CheckInterference(int count, ref object[] parts, ref int status,
+        public void CheckInterference(int count, ref Array parts, ref int status,
             [System.Runtime.InteropServices.Optional] object? comparison, [System.Runtime.InteropServices.Optional] object? count2, [System.Runtime.InteropServices.Optional] object? set2,
             [System.Runtime.InteropServices.Optional] object? addOccurrence, [System.Runtime.InteropServices.Optional] object? report, [System.Runtime.InteropServices.Optional] object? reportType,
             [System.Runtime.InteropServices.Optional] ref object number,
@@ -75,12 +78,15 @@ static class SelfTest
             [System.Runtime.InteropServices.Optional] ref object occurrence,
             object? ignoreThreads = null)
         {
+            if (parts.GetLowerBound(0) != 1 || parts.GetValue(1) is not System.Runtime.InteropServices.DispatchWrapper) throw new Exception("Wrong automation array type");
+            var input = parts;
+            object Part(int index) => ((System.Runtime.InteropServices.DispatchWrapper)input.GetValue(index)!).WrappedObject!;
             if (ChecksUntilFailure > 0 && --ChecksUntilFailure == 0) throw new InvalidOperationException("Fake post-update API failure");
             if (FailCheck) throw new InvalidOperationException("Fake API failure");
             if (addOccurrence is not false) throw new Exception("Interference geometry creation must be disabled");
-            status = ForcedStatus != 0 ? ForcedStatus : ((FakePart)parts[0]).Pose[12] > 0.55 ? 2 : 1;
+            status = ForcedStatus != 0 ? ForcedStatus : ((FakePart)Part(1)).Pose[12] > 0.55 ? 2 : 1;
             number = status == 1 ? 0 : 1;
-            first = new object[] { parts[0] }; second = new object[] { parts[^1] }; confirmed = new bool[] { status == 2 };
+            first = new object[] { Part(1) }; second = new object[] { Part(count) }; confirmed = new bool[] { status == 2 };
         }
     }
     public class FakeRelation { public double Offset { get; set; } public double Angle { get; set; } }
@@ -208,6 +214,23 @@ static class SelfTest
         public void Down(int x, int y) => OnMouseDown(new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
         public void DragTo(int x, int y) => OnMouseMove(new MouseEventArgs(MouseButtons.Left, 0, x, y, 0));
         public void Up(int x, int y) => OnMouseUp(new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
+    }
+    [System.Runtime.InteropServices.DllImport("oleaut32.dll")] static extern int VariantClear(IntPtr variant);
+    [System.Runtime.InteropServices.DllImport("oleaut32.dll")] static extern int SafeArrayGetVartype(IntPtr array, out ushort type);
+    static void TestNativeInterferenceArray()
+    {
+        var variant = System.Runtime.InteropServices.Marshal.AllocCoTaskMem(24);
+        for (int i = 0; i < 24; i++) System.Runtime.InteropServices.Marshal.WriteByte(variant, i, 0);
+        try
+        {
+            System.Runtime.InteropServices.Marshal.GetNativeVariantForObject(Bridge.InterferenceSet([new FakePart()]), variant);
+            int type = System.Runtime.InteropServices.Marshal.ReadInt16(variant);
+            var array = System.Runtime.InteropServices.Marshal.ReadIntPtr(variant, 8);
+            if (type != 0x2009 || SafeArrayGetVartype(array, out var element) != 0 || element != 9)
+                throw new Exception($"Expected SAFEARRAY(IDispatch), got variant {type:X4}");
+            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "native-interference-test-result.txt"), "PASS: native VARIANT is VT_ARRAY|VT_DISPATCH, SAFEARRAY element type IDispatch");
+        }
+        finally { VariantClear(variant); System.Runtime.InteropServices.Marshal.FreeCoTaskMem(variant); }
     }
     static void TestOverlay()
     {
