@@ -1,7 +1,9 @@
 param(
     [switch]$WithAddIn,
-    [string]$Version = '0.1.0-alpha.15',
-    [string]$OutputDirectory
+    [switch]$WithMcp,
+    [string]$Version = '0.1.0-alpha.16',
+    [string]$OutputDirectory,
+    [string]$PythonPath = 'python'
 )
 $ErrorActionPreference = 'Stop'
 if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw 'Invalid version' }
@@ -40,6 +42,18 @@ if ($WithAddIn) {
     & powershell.exe -NoProfile -STA -File (Join-Path $PSScriptRoot 'Test-Installer.ps1') -Path (Join-Path $taskAddInInstaller 'MechCue-AddIn-Setup.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Add-in-only installer package checks failed' }
     Copy-Item -LiteralPath (Join-Path $taskAddInInstaller 'MechCue-AddIn-Setup.exe') -Destination (Join-Path $taskDistribution "MechCue-$Version-AddIn-Setup.exe")
+}
+if ($WithMcp) {
+    $taskMcp = Join-Path $taskOutput 'mcp'
+    & dotnet restore (Join-Path $taskRoot 'Mcp/MechCue.Mcp.csproj') --configfile (Join-Path $taskRoot 'Mcp/NuGet.Config') --locked-mode
+    if ($LASTEXITCODE -ne 0) { throw 'MCP locked dependency restore failed' }
+    & dotnet publish (Join-Path $taskRoot 'Mcp/MechCue.Mcp.csproj') -c Release --no-restore --self-contained false -p:DebugType=none -p:DebugSymbols=false "-p:Version=$Version" -o $taskMcp
+    if ($LASTEXITCODE -ne 0) { throw 'MCP build failed' }
+    & (Join-Path $PSScriptRoot 'Copy-McpNotices.ps1') -OutputDirectory $taskMcp
+    Copy-Item -LiteralPath (Join-Path $taskRoot 'Mcp/README.md'),(Join-Path $taskRoot 'Mcp/mcp-config.example.json'),(Join-Path $taskRoot 'LICENSE'),(Join-Path $taskRoot 'THIRD_PARTY_NOTICES.md') -Destination $taskMcp
+    & $PythonPath (Join-Path $PSScriptRoot 'Test-Mcp.py') --mechcue (Join-Path $taskStandalone 'MechCue.exe') --mcp (Join-Path $taskMcp 'MechCue.Mcp.exe') --report (Join-Path $taskOutput 'mcp-test-result.txt')
+    if ($LASTEXITCODE -ne 0) { throw 'MCP protocol and UI integration test failed' }
+    Compress-Archive -Path (Join-Path $taskMcp '*') -DestinationPath (Join-Path $taskDistribution "MechCue-$Version-MCP-win-x64.zip")
 }
 Get-ChildItem -LiteralPath $taskDistribution -File | Sort-Object Name | ForEach-Object {
     '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name

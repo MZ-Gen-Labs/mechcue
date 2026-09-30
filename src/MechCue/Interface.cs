@@ -53,7 +53,7 @@ public partial class MainForm
     }
     readonly RadioButton editMode = new() { Text = "編集", Checked = true, AutoSize = true };
     readonly RadioButton reviewMode = new() { Text = "動作確認", AutoSize = true };
-    readonly Stack<(Track Track, List<KeyPoint> Points)> history = new();
+    readonly Stack<List<(Track Track, List<KeyPoint> Points)>> history = new();
     readonly NumericUpDown origin = Number(0, -1000000, 1000000);
     readonly NumericUpDown stroke = Number(100, -1000000, 1000000);
     readonly NumericUpDown moveSeconds = Number(1, 0.001m, 10000);
@@ -86,15 +86,15 @@ public partial class MainForm
     }
     void Remember(Track track)
     {
-        if (history.Count > 0 && ReferenceEquals(history.Peek().Track, track) && history.Peek().Points.SequenceEqual(track.Points)) return;
-        history.Push((track, track.Points.ToList()));
+        if (history.Count > 0 && history.Peek().Count == 1 && ReferenceEquals(history.Peek()[0].Track, track) && history.Peek()[0].Points.SequenceEqual(track.Points)) return;
+        history.Push([(track, track.Points.ToList())]);
     }
     void Undo()
     {
         timer.Stop();
         if (history.Count == 0) { status.Text = "戻せる編集はありません。"; return; }
-        var change = history.Pop(); change.Track.Points = change.Points;
-        int index = tracks.IndexOf(change.Track); RefreshTracks(Math.Max(0, index)); ApplyPreview(); MarkDocumentSettingsChanged();
+        var changes = history.Pop(); foreach(var change in changes)change.Track.Points = change.Points;
+        int index = tracks.IndexOf(changes[0].Track); RefreshTracks(Math.Max(0, index)); ApplyPreview(); MarkDocumentSettingsChanged();
         status.Text = "グラフの編集を元に戻しました。";
     }
     void ApplyPreview() { if (live.Checked) Drive((double)time.Value); }
@@ -231,6 +231,15 @@ public partial class MainForm
         if(!ReferenceEquals(form.Current,bound) || form.bridge.BoundLabel(bound)!=label || form.bridge.BindingCount!=1 || form.tracks.Count!=3 || form.live.Checked || form.timer.Enabled)throw new Exception("Connected table import lost assignment or omitted tracks");
         bool metadataRejected=false;try { form.ImportTableData([new Track { Id=bound.Id,Kind="部品座標",Axis="Y" }]); }catch(InvalidOperationException){ metadataRejected=true; }
         if(!metadataRejected || bound.Kind!="距離拘束" || bound.Points[1].Value!=25)throw new Exception("Bound target metadata must reject before modification");
+        form.HandleAi(System.Text.Json.JsonSerializer.SerializeToElement(new {method="set_keyframe",args=new {trackId=bound.Id.ToString(),time=2,value=100}}));
+        if(bound.Points[1].Value!=100 || form.bridge.BoundLabel(bound)!=label || form.bridge.BindingCount!=1 || form.live.Checked)throw new Exception("AI editing must preserve CAD target and disable reflection");
+        form.HandleAi(System.Text.Json.JsonSerializer.SerializeToElement(new {method="undo"}));
+        if(bound.Points[1].Value!=25)throw new Exception("AI edit undo on a connected target");
+        var originalAll=form.tracks.Select(t=>t.Points.ToList()).ToArray();
+        form.HandleAi(System.Text.Json.JsonSerializer.SerializeToElement(new {method="resample",args=new {endTime=10,step=1}}));
+        if(form.tracks.Any(t=>t.Points.Count!=11))throw new Exception("AI batch resampling");
+        form.HandleAi(System.Text.Json.JsonSerializer.SerializeToElement(new {method="undo"}));
+        if(form.tracks.Where((t,i)=>!t.Points.SequenceEqual(originalAll[i])).Any())throw new Exception("AI batch undo must restore all tracks");
         form.ExecuteHostAction(HostAction.Play);if(!form.timer.Enabled)throw new Exception("Ribbon play action");
         form.ExecuteHostAction(HostAction.Stop);if(form.timer.Enabled)throw new Exception("Ribbon stop action");
         form.ExecuteHostAction(HostAction.Compact);if(!form.compact)throw new Exception("Ribbon compact action");

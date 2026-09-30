@@ -32,7 +32,7 @@ public sealed partial class Bridge
             string assemblyPath = Path.Combine(directory, "fourbar.asm");
             testDocument = Call(documents, "Open", assemblyPath);
             testBridge = new Bridge(application); testBridge.Connect();
-            Assert(DocumentStorage.Read(testDocument) == null, "Clean sample has no MechCue settings");
+            Assert(string.Equals(Convert.ToString(Get(testDocument,"FullName")),assemblyPath,StringComparison.OrdinalIgnoreCase), "Only private copied assembly is used; existing sample settings may be replaced");
             var targets = testBridge.Targets("距離拘束");
             var driver = targets.First(t => Math.Abs(Convert.ToDouble(Get(t.Com, t.Property))) > .0001);
             double value = testBridge.CurrentValue(new Track(), driver);
@@ -98,6 +98,14 @@ public sealed partial class Bridge
             Assert(testBridge.TargetsFromSelection(coordinate.Kind).Count == 1,"Candidate lookup retains native selection");
             testBridge.ClearSelection();
             Assert(Convert.ToInt32(Get(Get(testDocument,"SelectSet"),"Count")) == 0,"Native CAD selection cleared");
+            string expected=Convert.ToString(Get(testDocument,"FullName"))!;
+            var aiDocument=System.Text.Json.JsonSerializer.SerializeToElement(ReadSolidEdge("document"));
+            Assert(aiDocument.GetProperty("fullName").GetString()==expected,"MCP direct document read");
+            var aiParts=System.Text.Json.JsonSerializer.SerializeToElement(ReadSolidEdge("parts",expectedDocument:expected));
+            Assert(aiParts.GetArrayLength()==1,"MCP part list read");
+            ReadSolidEdge("select_part",1,expected);
+            Assert(Convert.ToInt32(Get(Get(testDocument,"SelectSet"),"Count"))==1,"MCP part selection on private test assembly");
+            testBridge.ClearSelection();
             double x = testBridge.CurrentValue(coordinate, partTarget);
             coordinate.Points = [new(0,x),new(1,x + 10)];
             var before = Matrix(part); testBridge.Bind(coordinate, partTarget);

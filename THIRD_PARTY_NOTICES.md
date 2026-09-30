@@ -15,3 +15,14 @@ terms. The .NET Desktop Runtime is installed separately; it is not bundled here.
 Installers are built with Inno Setup by JRSoftware. Inno Setup license and source:
 https://jrsoftware.org/files/is/license.txt
 https://github.com/jrsoftware/issrc
+
+
+The optional MechCue MCP package uses the official C# MCP SDK (Apache-2.0):
+https://github.com/modelcontextprotocol/csharp-sdk
+Copyright Model Context Protocol a Series of LF Projects, LLC.
+
+Its Microsoft .NET support packages use the MIT license. Dependency versions
+and hashes are pinned in Mcp/packages.lock.json. The MCP distribution includes
+ThirdPartyNotices with full license texts, package metadata and supplied notices.
+These dependencies are used by the separate MCP process; they are not loaded
+into the Solid Edge add-in.

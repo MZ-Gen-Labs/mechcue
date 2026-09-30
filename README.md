@@ -19,8 +19,12 @@ MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート�
 - CSV・Excel（.xlsx）での全機構の表出力・表読込。接続中の同一IDはCADの駆動先を維持。
 - 大きなアイコンのアドインメニュー：開く、再生、停止、最大化、最小化、最小表示、CAD保存。
 - アセンブリ内へのグラフ・駆動先・再生設定の保存と、接続時の自動復元。
+- 別プロセスのMCPサーバーによるAI操作：点の変更、全値リセット、等間隔化、Undo、再生・停止。
+- MCPからSolid Edgeの文書・部品・変数を読み取り、部品を選択。
 
 PLC接続・プログラム読み込み、加減速モデル、負荷計算は未対応です。
+
+MCPを使う場合は追加の `MechCue-<version>-MCP-win-x64.zip` を展開し、MechCueの「AI接続」をオンにします。[MCP導入・接続設定](Mcp/README.md)を参照してください。
 
 ## はじめる
 
@@ -64,10 +68,10 @@ Solid Edge 2026の実機で、従来形式のインストーラーによる導�
 Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLLなしで両版をビルドできます。
 
 ```powershell
-./scripts/Build.ps1 -WithAddIn
+./scripts/Build.ps1 -WithAddIn -WithMcp
 ```
 
-成果物は`artifacts/0.1.0-alpha.15/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、SHA256を出力します。
+成果物は`artifacts/0.1.0-alpha.16/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
@@ -85,4 +89,4 @@ ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrerelease�
 製品名・ファイル名・プロジェクト名・ProgIDをMechCueへ統一しています。CLSIDは既存のものを使用します。
 [MIT License](LICENSE)。Solid Edgeは別途ライセンスが必要です。[第三者情報](THIRD_PARTY_NOTICES.md)を参照してください。
 
-0.1.0-alpha.15はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
+0.1.0-alpha.16はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。

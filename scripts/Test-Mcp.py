@@ -1,0 +1,87 @@
+"""Integration test using MCP JSON-RPC, two fresh offline MechCue windows, and stdio.
+No user document is changed. Only test processes launched by this script are terminated.
+"""
+import argparse,json,subprocess,threading,queue,time,pathlib,os
+p=argparse.ArgumentParser();p.add_argument('--mechcue',required=True);p.add_argument('--mcp',required=True);p.add_argument('--report',required=True);p.add_argument('--native-read',action='store_true');a=p.parse_args()
+owned=[];logs=[];checks=[]
+def launch(command,stdio=False):
+    startup=subprocess.STARTUPINFO();startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW;startup.wShowWindow=0
+    child=subprocess.Popen(command,stdin=subprocess.PIPE if stdio else subprocess.DEVNULL,stdout=subprocess.PIPE if stdio else subprocess.DEVNULL,stderr=subprocess.PIPE if stdio else subprocess.DEVNULL,text=True,encoding='utf-8',startupinfo=startup)
+    owned.append(child);return child
+try:
+    host=launch([str(pathlib.Path(a.mechcue).resolve()),'--enable-ai'])
+    server=launch([str(pathlib.Path(a.mcp).resolve())]+(['--allow-solidedge'] if a.native_read else []),True)
+    replies=queue.Queue()
+    def output():
+        for line in server.stdout:
+            try:replies.put(json.loads(line))
+            except json.JSONDecodeError:replies.put({'invalid_stdout':line})
+    def errors():
+        for line in server.stderr:logs.append(line)
+    threading.Thread(target=output,daemon=True).start();threading.Thread(target=errors,daemon=True).start()
+    seq=0
+    def request(method,params):
+        global seq
+        seq+=1;server.stdin.write(json.dumps({'jsonrpc':'2.0','id':seq,'method':method,'params':params})+'\n');server.stdin.flush()
+        end=time.monotonic()+25
+        while time.monotonic()<end:
+            msg=replies.get(timeout=max(.01,end-time.monotonic()))
+            if 'invalid_stdout' in msg:raise AssertionError('Non-protocol stdout: '+str(msg))
+            if msg.get('id')==seq:
+                if 'error' in msg:raise AssertionError(msg)
+                return msg['result']
+        raise TimeoutError(method)
+    def tool(name,args=None,error=False):
+        result=request('tools/call',{'name':name,'arguments':args or {}})
+        assert bool(result.get('isError',False))==error,(name,result)
+        if error:return result
+        text=''.join(c.get('text','') for c in result.get('content',[]) if c.get('type')=='text')
+        return json.loads(text)
+    result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
+    assert 'tools' in result['capabilities'];checks.append('MCP initialization')
+    server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
+    tools=request('tools/list',{})['tools'];assert len(tools)==13,len(tools)
+    assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
+    checks.append('13 tools and read-only annotations')
+    def own_session(pid):
+        end=time.monotonic()+15
+        while time.monotonic()<end:
+            sessions=tool('mechcue_list_sessions')
+            found=[s for s in sessions if s.get('processId',s.get('ProcessId'))==pid]
+            if found:return found[0].get('id',found[0].get('Id'))
+            time.sleep(.1)
+        raise AssertionError('Test session missing')
+    sid=own_session(host.pid);context={'sessionId':sid}
+    original=tool('mechcue_get_state',context);assert len(original['tracks'])==3 and not original['connected']
+    state=tool('mechcue_set_keyframe',context|{'trackNumber':1,'time':2,'value':100});assert state['tracks'][0]['points'][1]['value']==100
+    state=tool('mechcue_set_keyframe',context|{'trackId':state['tracks'][0]['id'],'time':1,'value':75});assert any(p['time']==1 and p['value']==75 for p in state['tracks'][0]['points'])
+    before=state
+    tool('mechcue_set_keyframe',context|{'trackNumber':1,'time':-1,'value':999},True)
+    assert tool('mechcue_get_state',context)['tracks']==before['tracks'];checks.append('Set/insert by track number and stable ID; invalid mutation leaves graph unchanged')
+    state=tool('mechcue_resample',context|{'endTime':10,'step':1});assert all([p['time'] for p in t['points']]==list(range(11)) for t in state['tracks'])
+    assert not state['playing'] and not state['applyToCad']
+    state=tool('mechcue_undo',context);assert state['tracks']==before['tracks'];checks.append('All-track 1-second resampling through 10 seconds; atomic batch undo')
+    state=tool('mechcue_reset_values',context|{'trackNumber':2,'value':100});assert all(p['value']==100 for p in state['tracks'][1]['points']);assert state['tracks'][1]['id']==before['tracks'][1]['id'];checks.append('Reset track values and retain IDs/times')
+    state=tool('mechcue_seek',context|{'time':4});assert state['time']==4
+    state=tool('mechcue_play',context);assert state['playing'] and state['time']<4
+    state=tool('mechcue_stop',context);assert not state['playing'];checks.append('Seek, playback from end and stop')
+    tool('mechcue_resample',context|{'endTime':10,'step':0},True)
+    host2=launch([str(pathlib.Path(a.mechcue).resolve()),'--enable-ai']);sid2=own_session(host2.pid)
+    tool('mechcue_get_state',error=True)
+    other=tool('mechcue_get_state',{'sessionId':sid2});assert other['tracks'][1]['points'][0]['value']==0;checks.append('Multiple windows require explicit session selection; edits remain isolated')
+    if a.native_read:
+        doc=tool('solidedge_get_document');assert doc['name'];parts=tool('solidedge_list_parts',{'expectedDocument':doc['fullName']});assert parts
+        variables=tool('solidedge_list_variables',{'expectedDocument':doc['fullName']});assert 'variables' in variables
+        assert any(v['name'] and v['value'] is not None and v['unitsType'] is not None for v in variables['variables']),[(v['unitsType'],v['error']) for v in variables['variables']]
+        tool('solidedge_list_parts',{'expectedDocument':'__not_the_active_document__'},True)
+        checks.append('Native Solid Edge document/parts/variables reads and document mismatch rejection; no save or geometry changes')
+    else:
+        tool('solidedge_get_document',error=True);checks.append('Direct Solid Edge access disabled without explicit server flag')
+finally:
+    for child in reversed(owned):
+        if child.poll() is None:child.terminate()
+        try:child.wait(timeout=5)
+        except subprocess.TimeoutExpired:child.kill();child.wait()
+    target=pathlib.Path(a.report);target.parent.mkdir(parents=True,exist_ok=True)
+    target.write_text('\n'.join('PASS: '+c for c in checks)+'\n\nServer stderr:\n'+''.join(logs),encoding='utf-8')
+print('\n'.join('PASS: '+c for c in checks))

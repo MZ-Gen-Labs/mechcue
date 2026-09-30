@@ -14,12 +14,15 @@ jobs:
       - uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: '8.0.x'
+      - name: Verify Python test runtime
+        shell: pwsh
+        run: python --version
       - name: Prepare Inno Setup compiler
         shell: pwsh
         run: ./scripts/Setup-InnoCI.ps1
       - name: Build, test and package both editions
         shell: pwsh
-        run: ./scripts/Build.ps1 -WithAddIn
+        run: ./scripts/Build.ps1 -WithAddIn -WithMcp
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: MechCue-prototype

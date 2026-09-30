@@ -156,5 +156,7 @@
   "設定をアセンブリへ保存します。": "Save settings inside the assembly.",
   "CSV・Excelへグラフを書き出しました。": "Charts exported to CSV / Excel.",
   "グラフを読み込みました。一致するIDの割り当てと、ファイルにない機構は保持しています。": "Charts imported. Matching target assignments and omitted tracks were retained.",
-  "割り当て済みの機構の駆動方法・軸は変更できません。先に解除してください。": "Unassign the target before changing its drive mode or axis."
+  "割り当て済みの機構の駆動方法・軸は変更できません。先に解除してください。": "Unassign the target before changing its drive mode or axis.",
+  "AI接続": "AI access",
+  "AIからグラフを編集しました。": "Graph edited by AI."
 }

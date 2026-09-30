@@ -58,7 +58,7 @@ static class Program
             using var image = new Bitmap(form.Width, form.Height); form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size));
             image.Save(Path.Combine(AppContext.BaseDirectory, "preview.png")); form.Close(); return;
         }
-        Application.Run(new MainForm(args.Contains("--fourbar-demo")));
+        Application.Run(new MainForm(args.Contains("--fourbar-demo"),enableAi:args.Contains("--enable-ai")));
     }
     static void MarshalRelease(object instance) { if (System.Runtime.InteropServices.Marshal.IsComObject(instance)) System.Runtime.InteropServices.Marshal.ReleaseComObject(instance); }
 }
@@ -95,7 +95,7 @@ public partial class MainForm : Form
     double playStart;
     bool loading;
     Track Current => tracks[Math.Max(0, trackList.SelectedIndex)];
-    public MainForm(bool fourbarDemo = false, object? hostedApplication = null)
+    public MainForm(bool fourbarDemo = false, object? hostedApplication = null,bool enableAi=false)
     {
         bridge = hostedApplication == null ? new Bridge() : new Bridge(hostedApplication);
         Text = hostedApplication == null ? "MechCue 独立版 — Solid Edge タイムチャート" : "MechCue アドイン版 — Solid Edge タイムチャート";
@@ -195,10 +195,12 @@ public partial class MainForm : Form
             if (warning != null) MessageBox.Show(this, UiText.Text(warning), UiText.Text("切断"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
         RefreshTracks(0);
+        ConfigureAi();
         ConfigureLanguage();
         ConfigureDocumentPersistence();
         Shown += (_, _) =>
         {
+            if(enableAi)aiAccess.Checked=true;
             split.SplitterDistance = 200;
             workspace.SplitterDistance = Math.Max(400, workspace.Width - 310);
             vertical.SplitterDistance = Math.Max(200, vertical.Height - 230);
@@ -235,7 +237,7 @@ public partial class MainForm : Form
         if (documentSettingsDirty && bridge.Connected) connection.Text += " / 設定変更あり：CAD保存";
         connection.ForeColor = live.Checked ? Color.DarkGreen : Color.DarkOrange;
     }
-    void Error(Exception ex) { status.Text = "停止：" + (ex.InnerException ?? ex).Message; MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
+    void Error(Exception ex) { status.Text = "停止：" + (ex.InnerException ?? ex).Message; if(aiExecuting){aiError=ex;return;} MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
     void RefreshTracks(int selected) { loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
         foreach (var t in tracks) trackList.Items.Add(t.Name, !plot.Hidden.Contains(t));
         foreach (Control control in legend.Controls.Cast<Control>().ToArray()) control.Dispose();
