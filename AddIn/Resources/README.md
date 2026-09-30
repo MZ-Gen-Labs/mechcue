@@ -1,0 +1,1 @@
+MechCue.res contains Win32 RT_BITMAP resources 101/102 (16/32 pixel color) and 103/104 (monochrome). The original MechCue chart/cursor artwork is MIT licensed. These native resources are embedded in MechCue.AddIn.dll and verified by ComContractCheck; no extra runtime file or resource compiler is required.

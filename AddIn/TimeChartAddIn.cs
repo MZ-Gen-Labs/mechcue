@@ -23,7 +23,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
     {
         application = Application;
         addIn = (SE.ISEAddInEx)AddInInstance;
-        addIn.GuiVersion = 2;
+        addIn.GuiVersion = 3;
         addIn.Description = "\nMechCue";
         var container = (IConnectionPointContainer)addIn.AddInEvents;
         var eventsId = typeof(SE.ISEAddInEvents).GUID;
@@ -39,7 +39,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
         {
             Array names = new[] { "タイムチャート\n時間と変位を編集\nタイムチャート" };
             Array ids = new[] { OpenChart };
-            addIn.SetAddInInfoEx(typeof(TimeChartAddIn).Assembly.Location, EnvCatID, "MechCue", 0, 0, 0, 0, 1, ref names, ref ids);
+            addIn.SetAddInInfoEx(typeof(TimeChartAddIn).Assembly.Location, EnvCatID, "MechCue", 101, 102, 103, 104, 1, ref names, ref ids);
             if (bFirstTime) addIn.AddCommandBarButton(EnvCatID, "MechCue", OpenChart);
             Log("Assembly command registered");
         }

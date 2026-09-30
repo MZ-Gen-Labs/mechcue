@@ -11,14 +11,14 @@
 Solid Edge付属DLL、CADモデル、個人のグラフ、診断結果をコミットしないでください。
 公開前に[実機確認](VALIDATION.md)を終え、画面画像と短い操作動画をREADMEへ追加すると試してもらいやすくなります。
 
-Windowsと.NET 8 SDKで`./scripts/Build.ps1 -WithAddIn -Version 0.1.0-alpha.9`を実行します。
+Windowsと.NET 8 SDKで`./scripts/Build.ps1 -WithAddIn -Version 0.1.0-alpha.10`を実行します。
 Solid Edge本体・付属DLLは不要です。出力先が存在する場合は別の`-OutputDirectory`を指定します。
 両版入りセットアップ、アドイン専用セットアップ、独立版ZIPの配布物だけが`artifacts/<version>/release`へ入り、SHA256SUMS.txtも出力します。
 
 `build.yml`はPR・main更新・手動実行で共通テスト、画面、COM定義、パッケージを検証します。
 成果物はActionsのArtifactsから取得できます。CAD駆動や管理者登録は自動確認の対象外です。
 
-`release.yml`は`v0.1.0-alpha.9`などのタグ送信で同じビルドを行い、Releaseへ添付します。
+`release.yml`は`v0.1.0-alpha.10`などのタグ送信で同じビルドを行い、Releaseへ添付します。
 タグのバージョンをアプリとセットアップへ渡します。**ドラフトのPrerelease**として作成します。
 実機結果と内容を点検し、GitHub画面で公開してください。GitHub Actionsの初回ビルドは成功しています。
 

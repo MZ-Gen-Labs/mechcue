@@ -211,6 +211,8 @@ public static class SelfTest
     }
     sealed class TestPlot : Plot
     {
+        public Keys TestModifiers;
+        protected override Keys DragModifiers => TestModifiers;
         public void Down(int x, int y) => OnMouseDown(new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
         public void DragTo(int x, int y) => OnMouseMove(new MouseEventArgs(MouseButtons.Left, 0, x, y, 0));
         public void Up(int x, int y) => OnMouseUp(new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
@@ -267,7 +269,12 @@ public static class SelfTest
         int edits = 0, seeks = 0; p.Edited = _ => edits++; p.Seek = _ => seeks++;
         // Default graph: point at 2 s / 100; middle of first segment at 1 s / 50.
         p.Down(265, 62); p.DragTo(285, 82); p.Up(285, 82);
-        Assert(edits == 1 && seeks == 0 && p.Tracks[0].Points[1].Time > 2 && p.Tracks[0].Points[1].Value < 100, "Point drag edits both coordinates without seeking");
+        Assert(edits == 1 && seeks == 0 && p.Tracks[0].Points[1].Time == 2 && p.Tracks[0].Points[1].Value < 100, "Default point drag keeps time unchanged");
+        p.Tracks = [new Track()];
+        p.TestModifiers = Keys.Control;
+        p.Down(265, 62); p.DragTo(285, 82); p.Up(285, 82);
+        Assert(p.Tracks[0].Points[1].Time > 2 && p.Tracks[0].Points[1].Value < 100, "Ctrl point drag edits both coordinates");
+        edits = 1; p.TestModifiers = Keys.None;
         p.Tracks = [new Track()];
         p.Down(165, 155); p.DragTo(195, 185);
         var once = p.Tracks[0].Points.ToArray(); p.DragTo(195, 185); p.Up(195, 185);
@@ -290,6 +297,16 @@ public static class SelfTest
         p.EditMode = false; p.Tracks = [new Track()];
         p.Down(265, 62); p.DragTo(265, 90); p.Up(265, 90);
         Assert(p.Tracks[0].Points.SequenceEqual(new Track().Points) && edits == 2 && seeks == 4, "Review mode never edits a point");
+        p.EditMode = true; p.TestModifiers = Keys.None;
+        p.Tracks = [new Track { Points = [new(0, 215.9), new(2, 215.9), new(4, 215.9)] }];
+        var position = p.PointLocation(0, 1);
+        p.Down((int)position.X, (int)position.Y); p.DragTo((int)position.X + 30, (int)position.Y - 30); p.Up((int)position.X + 30, (int)position.Y - 30);
+        Assert(p.Tracks[0].Points[1].Value > 219 && p.Tracks[0].Points[1].Time == 2, "Constant graph has useful vertical editing range");
+        p.Tracks = [new Track { Points = [new(0,0),new(1,50),new(3,50),new(4,0)] }];
+        p.TestModifiers = Keys.Control;
+        var a = p.PointLocation(0,1); var b = p.PointLocation(0,2);
+        p.Down((int)((a.X+b.X)/2), (int)a.Y); p.DragTo((int)((a.X+b.X)/2)+20, (int)a.Y-20); p.Up((int)((a.X+b.X)/2)+20, (int)a.Y-20);
+        Assert(p.Tracks[0].Points[1].Time > 1 && Math.Abs(p.Tracks[0].Points[2].Time-p.Tracks[0].Points[1].Time-2) < 1e-9 && p.Tracks[0].Points[1].Value > 50, "Ctrl segment translates time and value preserving duration");
         host.Close();
     }
 }

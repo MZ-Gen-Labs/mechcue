@@ -31,6 +31,7 @@ if (args.Length == 1)
         if (!actual.SequenceEqual(wanted)) throw new Exception($"Native signature mismatch: {type.Name}\nActual:\n{string.Join('\n', actual)}\nReference:\n{string.Join('\n', wanted)}");
     }
 }
+BitmapResources.Verify(assembly.Location);
 Console.WriteLine("PASS: COM identities, method order, no vendor assembly dependency" + (args.Length == 1 ? ", native signatures match Solid Edge reference" : ""));
 
 static MethodInfo[] Methods(Type type) => type.GetMethods().OrderBy(m => m.MetadataToken).ToArray();
@@ -42,4 +43,31 @@ static string Native(ParameterInfo parameter)
     string name = type.IsEnum ? Enum.GetUnderlyingType(type).Name : type.Name;
     if (marshal?.Value == UnmanagedType.Interface) name = "InterfacePointer";
     return $"{name}:{parameter.IsIn}:{parameter.IsOut}:{marshal?.Value}:{marshal?.SafeArraySubType}";
+}
+
+static class BitmapResources
+{
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
+    [DllImport("kernel32.dll")] static extern bool FreeLibrary(IntPtr module);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindResource(IntPtr module, IntPtr name, IntPtr type);
+    [DllImport("kernel32.dll")] static extern IntPtr LoadResource(IntPtr module, IntPtr resource);
+    [DllImport("kernel32.dll")] static extern IntPtr LockResource(IntPtr resource);
+    public static void Verify(string path)
+    {
+        var module = LoadLibraryEx(path, IntPtr.Zero, 0x22);
+        if (module == IntPtr.Zero) throw new Exception("Cannot load add-in bitmap resources");
+        try
+        {
+            foreach (var (id, size) in new[] { (101,16), (102,32), (103,16), (104,32) })
+            {
+                var resource = FindResource(module, new IntPtr(id), new IntPtr(2));
+                if (resource == IntPtr.Zero) throw new Exception("Missing Win32 bitmap resource: " + id);
+                var data = LockResource(LoadResource(module, resource));
+                if (data == IntPtr.Zero || Marshal.ReadInt32(data) != 40 || Marshal.ReadInt32(data,4) != size || Marshal.ReadInt32(data,8) != size)
+                    throw new Exception("Invalid command bitmap: " + id);
+            }
+        }
+        finally { FreeLibrary(module); }
+        Console.WriteLine("PASS: command bitmap resources 101-104, medium/large color and monochrome");
+    }
 }

@@ -1,6 +1,6 @@
 param(
     [switch]$WithAddIn,
-    [string]$Version = '0.1.0-alpha.9',
+    [string]$Version = '0.1.0-alpha.10',
     [string]$OutputDirectory
 )
 $ErrorActionPreference = 'Stop'

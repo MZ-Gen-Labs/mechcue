@@ -5,7 +5,7 @@ public partial class MainForm
     void ShowQuickStart()
     {
         MessageBox.Show(this,
-            "① グラフを編集\n点をドラッグ：時間と値を変更。線分をドラッグ：上下移動。Shift：時刻変更。Esc：取消。\n\n" +
+            "① グラフを編集\n点・線分をドラッグ：上下移動。Ctrl＋ドラッグ：時間と値を変更。Shift：時刻変更。Esc：取消。\n\n" +
             "② Solid Edgeに接続し、機構ごとに駆動先を登録\nCADで部品を選択して候補を表示し、対象を強調して確認します。割り当て変更は、その機構の解除だけで行えます。\n\n" +
             "③『Solid Edgeへ反映』をオンにして動作確認\n時間カーソルを動かすか再生します。反映がオフならCADは動きません。\n\n" +
             "値：距離はmm、角度は度。拘束は絶対値、部品移動・回転は登録時からの変化量、部品座標はアセンブリ内の絶対座標です。\n\n" +
@@ -41,7 +41,7 @@ public partial class MainForm
         reviewMode.CheckedChanged += (_, _) =>
         {
             timer.Stop(); plot.EditMode = !reviewMode.Checked;
-            status.Text = reviewMode.Checked ? "動作確認：グラフをクリック・ドラッグして時刻を変更します。" : "編集：点を移動、線分を上下移動。Shiftで時刻変更、Escで取消。";
+            status.Text = reviewMode.Checked ? "動作確認：グラフをクリック・ドラッグして時刻を変更します。" : "編集：点・線分を上下移動。Ctrlで時間も移動。Shiftで時刻変更、Escで取消。";
         };
         Add(toolbar, "元に戻す", Undo);
         plot.PointSelected = (index, point) =>

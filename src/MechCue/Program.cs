@@ -69,7 +69,7 @@ public partial class MainForm : Form
     readonly CheckBox overlay = new() { Text = "重ねて表示", Checked = true, AutoSize = true };
     readonly FlowLayoutPanel legend = new() { Dock = DockStyle.Top, Height = 36, AutoScroll = true, WrapContents = false };
     readonly Plot plot = new() { Dock = DockStyle.Fill };
-    readonly Label status = new() { Dock = DockStyle.Bottom, Height = 34, Text = "点：時間・変位を編集 / 線分：上下へ移動 / 空白：時刻変更 / Shift：時刻変更 / Esc：取消" };
+    readonly Label status = new() { Dock = DockStyle.Bottom, Height = 34, Text = "点・線分：上下へ移動 / Ctrl＋ドラッグ：時間も移動 / 空白・Shift：時刻変更 / Esc：取消" };
     readonly Label connection = new() { Dock = DockStyle.Bottom, Height = 30, Text = "未接続：Solid Edgeに接続 → 駆動先を登録 → Solid Edgeへ反映をオン", ForeColor = Color.DarkOrange };
     readonly NumericUpDown time = new() { DecimalPlaces = 3, Increment = 0.01m, Maximum = 100000, Width = 100 };
     readonly NumericUpDown speed = new() { DecimalPlaces = 1, Increment = 0.1m, Minimum = 0.1m, Maximum = 10, Value = 1, Width = 65 };
@@ -276,6 +276,8 @@ class Plot : Control
     KeyPoint? originalPoint;
     KeyPoint? originalEndPoint;
     bool draggingSegment;
+    bool freeDrag;
+    protected virtual Keys DragModifiers => ModifierKeys;
     Point mouseOrigin;
     bool moved;
     readonly ToolTip hint = new();
@@ -292,7 +294,7 @@ class Plot : Control
     {
         DoubleBuffered = true; BackColor = Color.FromArgb(246, 248, 252); TabStop = true;
         AccessibleName = "タイムチャート：点をドラッグして編集、線分を上下に移動、空白で時刻変更";
-        hint.SetToolTip(this, "点：時間・変位を編集 / 線分：上下に移動 / 空白：時刻変更 / Shift＋ドラッグ：時刻変更 / Esc：編集取消");
+        hint.SetToolTip(this, "点・線分：上下移動 / Ctrl＋ドラッグ：時間も移動 / 空白・Shift＋ドラッグ：時刻変更 / Esc：編集取消");
     }
     PlotScale GetScale(int index)
     {
@@ -303,6 +305,9 @@ class Plot : Control
         double min = values.Length == 0 ? 0 : values.Min(p => p.Value), max = values.Length == 0 ? 1 : values.Max(p => p.Value);
         double padding = Math.Max((max - min) * 0.2, Math.Max(Math.Abs(max), Math.Abs(min)) * 0.001);
         padding = Math.Max(padding, 0.1);
+        // Constant (or nearly constant) values still need a useful editing range.
+        if (max - min <= Math.Max(1e-6, Math.Max(Math.Abs(max), Math.Abs(min)) * 1e-6))
+            padding = Math.Max(padding, Math.Max(10, Math.Max(Math.Abs(max), Math.Abs(min)) * 0.1));
         if (Overlay) return new PlotScale(dragScale?.End ?? End, min - padding, max + padding, 32, Math.Max(33, Height - 30), Width, 65);
         float rowHeight = (Height - 35f) / Math.Max(1, visible.Length);
         int row = Array.IndexOf(visible, index);
@@ -352,17 +357,18 @@ class Plot : Control
         if (e.Button != MouseButtons.Left) return;
         Focus(); var hit = Hit(e.Location); bool segment = false;
         if (hit.Track < 0) { hit = HitSegment(e.Location); segment = hit.Track >= 0; }
-        if (EditMode && hit.Track >= 0 && (ModifierKeys & Keys.Shift) == 0)
+        if (EditMode && hit.Track >= 0 && (DragModifiers & Keys.Shift) == 0)
         {
             if (EditStarting != null && !EditStarting(hit.Track)) return;
             // A pending table edit can have moved the point during EditStarting.
             hit = segment ? HitSegment(e.Location) : Hit(e.Location); if (hit.Track < 0) return;
+            freeDrag = (DragModifiers & Keys.Control) != 0;
             dragScale = GetScale(hit.Track); dragTrack = hit.Track; dragPoint = hit.Point;
             dragViewScale = dragScale;
             originalPoint = Tracks[dragTrack].Points[dragPoint]; mouseOrigin = e.Location; moved = false;
             draggingSegment = segment; originalEndPoint = segment ? Tracks[dragTrack].Points[dragPoint + 1] : null;
             PointSelected?.Invoke(dragTrack, dragPoint);
-            Selected = dragTrack; Cursor = segment ? Cursors.SizeNS : Cursors.SizeAll; Capture = true; Invalidate();
+            Selected = dragTrack; Cursor = freeDrag ? Cursors.SizeAll : Cursors.SizeNS; Capture = true; Invalidate();
         }
         else { scrubbing = true; Capture = true; Seek?.Invoke(GetTime(e.X)); }
     }
@@ -376,7 +382,7 @@ class Plot : Control
             moved = true;
             var track = Tracks[dragTrack];
             // Use deltas to avoid snapping a point to the initial grab position.
-            double time = originalPoint.Time + dragScale.Time(e.X) - dragScale.Time(mouseOrigin.X);
+            double time = originalPoint.Time + (freeDrag ? dragScale.Time(e.X) - dragScale.Time(mouseOrigin.X) : 0);
             double value = originalPoint.Value + dragScale.Value(e.Y) - dragScale.Value(mouseOrigin.Y);
             if (draggingSegment && originalEndPoint != null)
             {
@@ -385,6 +391,15 @@ class Plot : Control
                 track.Points[dragPoint] = originalPoint;
                 track.Points[dragPoint + 1] = originalEndPoint;
                 track.ShiftSegment(dragPoint, delta);
+                if (freeDrag)
+                {
+                    double dt = time - originalPoint.Time;
+                    double lower = dragPoint == 0 ? 0 : Math.BitIncrement(track.Points[dragPoint - 1].Time);
+                    double upper = dragPoint + 2 >= track.Points.Count ? dragScale.End : Math.BitDecrement(track.Points[dragPoint + 2].Time);
+                    dt = Math.Clamp(dt, lower - originalPoint.Time, upper - originalEndPoint.Time);
+                    track.Points[dragPoint] = track.Points[dragPoint] with { Time = originalPoint.Time + dt };
+                    track.Points[dragPoint + 1] = track.Points[dragPoint + 1] with { Time = originalEndPoint.Time + dt };
+                }
             }
             else track.MovePoint(dragPoint, time, value, dragScale.End);
             // Keep the mouse-to-value conversion fixed during the gesture, while
@@ -400,7 +415,7 @@ class Plot : Control
             Invalidate();
         }
         else if (scrubbing) Seek?.Invoke(GetTime(e.X));
-        else Cursor = Hit(e.Location).Track >= 0 ? Cursors.SizeAll : HitSegment(e.Location).Track >= 0 ? Cursors.SizeNS : Cursors.Cross;
+        else Cursor = Hit(e.Location).Track >= 0 || HitSegment(e.Location).Track >= 0 ? ((DragModifiers & Keys.Control) != 0 ? Cursors.SizeAll : Cursors.SizeNS) : Cursors.Cross;
     }
     protected override void OnMouseUp(MouseEventArgs e)
     {
