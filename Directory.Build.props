@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <Version Condition="'$(Version)' == ''">0.1.0-alpha.1</Version>
+    <Product>MechCue</Product>
+    <Copyright>Copyright (c) 2026 MechCue contributors</Copyright>
+  </PropertyGroup>
+</Project>

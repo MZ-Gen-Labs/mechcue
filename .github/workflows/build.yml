@@ -1,0 +1,33 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build, test and package both editions
+        shell: pwsh
+        run: ./scripts/Build.ps1 -WithAddIn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MechCue-prototype
+          path: artifacts/*/release/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            artifacts/*/standalone/*test-result.txt
+            artifacts/*/standalone/preview.png
+            artifacts/*/installer/installer-test-result.txt
+          if-no-files-found: ignore

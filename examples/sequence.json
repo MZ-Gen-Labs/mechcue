@@ -1,0 +1,10 @@
+[
+  { "Name": "スライダー", "Kind": "距離拘束", "Axis": "X", "Points": [
+    { "Time": 0, "Value": 10 }, { "Time": 1, "Value": 60 },
+    { "Time": 2, "Value": 60 }, { "Time": 3, "Value": 10 }, { "Time": 4, "Value": 10 }
+  ] },
+  { "Name": "回転軸", "Kind": "角度拘束", "Axis": "X", "Points": [
+    { "Time": 0, "Value": 0 }, { "Time": 1, "Value": 0 },
+    { "Time": 2, "Value": 90 }, { "Time": 3, "Value": 90 }, { "Time": 4, "Value": 0 }
+  ] }
+]
