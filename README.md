@@ -26,7 +26,9 @@ Windows x64、Solid Edge 2026、.NET 8 Desktop Runtime（x64）が必要です�
 3. グラフを選び、駆動先を確認して登録します。
 4. 「Solid Edgeへ反映」をオンにして時間カーソルを動かします。
 
-独立版は配置先の`MechCue.exe`、または配布ZIPを展開して起動します。
+アドインのみ必要な場合は`MechCue-<version>-AddIn-Setup.exe`を選びます。独立版のEXEは含みません。
+両版入りは`MechCue-<version>-Setup.exe`です。独立版は配置先の`MechCue.exe`、または配布ZIPで起動します。
+構成を切り替える場合は、既存版をアンインストールしてから導入してください。
 画面の「使い方」、[操作ガイド](docs/USER_GUIDE.md)、[セットアップ手順](Installer/README.md)を参照してください。
 
 [examples/sequence.json](examples/sequence.json)を「開く」で読み込むと複数動作を試せます。
@@ -54,7 +56,7 @@ Windowsと.NET 8 SDKがあれば、Solid Edge本体・付属DLLなしで両版�
 ./scripts/Build.ps1 -WithAddIn
 ```
 
-成果物は`artifacts/0.1.0-alpha.2/release`です。独立版ZIP、セットアップEXE、SHA256を出力します。
+成果物は`artifacts/0.1.0-alpha.3/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。

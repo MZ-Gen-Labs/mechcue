@@ -1,6 +1,6 @@
 param(
     [switch]$WithAddIn,
-    [string]$Version = '0.1.0-alpha.2',
+    [string]$Version = '0.1.0-alpha.3',
     [string]$OutputDirectory
 )
 $ErrorActionPreference = 'Stop'
@@ -35,6 +35,11 @@ if ($WithAddIn) {
     & powershell.exe -NoProfile -STA -File (Join-Path $PSScriptRoot 'Test-Installer.ps1') -Path (Join-Path $taskInstaller 'MechCue-Setup.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Installer package checks failed' }
     Copy-Item -LiteralPath (Join-Path $taskInstaller 'MechCue-Setup.exe') -Destination (Join-Path $taskDistribution "MechCue-$Version-Setup.exe")
+    $taskAddInInstaller = Join-Path $taskOutput 'installer-addin'
+    & (Join-Path $taskRoot 'Installer\Build-Installer.ps1') -PayloadDirectory $taskAddIn -OutputDirectory $taskAddInInstaller -Version $Version -AddInOnly
+    & powershell.exe -NoProfile -STA -File (Join-Path $PSScriptRoot 'Test-Installer.ps1') -Path (Join-Path $taskAddInInstaller 'MechCue-AddIn-Setup.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Add-in-only installer package checks failed' }
+    Copy-Item -LiteralPath (Join-Path $taskAddInInstaller 'MechCue-AddIn-Setup.exe') -Destination (Join-Path $taskDistribution "MechCue-$Version-AddIn-Setup.exe")
 }
 Get-ChildItem -LiteralPath $taskDistribution -File | Sort-Object Name | ForEach-Object {
     '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name

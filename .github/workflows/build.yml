@@ -30,4 +30,5 @@ jobs:
             artifacts/*/standalone/*test-result.txt
             artifacts/*/standalone/preview.png
             artifacts/*/installer/installer-test-result.txt
+            artifacts/*/installer-addin/installer-test-result.txt
           if-no-files-found: ignore

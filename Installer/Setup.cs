@@ -14,6 +14,11 @@ namespace MechCueInstaller
 {
     static class Program
     {
+#if ADDIN_ONLY
+        public static readonly bool AddInOnly = true;
+#else
+        public static readonly bool AddInOnly = false;
+#endif
         public static string ReleaseVersion
         {
             get { using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("ReleaseVersion.txt")) using (var reader = new StreamReader(stream)) return reader.ReadToEnd().Trim(); }
@@ -43,13 +48,15 @@ namespace MechCueInstaller
             using (var zip = new ZipArchive(memory))
             {
                 foreach (var entry in zip.Entries) { SafePath(root, entry.FullName); using (var s = entry.Open()) { var buffer = new byte[4096]; while (s.Read(buffer, 0, buffer.Length) > 0) { } } }
+                if (!Program.AddInOnly && !zip.Entries.Any(e => e.FullName == "MechCue.exe")) throw new IOException("Missing standalone executable");
+                if (Program.AddInOnly && zip.Entries.Any(e => e.FullName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))) throw new IOException("Executable must not be included in add-in-only payload");
                 foreach (var required in SetupForm.Required) if (!zip.Entries.Any(e => e.FullName == required)) throw new IOException("Missing " + required);
                 foreach (var required in new[] { "LICENSE", "THIRD_PARTY_NOTICES.md", "Example-Sequence.json" }) if (!zip.Entries.Any(e => e.FullName == required)) throw new IOException("Missing " + required);
                 if (zip.Entries.Any(e => e.FullName.Contains("CADTeam"))) throw new IOException("Vendor binary must not be packaged");
             }
             bool rejected = false; try { SafePath(root, "../outside.dll"); } catch (IOException) { rejected = true; }
             if (!rejected) throw new IOException("Unsafe path accepted");
-            File.WriteAllText(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "installer-test-result.txt"), "PASS: payload integrity, required files, vendor dependency policy, traversal rejection");
+            File.WriteAllText(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "installer-test-result.txt"), "PASS: " + (Program.AddInOnly ? "add-in only, no standalone EXE; " : "add-in and standalone; ") + "payload integrity, required files, vendor dependency policy, traversal rejection");
         }
     }
     class SetupForm : Form
@@ -58,7 +65,7 @@ namespace MechCueInstaller
         const string ClassKey = @"SOFTWARE\Classes\CLSID\" + Clsid;
         const string ProgKey = @"SOFTWARE\Classes\MechCue.TimeChartAddIn";
         const string UninstallKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MechCue.TimeChart";
-        public static readonly string[] Required = { "MechCue.AddIn.comhost.dll", "MechCue.AddIn.dll", "MechCue.AddIn.deps.json", "MechCue.AddIn.runtimeconfig.json", "MechCue.dll", "MechCue.exe", "MechCue.runtimeconfig.json", "MechCue.deps.json" };
+        public static readonly string[] Required = { "MechCue.AddIn.comhost.dll", "MechCue.AddIn.dll", "MechCue.AddIn.deps.json", "MechCue.AddIn.runtimeconfig.json", "MechCue.dll", "MechCue.runtimeconfig.json", "MechCue.deps.json" };
         readonly TextBox destination = new TextBox { Width = 550 };
         readonly TextBox solidEdge = new TextBox { Width = 550 };
         readonly Label status = new Label { Width = 620, Height = 100 };
@@ -69,7 +76,7 @@ namespace MechCueInstaller
             this.uninstall = uninstall; Text = "MechCue セットアップ " + Program.ReleaseVersion; ClientSize = new Size(690, 480);
             Font = new Font("Yu Gothic UI", 10); FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false;
             var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(22), FlowDirection = FlowDirection.TopDown, WrapContents = false };
-            panel.Controls.Add(new Label { Text = "MechCue アドイン ＋ 独立版", Font = new Font(Font.FontFamily, 17, FontStyle.Bold), Width = 630, Height = 44 });
+            panel.Controls.Add(new Label { Text = Program.AddInOnly ? "MechCue アドイン版" : "MechCue アドイン ＋ 独立版", Font = new Font(Font.FontFamily, 17, FontStyle.Bold), Width = 630, Height = 44 });
             panel.Controls.Add(new Label { Text = "Solid Edgeを終了してから実行してください。グラフファイルは保存しておいてください。", Width = 630, Height = 40 });
             panel.Controls.Add(new Label { Text = "インストール先", AutoSize = true }); panel.Controls.Add(destination);
             panel.Controls.Add(new Label { Text = "Solid Edgeのインストールフォルダー", AutoSize = true }); panel.Controls.Add(solidEdge);
@@ -124,6 +131,12 @@ namespace MechCueInstaller
             if (target.TrimEnd('\\').Length <= 3 || target.IndexOf('"') >= 0) throw new IOException("有効なインストール先を指定してください。");
             string cadRoot = Path.GetFullPath(solidEdge.Text).TrimEnd('\\');
             if (string.Equals(target.TrimEnd('\\'), cadRoot, StringComparison.OrdinalIgnoreCase) || target.StartsWith(cadRoot + "\\", StringComparison.OrdinalIgnoreCase)) throw new IOException("Solid Edge本体のフォルダーとは別の場所を指定してください。");
+            using (var machine = Machine()) using (var previous = machine.OpenSubKey(UninstallKey))
+            {
+                string mode = Program.AddInOnly ? "AddInOnly" : "Full";
+                if (previous != null && Convert.ToString(previous.GetValue("InstallMode", "Full")) != mode)
+                    throw new IOException("別の構成のMechCueが導入済みです。既存版をアンインストールしてから、今回のインストーラーを実行してください。");
+            }
             Directory.CreateDirectory(target);
             var backups = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
@@ -145,7 +158,7 @@ namespace MechCueInstaller
                     using (var existing = user.OpenSubKey(ClassKey)) if (existing != null) Register(user, target);
                     using (var key = machine.CreateSubKey(UninstallKey))
                     {
-                        key.SetValue("DisplayName", "MechCue タイムチャート"); key.SetValue("DisplayVersion", Program.ReleaseVersion); key.SetValue("Publisher", "MechCue contributors");
+                        key.SetValue("DisplayName", Program.AddInOnly ? "MechCue タイムチャート（アドイン版）" : "MechCue タイムチャート"); key.SetValue("InstallMode", Program.AddInOnly ? "AddInOnly" : "Full"); key.SetValue("DisplayVersion", Program.ReleaseVersion); key.SetValue("Publisher", "MechCue contributors");
                         key.SetValue("InstallLocation", target); key.SetValue("UninstallString", "\"" + setupPath + "\" --uninstall"); key.SetValue("NoModify", 1); key.SetValue("NoRepair", 1);
                     }
                 }
@@ -156,7 +169,7 @@ namespace MechCueInstaller
                     throw;
                 }
             }
-            status.Text = "インストールが完了しました。Solid Edgeを起動し、MechCueのタイムチャートを開いてください。\n独立版：" + Path.Combine(target, "MechCue.exe");
+            status.Text = "インストールが完了しました。Solid Edgeを起動し、MechCueのタイムチャートを開いてください。" + (Program.AddInOnly ? "" : "\n独立版：" + Path.Combine(target, "MechCue.exe"));
             install.Text = "完了";
         }
         static void Register(RegistryKey root, string target)
