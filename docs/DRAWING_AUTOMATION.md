@@ -19,10 +19,10 @@
 ## 寸法の範囲
 
 - `dimensionMode=overall`：正面の幅・高さと、上側投影の奥行き。円筒端面では直径を使用。
-- `dimensionMode=features`：外形に加えて、投影された全円の直径、円中心の端面からの距離、主要な直線段差を追加。
+- `dimensionMode=features`：外形に加えて、対応する投影円の直径、円中心の端面からの距離、主要な直線段差を追加。
 - `dimensionMode=none`：ビューのみ作成。
 
-寸法は投影線・円の参照に関連付けた、Solid Edgeの参照寸法です。数値の表示を上書きする方式ではありません。直径は同じビュー・同じ径で一つにまとめ、円位置は最大4か所、段差は各方向の主要なものを選びます。段差の同一方向・同一長さの重複をビュー間で減らします。自動作成した寸法には識別属性を付け、再実行時に重複を防ぎます。手作業で追加した寸法の重複判定は含みません。
+寸法は投影線・円の参照に関連付けた、Solid Edgeの参照寸法です。数値の表示を上書きする方式ではありません。直径は同じビュー・同じ径で一つにまとめ、円位置は最大8か所、段差は各方向の主要なものを選びます。段差の同一方向・同一長さの重複をビュー間で減らします。自動作成した寸法には識別属性を付け、再実行時に重複を防ぎます。手作業で追加した寸法の重複判定は含みません。
 
 寸法線を外側の段に並べ、円径の文字位置を調整します。複雑な形状、文字の大きさ、会社の図面テンプレートによっては手動調整が必要です。線や円を特定できない場合、参照寸法の値が想定と合わない場合などは追加せず、結果の `warnings` に理由を返します。モデルのエッジが削除・分割される更新では参照切れを確認してください。
 
@@ -53,3 +53,10 @@ APIの根拠：[DrawingView](https://support.industrysoftware.automation.siemens
 Linear dimensions are arranged independently per view and direction: smallest nearest the geometry, largest outermost. Horizontal dimensions are below the view and vertical dimensions to its left, with an initial 9 mm gap and 7 mm lane spacing on the sheet. Diameter callouts retain their placement.
 
 Use `solidedge_arrange_drawing_dimensions(expectedDocument, viewNumber=0)` to rearrange existing MechCue dimensions without adding dimensions or saving. `0` processes all views on the active sheet. Values and model associations are preserved; manually created dimensions are untouched. Ambiguous ownership in older overlapping views is reported and left unchanged. This ordering reduces extension-line crossings for nested dimensions; it does not provide general collision avoidance for all annotations or adjacent views. Inspect the result before saving.
+
+
+## 同じ穴位置寸法の重複防止（0.2.0-alpha.12）
+
+同じビュー・同じ測定方向・同じ基準から同じ座標までの穴位置寸法は1つにまとめます。例えば、穴が5個あってもY座標が20と70の2種類なら、Y方向の位置寸法は20と70を各1つ作成します。X方向の20とY方向の20、同じ20でも基準が異なる寸法、別ビューの寸法は別々に残します。寸法数の上限は引き続き適用されます。
+
+旧版で作成した重複は`solidedge_arrange_drawing_dimensions`で整理できます。MechCueが作成した円位置寸法の参照点・方向・実際の寸法値が一致する場合だけ重複を削除し、`removedDuplicates`に返します。手作業の寸法、直径、全体寸法、段差寸法は削除対象にしません。基準やビューを特定できない場合は保持して警告を返します。整理後は保存を明示的に実行してください。

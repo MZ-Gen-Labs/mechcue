@@ -170,3 +170,6 @@ Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechc
 ## 3D PMI（0.2.0-alpha.11）
 
 `solidedge_auto_pmi`で部品モデルに関連付き参照寸法を作成し、`solidedge_list_pmi`で確認、`solidedge_show_pmi_view`で注釈ビューを切り替えます。対象は単一ボディの`.par`です。自動保存・公差推定は行いません。初回のPMI一覧取得でもSolid Edgeの内部初期化で未保存状態になる場合があります。[対応範囲・設定・操作例](../docs/PMI_AUTOMATION.md)を参照してください。
+
+
+0.2.0-alpha.12では、同じビュー・方向・基準の穴位置寸法を同じ座標なら1つにまとめます。旧版の重複は`solidedge_arrange_drawing_dimensions`で整理でき、`removedDuplicates`で削除結果を確認できます。異なる基準・方向、手作業の寸法は保持します。円位置の対象を最大8箇所に拡張しました。

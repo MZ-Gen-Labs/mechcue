@@ -79,6 +79,18 @@ try:
     for name,orientation in [('opposite','back'),('side','right')]:
         path,result=drawing(plate,name,frontOrientation=orientation,includeIsometric=False)
         check(result['plan']['FrontOrientation']==orientation and len(result['views']['views'])==3,'Explicit '+orientation+' front')
+    multi=save_part('multi-hole','rectangle',widthMm=160,heightMm=100,depthMm=15)
+    for x,y,r in [(20,20,4),(80,20,4),(140,20,4),(40,70,8),(120,70,8)]:tool('solidedge_extrude_profile',{'expectedDocument':multi,'shape':'circle','radiusMm':r,'depthMm':25,'xMm':x,'yMm':y,'operation':'cut'})
+    tool('solidedge_save_document',{'expectedDocument':multi})
+    path,result=drawing(multi,'multi-hole-drawing')
+    values=[round(d['valueMm'],3) for d in result['dimensions'] if d['kind'].startswith('circle-') and d['kind'].endswith('-y')]
+    check(sorted(values)==[20,70],'Equal-height hole positions dimensioned once per view/datum')
+    xvalues=[round(d['valueMm'],3) for d in result['dimensions'] if d['kind'].startswith('circle-') and d['kind'].endswith('-x')]
+    check(sorted(xvalues)==[20,40,80,120,140],'All five hole X positions included; X20 and Y20 remain separate')
+    state=tool('solidedge_list_drawing_views',{'expectedDocument':path})
+    repeat=tool('solidedge_dimension_drawing_view',{'expectedDocument':path,'viewNumber':1,'maxDimensions':30})
+    check(not repeat['added'] and not repeat['warnings'] and state==tool('solidedge_list_drawing_views',{'expectedDocument':path}),'Repeated multi-hole dimension generation stays deduplicated')
+    check_lanes(path,'Multi-hole')
     cylinder=save_part('cylinder','circle',radiusMm=20,depthMm=50)
     path,result=drawing(cylinder,'cylinder-drawing',includeIsometric=False)
     check(len(result['views']['views'])==2 and sorted(round(d['valueMm'],3) for d in result['dimensions'])==[40,50],'Cylinder uses two views and diameter/length')

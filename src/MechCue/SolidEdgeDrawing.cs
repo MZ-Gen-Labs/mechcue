@@ -104,9 +104,36 @@ public sealed partial class Bridge
         if(id==null||id.Contains("/diameter/"))return null;
         try {var a=DrawingRelatedPoint(dimension,0);var b=DrawingRelatedPoint(dimension,1);return (a[DrawingDimensionHorizontal(id,a,b)?1:0]+Convert.ToDouble(Get(dimension,"TrackDistance")))*1000;}catch{return null;}
     }
-    static (List<object> placements,List<string> warnings) DrawingArrange(object sheet,int selectedView=0)
+    static bool DrawingCirclePosition(string id) {
+        string label=id[(id.LastIndexOf('/')+1)..];
+        return label.StartsWith("circle-",StringComparison.Ordinal) && (label.EndsWith("-x",StringComparison.Ordinal)||label.EndsWith("-y",StringComparison.Ordinal)) && int.TryParse(label[7..^2],out _);
+    }
+    // Deduplicate projected intervals, not scalar values: equally long dimensions with different
+    // datums or directions must remain. Only MechCue-generated circular-feature positions qualify.
+    static (List<object> removed,List<string> warnings) DrawingRemoveDuplicatePositions(object sheet,int selectedView) {
+        var removed=new List<object>();var warnings=new List<string>();var views=Get(sheet,"DrawingViews");
+        var owners=Enumerable.Range(1,Convert.ToInt32(Get(views,"Count"))).Select(i=>(number:i,key:Convert.ToString(Get(GetItem(views,i),"Key"))??i.ToString())).ToList();
+        var seen=new List<(int view,bool x,double low,double high,double value)>();var duplicates=new List<(object dimension,int view,string id,double value)>();
+        var dimensions=Get(sheet,"Dimensions");
+        for(int i=1;i<=Convert.ToInt32(Get(dimensions,"Count"));i++) {
+            var dim=GetItem(dimensions,i);string? id=DrawingTag(dim);if(id==null||!DrawingCirclePosition(id))continue;
+            try {
+                var owner=owners.Where(v=>id.StartsWith(v.key+"/",StringComparison.Ordinal)).ToList();
+                if(owner.Count!=1){warnings.Add($"{id}: ambiguous view ownership; dimension retained.");continue;}
+                int number=owner[0].number;if(selectedView!=0&&selectedView!=number)continue;
+                var a=DrawingRelatedPoint(dim,0);var b=DrawingRelatedPoint(dim,1);bool x=id.EndsWith("-x",StringComparison.Ordinal);int axis=x?0:1;
+                double low=Math.Min(a[axis],b[axis]),high=Math.Max(a[axis],b[axis]),value=Math.Abs(Convert.ToDouble(Get(dim,"Value")));
+                if(!double.IsFinite(low)||!double.IsFinite(high)||!double.IsFinite(value))continue;
+                if(seen.Any(r=>r.view==number&&r.x==x&&Math.Abs(r.low-low)<1e-7&&Math.Abs(r.high-high)<1e-7&&Math.Abs(r.value-value)<1e-7))duplicates.Add((dim,number,id,value));
+                else seen.Add((number,x,low,high,value));
+            }catch(Exception e){warnings.Add($"{id}: duplicate check failed; dimension retained: {e.GetBaseException().Message}");}
+        }
+        foreach(var row in duplicates)try{Call(row.dimension,"Delete");removed.Add(new {viewNumber=row.view,mechCueId=row.id,valueMm=row.value*1000});}catch(Exception e){warnings.Add($"{row.id}: duplicate removal failed: {e.GetBaseException().Message}");}
+        return(removed,warnings);
+    }
+    static (List<object> placements,List<string> warnings,List<object> removedDuplicates) DrawingArrange(object sheet,int selectedView=0)
     {
-        var placements=new List<object>();var warnings=new List<string>();var views=Get(sheet,"DrawingViews");
+        var cleanup=DrawingRemoveDuplicatePositions(sheet,selectedView);var placements=new List<object>();var warnings=cleanup.warnings;var views=Get(sheet,"DrawingViews");
         var bounds=new List<(int number,string key,double[] box)>();
         for(int i=1;i<=Convert.ToInt32(Get(views,"Count"));i++) {
             var view=GetItem(views,i);if(DrawingOrientation(view)==9)continue;var points=new List<(double x,double y)>();
@@ -137,14 +164,14 @@ public sealed partial class Bridge
                 }catch(Exception e){warnings.Add($"{row.id}: {e.GetBaseException().Message}");}
             }
         }
-        return(placements,warnings);
+        return(placements,warnings,cleanup.removed);
     }
     public static object CadArrangeDrawingDimensions(string expectedDocument,int viewNumber=0)
     {
         if(viewNumber<0)throw new ArgumentOutOfRangeException(nameof(viewNumber));
         var doc=CadDocument(CadApplication(),expectedDocument,".dft");var sheet=Get(doc,"ActiveSheet");
         if(viewNumber>Convert.ToInt32(Get(Get(sheet,"DrawingViews"),"Count")))throw new ArgumentOutOfRangeException(nameof(viewNumber));
-        var result=DrawingArrange(sheet,viewNumber);return new {fullName=CadName(doc),placements=result.placements,warnings=result.warnings,saved=false};
+        var result=DrawingArrange(sheet,viewNumber);return new {fullName=CadName(doc),placements=result.placements,removedDuplicates=result.removedDuplicates,warnings=result.warnings,saved=false};
     }
     static (List<object> dimensions,List<string> warnings) DrawingDimensions(object sheet,object view,int number,string mode,bool horizontal,bool vertical,int maximum)
     {
@@ -171,9 +198,14 @@ public sealed partial class Bridge
         if(horizontal&&left!=null&&rightAnchor!=null)Linear(left,rightAnchor,true,"overall-width",xmax-xmin,xLane++);
         if(vertical&&low!=null&&high!=null)Linear(low,high,false,"overall-height",ymax-ymin,yLane++);
         if(mode=="features" || anchors.Count==0) {
-            var unique=circles.GroupBy(c=>$"{c.center.X:F8}/{c.center.Y:F8}/{c.radius:F8}").Select(g=>g.First()).OrderBy(c=>c.center.X).ThenBy(c=>c.center.Y).Take(4).ToList();var diameters=new HashSet<string>();int hole=0;
+            var unique=circles.GroupBy(c=>$"{c.center.X:F8}/{c.center.Y:F8}/{c.radius:F8}").Select(g=>g.First()).OrderBy(c=>c.center.X).ThenBy(c=>c.center.Y).Take(8).ToList();var diameters=new HashSet<string>();var positions=new List<(bool x,double origin,double end)>();int hole=0;
             foreach(var c in unique){hole++;string diam=$"{c.radius:F8}";string id=$"{key}/diameter/{diam}";if(results.Count<maximum&&diameters.Add(diam)&&!existing.Contains(id)){object? dim=null;try{dim=Call(collection,"AddRadialDiameter",c.center.Reference);Set(dim,"Constraint",false);Set(dim,"TrackAngle",Math.PI/4);Set(dim,"TrackDistance",c.radius*scale+.018);Call(dim,"SetTextOffsets",.018,.012+.007*(hole-1));double v=Convert.ToDouble(Get(dim,"Value"));if(Math.Abs(v-c.radius*2)>1e-6)throw new InvalidOperationException("Circular dimension value mismatch.");DrawingTag(dim,id);existing.Add(id);results.Add(new {viewNumber=number,kind="diameter",valueMm=v*1000,associated=true});}catch(Exception e){if(dim!=null)try{Call(dim,"Delete");}catch{}warnings.Add($"View {number}, diameter: {e.GetBaseException().Message}");}}
-                if(mode=="features"&&left!=null)Linear(left,c.center,true,$"circle-{hole}-x",c.center.X-xmin,xLane++);if(mode=="features"&&low!=null)Linear(low,c.center,false,$"circle-{hole}-y",c.center.Y-ymin,yLane++);
+                foreach(bool x in new[]{true,false}) {
+                    var origin=x?left:low;if(mode!="features"||origin==null)continue;
+                    double first=x?origin.X:origin.Y,last=x?c.center.X:c.center.Y;
+                    if(positions.Any(p=>p.x==x&&Math.Abs(p.origin-first)<1e-7&&Math.Abs(p.end-last)<1e-7))continue;
+                    positions.Add((x,first,last));Linear(origin,c.center,x,$"circle-{hole}-{(x?"x":"y")}",last-first,x?xLane++:yLane++);
+                }
             }
         }
         if(mode=="features"&&anchors.Count>0){
