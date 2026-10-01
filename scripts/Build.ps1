@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.2.0-alpha.6',
+    [string]$Version = '0.2.0-alpha.7',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )

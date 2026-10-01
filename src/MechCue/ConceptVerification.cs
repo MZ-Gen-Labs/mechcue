@@ -16,6 +16,25 @@ public static partial class SelfTest
             Check(Math.Abs(moved[dependent][13]-home[dependent][13]-.05)<1e-10,"Nested Y motion");
             string vertical=kind=="gantry"?"gripper":"tool";
             Check(Math.Abs(moved[vertical][14]-home[vertical][14]-.02)<1e-10,"Z motion");
+            if(kind=="gantry") {
+                Check(model.Axes.Single(a=>a.Id=="Y").Parent=="" && model.Axes.Single(a=>a.Id=="X").Parent=="Y" && model.Axes.Single(a=>a.Id=="Z").Parent=="X","Gantry Y/X/Z hierarchy");
+                Check(Math.Abs(moved["bridge"][12]-home["bridge"][12])<1e-10 && Math.Abs(moved["bridge"][13]-home["bridge"][13]-.05)<1e-10,"Bridge must follow Y only, never trolley X");
+                Check(Math.Abs(moved["x-carriage"][12]-home["x-carriage"][12]-.1)<1e-10 && Math.Abs(moved["x-carriage"][13]-home["x-carriage"][13]-.05)<1e-10 && moved["x-carriage"][14]==home["x-carriage"][14],"Trolley follows XY only");
+                Check(moved["z-guide-left"][14]==home["z-guide-left"][14],"Guide must not follow slide Z");
+                foreach(var rail in model.Bodies.Where(b=>b.Id.EndsWith("-y-rail"))) Check(home[rail.Id].SequenceEqual(moved[rail.Id]),"Y rails stay fixed");
+                foreach(double x in new[]{-250d,250d}) foreach(double y in new[]{-150d,150d}) foreach(double z in new[]{-150d,150d}) {
+                    var pose=model.Poses(new Dictionary<string,double>{{"X",x},{"Y",y},{"Z",z}});
+                    var beam=model.Bodies.Single(b=>b.Id=="bridge");
+                    Check(Math.Abs(pose["bridge"][12]-home["bridge"][12])<1e-10,"Bridge leaves supports at X limit");
+                    foreach(var end in model.Bodies.Where(b=>b.Id.StartsWith("bridge-") && b.Id.EndsWith("-end"))) {
+                        var rail=model.Bodies.Single(b=>b.Id==end.Id.Replace("bridge-","").Replace("-end","-y-rail"));
+                        Check(Math.Abs(y)+end.SizeMm[1]/2<=rail.SizeMm[1]/2,"Bridge end leaves Y rail at travel limit");
+                    }
+                    var grip=model.Bodies.Single(b=>b.Id=="gripper"); var slide=model.Bodies.Single(b=>b.Id=="z-slide");
+                    Check(Math.Abs((pose["gripper"][14]+grip.SizeMm[2]/2000)-(pose["z-slide"][14]-slide.SizeMm[2]/2000))<1e-10,"Slide/gripper detached");
+                    Check(pose["z-slide"][14]+slide.SizeMm[2]/2000>home["x-carriage"][14],"Slide withdrawn from trolley at Z limit");
+                }
+            }
             if(kind=="mill5") {
                 values["A"]=90; values["C"]=90; moved=model.Poses(values);
                 Check(Math.Abs(moved["workpiece"][13]-(.05-.08))<1e-10 && Math.Abs(moved["workpiece"][14]-.35)<1e-10,"A pivot and child C preserve parent-local rotation");
@@ -70,7 +89,8 @@ public sealed partial class Bridge
                 chartBridge.Apply(0);
                 foreach(var b in model.Bodies)if(!ConceptSame(Matrix(CadOccurrence(document,model.Bodies.IndexOf(b)+1)),wanted[b.Id]))throw new Exception("Chart import jumped");
                 var xTrack=chartTracks.Single(t=>t.Name=="X");xTrack.Points=[new(0,100),new(4,150)];chartBridge.Apply(4);
-                if(Math.Abs(Matrix(CadOccurrence(document,model.Bodies.FindIndex(b=>b.Parent=="X")+1))[12]-.15)>1e-8)throw new Exception("Chart X movement failed");
+                var witness=model.Bodies.First(b=>b.Parent=="X");var expectedX=new Dictionary<string,double>(values){["X"]=150};
+                if(Math.Abs(Matrix(CadOccurrence(document,model.Bodies.IndexOf(witness)+1))[12]-model.Poses(expectedX)[witness.Id][12])>1e-8)throw new Exception("Chart X movement failed");
                 xTrack.Points=[new(0,999),new(4,999)];
                 try{chartBridge.Apply(0);throw new Exception("Chart range accepted");}catch(ArgumentException){}
                 xTrack.Points=[new(0,100),new(4,150)];

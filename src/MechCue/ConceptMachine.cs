@@ -45,13 +45,31 @@ public sealed class ConceptMachine
         double w = xTravelMm + 400, d = yTravelMm + 400, h = zTravelMm + 600;
         Box("base", "", w, d, 100, 0, 0, 50);
         if (type == "gantry") {
-            Axis("X", "", "X", xTravelMm); Axis("Y", "X", "Y", yTravelMm); Axis("Z", "Y", "Z", zTravelMm);
-            Box("left-column", "", 100, d, h, -w/2+50, 0, 100+h/2);
-            Box("right-column", "", 100, d, h, w/2-50, 0, 100+h/2);
-            Box("bridge", "Y", w-200, 100, 100, 0, 0, h+50);
-            Box("x-carriage", "X", 120, d, 80, 0, 0, h+140);
-            Box("z-slide", "Z", 80, 80, zTravelMm+200, 0, 0, 400+zTravelMm/2);
-            Box("gripper", "Z", 140, 80, 60, 0, 0, 270);
+            // The bridge travels along the two Y rails; the trolley travels on the bridge.
+            Axis("Y", "", "Y", yTravelMm); Axis("X", "Y", "X", xTravelMm); Axis("Z", "X", "Z", zTravelMm);
+            foreach (int side in new[] { -1, 1 }) {
+                string tag = side < 0 ? "left" : "right";
+                double x = side * (w / 2 - 50);
+                Box(tag + "-column-front", "", 100, 100, h, x, -d / 2 + 50, 100 + h / 2);
+                Box(tag + "-column-back", "", 100, 100, h, x, d / 2 - 50, 100 + h / 2);
+                Box(tag + "-y-rail", "", 100, d, 20, x, 0, h + 110);
+                Box("bridge-" + tag + "-end", "Y", 100, 200, 100, x, 0, h + 170);
+            }
+            // Twin beams leave room for the vertical slide rather than intersecting it.
+            Box("bridge", "Y", w - 200, 35, 100, 0, -82.5, h + 170);
+            Box("bridge-back", "Y", w - 200, 35, 100, 0, 82.5, h + 170);
+            Box("x-carriage", "X", 30, 140, 80, -65, 0, h + 260);
+            Box("x-carriage-right", "X", 30, 140, 80, 65, 0, h + 260);
+            // Four guide walls provide a 70 mm square opening around the 60 mm slide.
+            double guideHeight = h - 300, guideZ = h + 300 - guideHeight / 2;
+            Box("z-guide-left", "X", 15, 70, guideHeight, -42.5, 0, guideZ);
+            Box("z-guide-right", "X", 15, 70, guideHeight, 42.5, 0, guideZ);
+            Box("z-guide-front", "X", 100, 15, guideHeight, 0, -42.5, guideZ);
+            Box("z-guide-back", "X", 100, 15, guideHeight, 0, 42.5, guideZ);
+            double gripZ = 180 + zTravelMm / 2, slideBottom = gripZ + 30;
+            double slideHeight = h + 300 + zTravelMm / 2 + 50 - slideBottom;
+            Box("z-slide", "Z", 60, 60, slideHeight, 0, 0, slideBottom + slideHeight / 2);
+            Box("gripper", "Z", 140, 80, 60, 0, 0, gripZ);
             Box("workpiece", "", 100, 100, 100, 0, 0, 150);
         } else {
             Axis("Y", "", "Y", yTravelMm); Axis("X", "Y", "X", xTravelMm); Axis("Z", "", "Z", zTravelMm);
