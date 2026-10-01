@@ -72,3 +72,8 @@ AI access defaults on and can be disabled explicitly; communication remains loca
 ## alpha.21: small-grid selection and diagnostics
 
 User exception stack confirmed FirstDisplayedScrollingRowIndex failed from graph point selection when the keyframe grid had no space below its header. Scroll is skipped for hidden/tiny grids; selection remains valid. Regression tests shrink the numeric panel to its header and select a point, and repeat while compact/hidden. Operation, option, resize/splitter, point selection and exception logs include version and layout state. JSONL diagnostics are local in %LOCALAPPDATA%/MechCue/Logs, rotate around 5 MB and retain 20 diagnostic files. Log write failures do not interrupt editing. Data > Log folder opens the directory.
+
+
+## alpha.22: visible magenta in ribbon icons
+
+Solid Edge 2026 displayed the assumed magenta bitmap transparency key and antialiased fringes. Color bitmap backgrounds and antialiasing are now neutral white. GUI version 9 invalidates cached ribbon artwork. All color bitmap resources are checked for residual pure magenta pixels. Native ribbon appearance after upgrade still needs user verification. Includes alpha.21 small-grid scroll fix and operation diagnostics.

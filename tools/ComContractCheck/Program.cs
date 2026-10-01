@@ -67,6 +67,15 @@ static class BitmapResources
                 var data = LockResource(LoadResource(module, resource));
                 if (data == IntPtr.Zero || Marshal.ReadInt32(data) != 40 || Marshal.ReadInt32(data,4) != size || Marshal.ReadInt32(data,8) != size)
                     throw new Exception("Invalid command bitmap: " + id);
+                if (Marshal.ReadInt16(data,14) == 24)
+                {
+                    int stride = ((size * 24 + 31) / 32) * 4;
+                    for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) {
+                        int offset = 40 + y * stride + x * 3;
+                        if (Marshal.ReadByte(data,offset) == 255 && Marshal.ReadByte(data,offset+1) == 0 && Marshal.ReadByte(data,offset+2) == 255)
+                            throw new Exception("Visible magenta background in bitmap: " + id);
+                    }
+                }
             }
         }
         finally { FreeLibrary(module); }

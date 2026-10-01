@@ -23,7 +23,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
     {
         application = Application;
         addIn = (SE.ISEAddInEx)AddInInstance;
-        addIn.GuiVersion = 8;
+        addIn.GuiVersion = 9;
         addIn.Description = "\nMechCue";
         var container = (IConnectionPointContainer)addIn.AddInEvents;
         var eventsId = typeof(SE.ISEAddInEvents).GUID;

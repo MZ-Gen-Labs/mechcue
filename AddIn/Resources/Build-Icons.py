@@ -7,7 +7,7 @@ for command in range(36):
  for base,size,mono in [(101,16,False),(102,32,False),(103,16,True),(104,32,True)]:
     rid=base+command*10
     scale=4
-    bg=(255,255,255) if mono else (255,0,255)
+    bg=(255,255,255)
     strip=Image.new('RGB',(size,size),bg)
     for k in [command]:
         im=Image.new('RGB',(size*scale,size*scale),bg)
