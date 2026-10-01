@@ -79,6 +79,8 @@ japanese.McpGuide=MCP接続ガイド
 english.McpGuide=MCP connection guide
 japanese.McpFolder=MCPサーバーのフォルダー
 english.McpFolder=MCP server folder
+japanese.McpControl=MCP設定（タスクトレイ）
+english.McpControl=MCP settings (system tray)
 
 [Types]
 Name: "standard"; Description: "{cm:StandardInstall}"
@@ -130,6 +132,7 @@ Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\MechCue
 Name: "{autoprograms}\MechCue"; Filename: "{app}\MechCue.exe"
 #endif
 #if HasMcp == "1"
+Name: "{autoprograms}\MechCue MCP\{cm:McpControl}"; Filename: "{app}\MCP\control\MechCue.Mcp.Control.exe"; Components: mcp
 Name: "{autoprograms}\MechCue MCP\{cm:McpGuide}"; Filename: "{app}\MCP\MCP-Guide.html"; Components: mcp
 Name: "{autoprograms}\MechCue MCP\{cm:McpFolder}"; Filename: "{app}\MCP"; Components: mcp
 #endif

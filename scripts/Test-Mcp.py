@@ -1,12 +1,16 @@
 """Integration test using MCP JSON-RPC, two fresh offline MechCue windows, and stdio.
 No user document is changed. Only test processes launched by this script are terminated.
 """
-import argparse,json,subprocess,threading,queue,time,pathlib,os
+import argparse,json,subprocess,threading,queue,time,pathlib,os,tempfile
 p=argparse.ArgumentParser();p.add_argument('--mechcue',required=True);p.add_argument('--mcp',required=True);p.add_argument('--report',required=True);p.add_argument('--native-read',action='store_true');a=p.parse_args()
 owned=[];logs=[];checks=[]
+settings_temp=tempfile.TemporaryDirectory(prefix='mechcue-mcp-test-')
+settings_path=pathlib.Path(settings_temp.name)/'access.json'
+child_env=os.environ.copy();child_env['MECHCUE_MCP_SETTINGS_PATH']=str(settings_path);child_env['MECHCUE_MCP_NO_TRAY']='1'
+
 def launch(command,stdio=False):
     startup=subprocess.STARTUPINFO();startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW;startup.wShowWindow=0
-    child=subprocess.Popen(command,stdin=subprocess.PIPE if stdio else subprocess.DEVNULL,stdout=subprocess.PIPE if stdio else subprocess.DEVNULL,stderr=subprocess.PIPE if stdio else subprocess.DEVNULL,text=True,encoding='utf-8',startupinfo=startup)
+    child=subprocess.Popen(command,stdin=subprocess.PIPE if stdio else subprocess.DEVNULL,stdout=subprocess.PIPE if stdio else subprocess.DEVNULL,stderr=subprocess.PIPE if stdio else subprocess.DEVNULL,text=True,encoding='utf-8',startupinfo=startup,env=child_env)
     owned.append(child);return child
 try:
     host=launch([str(pathlib.Path(a.mechcue).resolve()),'--enable-ai'])
@@ -49,6 +53,19 @@ try:
     tool('solidedge_extrude_profile',{'expectedDocument':'test.par','shape':'rectangle','depthMm':10,'widthMm':20,'heightMm':30},True)
     tool('solidedge_save_document',{'expectedDocument':'test.par','outputPath':'test.par'},True)
     checks.append('CAD mutations disabled without explicit write flag')
+    def mode(value):
+        temp=settings_path.with_suffix('.tmp');temp.write_text(json.dumps({'schema':1,'mode':value}),encoding='utf-8');temp.replace(settings_path)
+    for value in ['read','write','chart','write','read']:
+        mode(value)
+        result=tool('solidedge_new_document',{'kind':'invalid'},True)
+        message=str(result)
+        if value=='write': assert 'kind must be part' in message,message
+        else: assert 'kind must be part' not in message,message
+    settings_path.write_text('invalid',encoding='utf-8')
+    assert 'kind must be part' not in str(tool('solidedge_new_document',{'kind':'invalid'},True))
+    settings_path.unlink()
+    checks.append('Running MCP follows live tray settings without restart; malformed settings deny editing')
+
     def own_session(pid):
         end=time.monotonic()+15
         while time.monotonic()<end:
@@ -88,6 +105,7 @@ finally:
         if child.poll() is None:child.terminate()
         try:child.wait(timeout=5)
         except subprocess.TimeoutExpired:child.kill();child.wait()
+    settings_temp.cleanup()
     target=pathlib.Path(a.report);target.parent.mkdir(parents=True,exist_ok=True)
     target.write_text('\n'.join('PASS: '+c for c in checks)+'\n\nServer stderr:\n'+''.join(logs),encoding='utf-8')
 print('\n'.join('PASS: '+c for c in checks))

@@ -68,7 +68,10 @@ public sealed partial class Bridge
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true,
             RedirectStandardError = true, CreateNoWindow = true, WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
         };
-        start.ArgumentList.Add("--allow-solidedge-write");
+        string accessPath = Path.Combine(directory, "test-access.json");
+        File.WriteAllText(accessPath, JsonSerializer.Serialize(new { schema = 1, mode = "write" }));
+        start.Environment["MECHCUE_MCP_NO_TRAY"] = "1";
+        start.Environment["MECHCUE_MCP_SETTINGS_PATH"] = accessPath;
         using var server = System.Diagnostics.Process.Start(start)!;
         var stderr = server.StandardError.ReadToEndAsync(); int sequence = 0;
         JsonElement Request(string method, object parameters) {

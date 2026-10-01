@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.2.0-alpha.1',
+    [string]$Version = '0.2.0-alpha.2',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -33,6 +33,17 @@ if ($WithMcp) {
     if ($LASTEXITCODE -ne 0) { throw 'MCP locked dependency restore failed' }
     & dotnet publish (Join-Path $taskRoot 'Mcp/MechCue.Mcp.csproj') -c Release --no-restore --self-contained false -p:DebugType=none -p:DebugSymbols=false "-p:Version=$Version" -o $taskMcp
     if ($LASTEXITCODE -ne 0) { throw 'MCP build failed' }
+    $taskControl = Join-Path $taskMcp 'control'
+    & dotnet publish (Join-Path $taskRoot 'McpControl/MechCue.Mcp.Control.csproj') -c Release --self-contained false "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$Version" -o $taskControl
+    if ($LASTEXITCODE -ne 0) { throw 'MCP tray controller build failed' }
+    $taskOldSettings = $env:MECHCUE_MCP_SETTINGS_PATH
+    try {
+        $env:MECHCUE_MCP_SETTINGS_PATH = Join-Path $taskOutput 'tray-test-settings.json'
+        $taskProcess = Start-Process -FilePath (Join-Path $taskControl 'MechCue.Mcp.Control.exe') -ArgumentList '--self-test' -PassThru -Wait -WindowStyle Hidden
+        if ($taskProcess.ExitCode -ne 0) { throw 'MCP tray controller test failed' }
+    } finally { $env:MECHCUE_MCP_SETTINGS_PATH = $taskOldSettings }
+    Get-ChildItem -LiteralPath $taskControl -File | Where-Object { $_.Name -eq 'MechCue.exe' -or $_.Extension -eq '.pdb' -or $_.Name -eq 'tray-test-result.txt' } | Remove-Item
+
     & (Join-Path $PSScriptRoot 'Copy-McpNotices.ps1') -OutputDirectory $taskMcp
     Copy-Item -LiteralPath (Join-Path $taskRoot 'Mcp/README.md'),(Join-Path $taskRoot 'Mcp/mcp-config.example.json'),(Join-Path $taskRoot 'LICENSE'),(Join-Path $taskRoot 'THIRD_PARTY_NOTICES.md') -Destination $taskMcp
     & $PythonPath (Join-Path $PSScriptRoot 'Test-Mcp.py') --mechcue (Join-Path $taskStandalone 'MechCue.exe') --mcp (Join-Path $taskMcp 'MechCue.Mcp.exe') --report (Join-Path $taskOutput 'mcp-test-result.txt')

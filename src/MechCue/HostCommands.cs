@@ -20,7 +20,7 @@ public static class HostCommands
         (HostAction)15 => "反映",
         (HostAction)16 => "干渉",
         (HostAction)17 => "反復",
-        (HostAction)18 => "重ねて表示",
+        (HostAction)18 => "グラフ表示",
         (HostAction)19 => "編集",
         (HostAction)20 => "動作確認",
         (HostAction)21 => "元に戻す",
@@ -39,11 +39,12 @@ public static class HostCommands
         (HostAction)34 => "選択中の設定",
         (HostAction)35 => "数値編集",
         _ => "MechCue" });
-    public static bool IsToggle(HostAction action) => action is HostAction.Apply or HostAction.Collision or HostAction.Loop or HostAction.Overlay or HostAction.Edit or HostAction.Review or HostAction.Ai or HostAction.TracksPanel or HostAction.SettingsPanel or HostAction.PointsPanel;
+    public static bool IsToggle(HostAction action) => action is HostAction.Apply or HostAction.Collision or HostAction.Loop or HostAction.Edit or HostAction.Review or HostAction.Ai or HostAction.TracksPanel or HostAction.SettingsPanel or HostAction.PointsPanel;
     public static string Hint(HostAction action) => action switch {
         HostAction.Play => UiText.IsJapanese ? "再生と一時停止を切り替えます。現在の時刻から再開します。" : "Toggle playback and pause; resume from the current time.",
         HostAction.Apply => UiText.IsJapanese ? "Solid Edgeへの反映を切り替えます。" : "Toggle applying values to Solid Edge.",
         HostAction.Collision => UiText.IsJapanese ? "干渉したら停止する設定を切り替えます。" : "Toggle stopping on interference.",
+        HostAction.Overlay => UiText.IsJapanese ? "選択のみ → 選択＋チェック → 全機構の表示を切り替えます。" : "Cycle Selected only, Selected + checked and All tracks.",
         HostAction.Ai => UiText.IsJapanese ? "AIからの接続を切り替えます。標準はオンです。" : "Toggle AI access; enabled by default.",
         HostAction.TracksPanel or HostAction.SettingsPanel or HostAction.PointsPanel => UiText.IsJapanese ? "パネルの表示と非表示を切り替えます。" : "Show or hide this panel.",
         HostAction.Compact => UiText.CommandHint("最小表示"), HostAction.Save => UiText.CommandHint("CADに保存"),

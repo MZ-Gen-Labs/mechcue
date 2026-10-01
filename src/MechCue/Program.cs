@@ -78,8 +78,10 @@ public partial class MainForm : Form
     readonly ComboBox target = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
     readonly TextBox name = new() { Width = 160 };
     readonly DataGridView grid = new() { Dock = DockStyle.Fill, AllowUserToAddRows = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
-    readonly CheckBox overlay = new() { Text = "重ねて表示", Checked = true, AutoSize = true };
-    readonly FlowLayoutPanel legend = new() { Dock = DockStyle.Top, Height = 36, AutoScroll = true, WrapContents = false };
+    readonly ComboBox overlay = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150, Margin = new Padding(4, 3, 4, 3) };
+    string ChartDisplayMode => overlay.SelectedIndex switch { 0 => "selected", 2 => "all", _ => "checked" };
+    readonly FlowLayoutPanel legend = new() { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = false };
+    readonly Panel legendRow = new() { Dock = DockStyle.Top, Height = 42 };
     readonly NumericUpDown dragStep = new() { DecimalPlaces = 4, Minimum = 0, Maximum = 10000, Increment = 0.1m, Value = 0.1m };
     SplitContainer split = null!, workspace = null!, vertical = null!;
     FlowLayoutPanel top = null!;
@@ -122,7 +124,7 @@ public partial class MainForm : Form
         ConfigureDataMenu();
         top.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true }); top.Controls.Add(time);
         Add(top, "▶ 再生", TogglePlayback);
-        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live); top.Controls.Add(collision); top.Controls.Add(overlay);
+        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live); top.Controls.Add(collision);
         ConfigureModes(top);
         Add(top, "使い方", ShowQuickStart);
         Add(top, "最小表示", () => SetCompact(true));
@@ -158,7 +160,10 @@ public partial class MainForm : Form
         editor.Controls.Add(axisHelp);
         ConfigurePreset(editor);
         vertical = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 360, SplitterWidth = 8 };
-        vertical.Panel1.Controls.Add(plot); vertical.Panel1.Controls.Add(legend); vertical.Panel2.Controls.Add(grid);
+        legendRow.Controls.Add(legend);
+        var displayChoice = new Panel { Dock = DockStyle.Left, Width = 160 };
+        overlay.Location = new Point(4, 3); displayChoice.Controls.Add(overlay); legendRow.Controls.Add(displayChoice);
+        vertical.Panel1.Controls.Add(plot); vertical.Panel1.Controls.Add(legendRow); vertical.Panel2.Controls.Add(grid);
         vertical.Panel1.Controls.Add(chartHeading);
         vertical.Panel2.Controls.Add(PanelHeading("選択機構の点を数値で編集", HostAction.PointsPanel));
         workspace = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel2, SplitterWidth = 8 };
@@ -174,13 +179,15 @@ public partial class MainForm : Form
         grid.Columns.Add("Time", "時間 [s]"); grid.Columns.Add("Value", "変位 [mm] / 角度 [°]");
         grid.Columns[0].DefaultCellStyle.Format = "0.####";
         grid.Columns[1].DefaultCellStyle.Format = "0.####";
-        plot.Overlay = overlay.Checked;
-        overlay.CheckedChanged += (_, _) => { PausePlayback(); plot.Overlay = overlay.Checked; plot.Invalidate(); };
+        overlay.Items.AddRange(["選択のみ", "選択＋チェック", "全機構"]); overlay.SelectedIndex = 1;
+        overlay.FormattingEnabled = true; overlay.Format += (_, e) => e.Value = UiText.Text(Convert.ToString(e.ListItem) ?? "");
+        plot.Overlay = true; plot.DisplayMode = ChartDisplayMode;
+        overlay.SelectedIndexChanged += (_, _) => { if (loading) return; PausePlayback(); plot.DisplayMode = ChartDisplayMode; RefreshLegend(); RefreshMenus(); plot.Invalidate(); MarkDocumentSettingsChanged(); };
         trackList.ItemCheck += (_, e) =>
         {
             if (loading || e.Index >= tracks.Count) return;
             if (e.NewValue == CheckState.Checked) plot.Hidden.Remove(tracks[e.Index]); else plot.Hidden.Add(tracks[e.Index]);
-            plot.Invalidate(); MarkDocumentSettingsChanged();
+            RefreshLegend(); plot.Invalidate(); MarkDocumentSettingsChanged();
         };
         trackList.SelectedIndexChanged += (_, _) => LoadTrack();
         kind.SelectedIndexChanged += (_, _) => { UpdateAxisHelp(); if (!loading) Guard(PopulateTargets); };
@@ -256,23 +263,26 @@ public partial class MainForm : Form
     void Error(Exception ex) { DiagnosticLog.Error("ui-error", ex, DiagnosticState()); status.Text = "停止：" + (ex.InnerException ?? ex).Message; if(aiExecuting){aiError=ex;return;} MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
     void RefreshTracks(int selected, bool refreshTargets = true) { loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
         foreach (var t in tracks) trackList.Items.Add(t.Name, !plot.Hidden.Contains(t));
-        foreach (Control control in legend.Controls.Cast<Control>().ToArray()) control.Dispose();
-        legend.Controls.Clear();
-        for (int n = 0; n < tracks.Count; n++)
-        {
-            int index = n;
-            var label = new Label { AutoSize = true, Text = $"━ {tracks[n].Name} [{(Plot.IsAngle(tracks[n]) ? "°" : "mm")}]", ForeColor = Plot.TrackColor(n), Margin = new Padding(8, 6, 8, 0), Cursor = Cursors.Hand };
-            label.Click += (_, _) => trackList.SelectedIndex = index;
-            legend.Controls.Add(label);
-        }
-        trackList.SelectedIndex = selected; loading = false; LoadTrack(refreshTargets); plot.Tracks = tracks; plot.Invalidate(); }
+        trackList.SelectedIndex = selected; loading = false; plot.Tracks = tracks; LoadTrack(refreshTargets); plot.Invalidate(); }
+    void RefreshLegend()
+    {
+        legend.SuspendLayout();
+        try {
+            foreach (var label in legend.Controls.OfType<Label>().ToArray()) label.Dispose();
+            foreach (int n in plot.ShownIndices) {
+                int index = n;
+                var label = new Label { AutoSize = true, Text = $"━ {tracks[n].Name} [{(Plot.IsAngle(tracks[n]) ? "°" : "mm")}]", ForeColor = Plot.TrackColor(n), Margin = new Padding(8, 6, 8, 0), Cursor = Cursors.Hand };
+                label.Click += (_, _) => trackList.SelectedIndex = index; legend.Controls.Add(label);
+            }
+        } finally { legend.ResumeLayout(true); }
+    }
     void LoadTrack() => LoadTrack(true);
     void LoadTrack(bool refreshTargets)
     {
         if (loading) return;
         loading = true; var t = Current; name.Text = t.Name; kind.SelectedItem = t.Kind; axis.SelectedItem = t.Axis;
         grid.Rows.Clear(); foreach (var p in t.Points) grid.Rows.Add(p.Time, p.Value);
-        loading = false; UpdateAxisHelp(); plot.Selected = trackList.SelectedIndex; plot.Invalidate(); if (refreshTargets) Guard(PopulateTargets);
+        loading = false; UpdateAxisHelp(); plot.Selected = trackList.SelectedIndex; RefreshLegend(); plot.Invalidate(); if (refreshTargets) Guard(PopulateTargets);
     }
     void PopulateTargets()
     {
@@ -311,7 +321,11 @@ class Plot : Control
     double Snap(double value) => ValueStep > 0 ? Math.Round(value / ValueStep, MidpointRounding.AwayFromZero) * ValueStep : value;
     public bool Overlay;
     public HashSet<Track> Hidden = [];
-    IEnumerable<int> VisibleIndices => Enumerable.Range(0, Tracks.Count).Where(i => !Hidden.Contains(Tracks[i]));
+    public string? DisplayMode;
+    internal IEnumerable<int> ShownIndices => Enumerable.Range(0, Tracks.Count).Where(i => DisplayMode switch {
+        "selected" => i == Selected, "all" => true, "checked" => i == Selected || !Hidden.Contains(Tracks[i]), _ => !Hidden.Contains(Tracks[i])
+    });
+    IEnumerable<int> VisibleIndices => ShownIndices;
     public static bool IsAngle(Track t) => t.Kind.Contains("角度") || t.Kind == "部品回転";
     IEnumerable<int> Editable => Overlay ? VisibleIndices.Where(i => i == Selected) : VisibleIndices;
     public Action<int, int>? PointSelected;

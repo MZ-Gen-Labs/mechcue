@@ -50,6 +50,7 @@ public partial class MainForm
         commandHints.SetToolTip(live, HostCommands.Hint(HostAction.Apply));
         commandHints.SetToolTip(collision, HostCommands.Hint(HostAction.Collision));
         commandHints.SetToolTip(loop, UiText.IsJapanese ? "最後まで再生したら先頭から繰り返します。" : "Repeat from the beginning after reaching the end.");
+        commandHints.SetToolTip(overlay, UiText.IsJapanese ? "選択のみ／選択＋チェック／全機構。編集対象はチェックを外しても表示します。" : "Selected only / Selected + checked / All tracks. The edit target stays visible even when unchecked.");
         commandHints.SetToolTip(aiAccess, HostCommands.Hint(HostAction.Ai));
         foreach (var menu in new[] { dataMenu, viewMenu })
             foreach (var item in menu.Items.OfType<ToolStripMenuItem>())
@@ -90,7 +91,7 @@ public partial class MainForm
     }
     public bool IsHostActionChecked(HostAction action) => action switch {
         HostAction.Apply => live.Checked, HostAction.Collision => collision.Checked, HostAction.Loop => loop.Checked,
-        HostAction.Overlay => overlay.Checked, HostAction.Edit => editMode.Checked, HostAction.Review => reviewMode.Checked,
+        HostAction.Overlay => ChartDisplayMode != "selected", HostAction.Edit => editMode.Checked, HostAction.Review => reviewMode.Checked,
         HostAction.Ai => aiAccess.Checked, HostAction.TracksPanel => !tracksHidden, HostAction.SettingsPanel => !settingsHidden,
         HostAction.PointsPanel => !pointsHidden, HostAction.Compact => compact, _ => false
     };

@@ -57,27 +57,24 @@ public static class SolidEdgeTools
     static readonly Lazy<StaWorker> worker=new(()=>new());
     internal static Task<string> ExecuteCad(string operation, Func<object> action, bool write = true)
     {
-        string flag = write ? "--allow-solidedge-write" : "--allow-solidedge";
-        var args = Environment.GetCommandLineArgs();
-        if (!args.Contains(flag) && !(!write && args.Contains("--allow-solidedge-write")))
-            throw new InvalidOperationException("Direct Solid Edge " + (write ? "editing" : "reading") + " is disabled. Start MCP with " + flag + ".");
+        try { McpAccessSettings.EnsureAllowed(write); }
+        catch (InvalidOperationException error) { throw new ModelContextProtocol.McpException(error.Message); }
         return worker.Value.Run(() => {
-            try { var result = action(); DiagnosticLog.Write("mcp-cad-" + operation); return JsonSerializer.Serialize(result); }
-            catch (Exception error) { DiagnosticLog.Error("mcp-cad-" + operation, error); throw; }
+            try { McpAccessSettings.EnsureAllowed(write); var result = action(); DiagnosticLog.Write("mcp-cad-" + operation); return JsonSerializer.Serialize(result); }
+            catch (Exception error) { DiagnosticLog.Error("mcp-cad-" + operation, error); throw new ModelContextProtocol.McpException((error.InnerException ?? error).Message); }
         });
     }
     static Task<string> Read(string method,int part=0,string expected="")
     {
-        if(!Environment.GetCommandLineArgs().Any(a=>a is "--allow-solidedge" or "--allow-solidedge-write"))throw new InvalidOperationException("Direct Solid Edge access is disabled. Start MCP with --allow-solidedge to enable read and selection tools.");
-        return worker.Value.Run(()=>JsonSerializer.Serialize(Bridge.ReadSolidEdge(method,part,expected)));
+        return ExecuteCad(method, () => Bridge.ReadSolidEdge(method,part,expected), false);
     }
-    [McpServerTool(ReadOnly=true),Description("Read the active Solid Edge document's name, fullName, read-only and dirty status. Requires server option --allow-solidedge; does not open or save files.")]
+    [McpServerTool(ReadOnly=true),Description("Read the active Solid Edge document's name, fullName, read-only and dirty status. Requires Read/select or Creation/edit mode in MechCue MCP tray settings; does not open or save files.")]
     public static Task<string> solidedge_get_document()=>Read("document");
-    [McpServerTool(ReadOnly=true),Description("List top-level assembly parts and absolute XYZ position in millimetres. Requires --allow-solidedge. Set expectedDocument to fullName from solidedge_get_document to detect active-document changes.")]
+    [McpServerTool(ReadOnly=true),Description("List top-level assembly parts and absolute XYZ position in millimetres. Requires Read/select or Creation/edit mode in MechCue MCP tray settings. Set expectedDocument to fullName from solidedge_get_document to detect active-document changes.")]
     public static Task<string> solidedge_list_parts(string expectedDocument="")=>Read("parts",expected:expectedDocument);
-    [McpServerTool(ReadOnly=true),Description("Read the active document's variable table. Values use Solid Edge native internal units (metres/radians), not MechCue display units; includes native unitsType. Requires --allow-solidedge.")]
+    [McpServerTool(ReadOnly=true),Description("Read the active document's variable table. Values use Solid Edge native internal units (metres/radians), not MechCue display units; includes native unitsType. Requires Read/select or Creation/edit mode in MechCue MCP tray settings.")]
     public static Task<string> solidedge_list_variables(string expectedDocument="")=>Read("variables",expected:expectedDocument);
-    [McpServerTool,Description("Select and highlight one top-level assembly part by 1-based partNumber. Replaces CAD selection; does not move geometry. Required expectedDocument must equal the current document fullName. Requires --allow-solidedge.")]
+    [McpServerTool,Description("Select and highlight one top-level assembly part by 1-based partNumber. Replaces CAD selection; does not move geometry. Required expectedDocument must equal the current document fullName. Requires Read/select or Creation/edit mode in MechCue MCP tray settings.")]
     public static Task<string> solidedge_select_part(int partNumber,string expectedDocument)=>Read("select_part",partNumber,expectedDocument);
 }
 sealed class StaWorker

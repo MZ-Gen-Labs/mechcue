@@ -29,7 +29,7 @@ public partial class MainForm
             case HostAction.Apply: live.Checked = !live.Checked; break;
             case HostAction.Collision: collision.Checked = !collision.Checked; break;
             case HostAction.Loop: loop.Checked = !loop.Checked; break;
-            case HostAction.Overlay: overlay.Checked = !overlay.Checked; break;
+            case HostAction.Overlay: overlay.SelectedIndex = (overlay.SelectedIndex + 1) % 3; break;
             case HostAction.Edit: if (compact) SetCompact(false); editMode.Checked = true; break;
             case HostAction.Review: reviewMode.Checked = true; break;
             case HostAction.Undo: Undo(); break;

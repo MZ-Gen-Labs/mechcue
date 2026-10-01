@@ -8,7 +8,7 @@ MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート�
 
 ## できること
 
-- 複数変数の重ね表示、表示対象のチェック、距離/角度の左右軸、個別表示への切り替え。
+- 選択のみ／選択＋チェック／全機構のグラフ表示、距離/角度の左右軸。
 - グラフの点・線分のドラッグ、数値入力、Undo、往復動作のひな形。
 - 再生、停止、速度変更、繰り返し、任意時刻への移動。
 - 距離・角度拘束の駆動、自由部品・固定部品の移動・回転、選択軸の絶対座標指定。
@@ -20,7 +20,7 @@ MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート�
 - 大きなアイコンのアドインメニュー：表示、再生・一時停止、最小表示、データ、接続、編集、機構の操作。
 - アセンブリ内へのグラフ・駆動先・再生設定の保存と、接続時の自動復元。
 - 別プロセスのMCPサーバーによるAI操作：点の変更、全値リセット、等間隔化、Undo、再生・停止。
-- MCPからSolid Edgeの文書・部品・変数を読み取り、部品を選択。
+- MCPからSolid Edgeの文書・部品・変数を読み取り、部品を選択。MCPのアクセスモードをタスクトレイから切り替え。
 - 0.2.0系：MCPからオーダードの押し出し・切り抜き、アセンブリ配置・平面拘束、図面ビュー・PDFを作成。
 
 PLC接続・プログラム読み込み、加減速モデル、負荷計算は未対応です。
@@ -72,7 +72,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 ./scripts/Build.ps1 -WithAddIn -WithMcp
 ```
 
-成果物は`artifacts/0.2.0-alpha.1/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
+成果物は`artifacts/0.2.0-alpha.2/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
@@ -90,4 +90,4 @@ ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrerelease�
 製品名・ファイル名・プロジェクト名・ProgIDをMechCueへ統一しています。CLSIDは既存のものを使用します。
 [MIT License](LICENSE)。Solid Edgeは別途ライセンスが必要です。[第三者情報](THIRD_PARTY_NOTICES.md)を参照してください。
 
-0.2.0-alpha.1はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
+0.2.0-alpha.2はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。

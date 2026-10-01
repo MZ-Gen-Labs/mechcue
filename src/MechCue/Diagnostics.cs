@@ -32,7 +32,7 @@ public partial class MainForm
         EventHandler resize = (_, _) => DiagnosticLog.Write("resize", DiagnosticState());
         ResizeEnd += resize;
         foreach (var panel in new[] { split, workspace, vertical }) panel.SplitterMoved += (_, _) => DiagnosticLog.Write("splitter", DiagnosticState());
-        foreach (var option in new[] { loop, live, collision, overlay, aiAccess }) option.CheckedChanged += (_, _) => DiagnosticLog.Write("option", new { option = option.Text, value = option.Checked, state = DiagnosticState() });
+        foreach (var option in new[] { loop, live, collision, aiAccess }) option.CheckedChanged += (_, _) => DiagnosticLog.Write("option", new { option = option.Text, value = option.Checked, state = DiagnosticState() });
         System.Threading.ThreadExceptionEventHandler error = (_, e) => {
             if (!(e.Exception.StackTrace?.Contains("MechCue", StringComparison.Ordinal) ?? false)) {
                 using var dialog = new ThreadExceptionDialog(e.Exception); dialog.ShowDialog(); return;

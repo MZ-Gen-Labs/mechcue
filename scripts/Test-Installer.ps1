@@ -10,7 +10,7 @@ if ($taskManifest.AddInOnly -and ($taskManifest.Payload.Name | Where-Object { $_
 if (!$taskManifest.AddInOnly -and 'MechCue.exe' -notin $taskManifest.Payload.Name) { throw 'Full compiler input lacks standalone EXE' }
 if ($taskManifest.Payload.Name | Where-Object { $_ -match 'CADTeam|[\\/]|\.pdb$' }) { throw 'Unexpected compiler input' }
 if ($taskManifest.McpIncluded) {
-    foreach ($taskName in @('MechCue.Mcp.exe','MechCue.Mcp.dll','MechCue.Mcp.deps.json','MechCue.Mcp.runtimeconfig.json','MechCue.dll','README.md','mcp-config.example.json','MCP-Guide.html')) {
+    foreach ($taskName in @('MechCue.Mcp.exe','MechCue.Mcp.dll','MechCue.Mcp.deps.json','MechCue.Mcp.runtimeconfig.json','MechCue.dll','README.md','mcp-config.example.json','MCP-Guide.html','control\MechCue.Mcp.Control.exe','control\MechCue.Mcp.Control.dll','control\MechCue.Mcp.Control.runtimeconfig.json')) {
         if ($taskName -notin $taskManifest.McpPayload.Name) { throw "Missing optional MCP compiler input: $taskName" }
     }
     if ('MechCue.exe' -in $taskManifest.McpPayload.Name) { throw 'MCP component unexpectedly includes standalone EXE' }

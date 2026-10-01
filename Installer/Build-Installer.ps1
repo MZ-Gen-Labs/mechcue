@@ -2,7 +2,7 @@ param(
     [string]$PayloadDirectory,
     [string]$McpDirectory,
     [string]$OutputDirectory,
-    [string]$Version = '0.2.0-alpha.1',
+    [string]$Version = '0.2.0-alpha.2',
     [switch]$AddInOnly,
     [string]$CompilerPath = $env:INNO_SETUP_COMPILER
 )
@@ -28,7 +28,7 @@ $taskMcpFiles = @()
 $taskMcpArguments = @('/DHasMcp=0')
 if ($McpDirectory) {
     $taskMcp = [IO.Path]::GetFullPath($McpDirectory)
-    foreach ($taskRequired in @('MechCue.Mcp.exe','MechCue.Mcp.dll','MechCue.Mcp.deps.json','MechCue.Mcp.runtimeconfig.json','MechCue.dll','README.md','mcp-config.example.json')) {
+    foreach ($taskRequired in @('MechCue.Mcp.exe','MechCue.Mcp.dll','MechCue.Mcp.deps.json','MechCue.Mcp.runtimeconfig.json','MechCue.dll','README.md','mcp-config.example.json','control/MechCue.Mcp.Control.exe','control/MechCue.Mcp.Control.dll','control/MechCue.Mcp.Control.runtimeconfig.json')) {
         if (!(Test-Path -LiteralPath (Join-Path $taskMcp $taskRequired))) { throw "Missing MCP payload: $taskRequired" }
     }
     $taskMcpFiles = @(Get-ChildItem -LiteralPath $taskMcp -Recurse -File | Where-Object { $_.Name -ne 'MechCue.exe' -and $_.Extension -ne '.pdb' })

@@ -8,7 +8,7 @@ MechCueをAIから操作するローカルMCPサーバーです。独立版・�
 2. MCPサーバーは通常 `C:\Program Files\MechCue\MCP\MechCue.Mcp.exe` に配置されます。スタートメニューの「MechCue MCP」からガイドとフォルダーを開けます。ZIPを使用する場合は任意のフォルダーへ展開し、EXEだけ移動せず全ファイルを保持してください。
 3. MechCueを開き「AI接続」をオンにします。独立版は `MechCue.exe --enable-ai` でも有効にできます。
 4. 使用するAIアプリのローカルMCP（stdio）設定に `MechCue.Mcp.exe` のフルパスを登録します。設定例は `mcp-config.example.json` です。設定の形式はAIアプリにより異なります。設定例はインストーラーの標準配置先を使っています。配置先を変えた場合やZIPを使う場合は `command` を実際のパスに変更してください。
-5. Solid Edgeの直接読み取り・部品選択も使う場合は起動引数 `--allow-solidedge` を追加します。MechCueのグラフ操作だけなら引数は不要です。
+5. 0.2.0-alpha.2以降はタスクトレイの「MechCue MCP」から「読み取り・選択のみ」または「作成・編集も許可」を選びます。起動引数を都度変更する必要はありません。
 
 Windows x64、.NET 8 Desktop Runtime x64が必要です。Solid Edge用の操作には起動中のSolid Edgeが必要です。同じユーザーで実行してください。alpha.20以降、MechCue側の「AI接続」は標準でオンです。不要な場合はオフにできます。
 
@@ -44,7 +44,7 @@ MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリ
 
 ## Solid Edgeの機能
 
-`--allow-solidedge` を指定した場合だけ実行できます。MechCue画面を開いていなくても利用できます。
+トレイ設定が「読み取り・選択のみ」または「作成・編集も許可」の場合に実行できます。MechCue画面を開いていなくても利用できます。
 
 | ツール | 内容 |
 |---|---|
@@ -67,14 +67,14 @@ MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリ
 
 ## 0.2.0：Solid Edgeの作成・編集
 
-モデル作成用の起動引数は `--allow-solidedge-write` です。これにより読み取りも有効になります。既存の `--allow-solidedge` だけでは作成・保存・部品移動は実行できません。MechCueの画面や「AI接続」は、Solid Edgeを直接操作するツールには不要です。
+0.2.0-alpha.2以降はトレイ設定で「作成・編集も許可」を選びます。このモードでは読み取りも使えます。「読み取り・選択のみ」では作成・保存・部品移動は実行できません。MechCueの画面や「AI接続」は、Solid Edgeを直接操作するツールには不要です。
 
 ```json
 {
   "mcpServers": {
     "mechcue": {
       "command": "C:/Program Files/MechCue/MCP/MechCue.Mcp.exe",
-      "args": ["--allow-solidedge-write"]
+      "args": []
     }
   }
 }
@@ -95,7 +95,7 @@ MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリ
 | solidedge_update_drawing | 図面内のビューを更新 |
 | solidedge_export_pdf | 図面を新規PDFファイルへ出力 |
 
-`list_planes` と `list_features` は読み取り用なので `--allow-solidedge` でも使えます。番号は1から始まります。
+`list_planes` と `list_features` は「読み取り・選択のみ」でも使えます。番号は1から始まります。
 
 ### 操作の流れ
 
@@ -131,3 +131,22 @@ CAD操作は一括Undoや自動ロールバックを保証しません。APIが�
 手動の開発検証は `MechCue.exe --cad-integration-test <新規テストフォルダーの絶対パス>` です。起動中のSolid Edge 2026と標準のISO Metricテンプレートが必要です。ファイルと `result.txt` がテストフォルダーに残ります。第3引数にMCPのEXEパスを渡すと、編集を有効にした実際のstdio通信で新規部品作成・押し出し・フィーチャー確認・保存も検証します。通常の自動ビルドではSolid Edgeがないため、MCP通信・ツール定義・編集許可の確認までを行います。
 
 実装の根拠は、インストール済み2026のタイプライブラリとSiemensの公式API資料です：[押し出し](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgePart~Models~AddFiniteExtrudedProtrusion.html)、[部品配置](https://support.industrysoftware.automation.siemens.com/trainings/se/106/api/SolidEdgeAssembly~Occurrences~AddByFilename.html)、[図面ビュー](https://support.industrysoftware.automation.siemens.com/trainings/se/106/api/SolidEdgeDraft~DrawingViews~AddPartView.html)。
+
+
+## トレイからのMCP設定（0.2.0-alpha.2以降）
+
+MCP本体はAIアプリが自動起動するstdioサーバーです。常駐する設定アイコンは別プログラム `control/MechCue.Mcp.Control.exe` で、MCP起動時に自動的に起動します。同じWindowsセッション内では1つだけ表示します。アイコンが見えないときはWindowsの隠れているアイコン一覧も確認してください。
+
+左クリックまたは右クリックでアクセスモードを選びます。
+
+- **Solid Edgeアクセスなし**：MechCueのグラフ操作だけを利用できます。
+- **読み取り・選択のみ**：文書・部品・変数・平面・フィーチャーの読み取りと部品選択を利用できます。
+- **作成・編集も許可**：読み取りに加え、今回追加したCADの作成・移動・拘束・保存・図面出力も利用できます。
+
+設定は同じWindowsユーザーの複数のMCPサーバーに共有し、次の操作から反映します。MCPを再起動する必要はありません。すでに実行中のCAD操作は中断しません。MechCue画面の「AI接続」は、これとは別にグラフ操作の接続を制御します。
+
+スタートメニューの「MechCue MCP」→「MCP設定（タスクトレイ）」からも起動できます。ZIPでは `control/MechCue.Mcp.Control.exe` を起動してください。「設定アイコンを終了」はトレイ表示だけを終了し、MCPを停止したり設定を解除したりしません。最後の設定は次回も保持します。
+
+新しい接続設定は引数なしで構いません。初回の自動起動はSolid Edgeアクセスなしで開始します。従来の引数 `--allow-solidedge`／`--allow-solidedge-write` は、まだトレイの保存設定がない場合の初期値として引き続き使えます。一度トレイで保存した設定があれば、保存設定を優先します。作成・編集を毎回引数で切り替える必要はありません。
+
+保存先は `%LOCALAPPDATA%/MechCue/mcp-access.json` です。読み込めない設定はSolid Edgeアクセスなしとして扱います。設定の変更はMCPツールからは行えず、人がトレイから切り替えます。

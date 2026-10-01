@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
@@ -115,11 +115,13 @@ public sealed class DocumentSettings
     public bool Loop { get; set; }
     public bool Collision { get; set; }
     public bool Overlay { get; set; } = true;
+    public string? DisplayMode { get; set; }
     public static DocumentSettings Parse(string json)
     {
         var settings = JsonSerializer.Deserialize<DocumentSettings>(json) ?? throw new InvalidDataException("Empty MechCue settings");
         if (settings.Version != 1) throw new InvalidDataException("Unsupported MechCue settings version: " + settings.Version);
         if (settings.Tracks == null || settings.Tracks.Count is < 1 or > 10000) throw new InvalidDataException("Invalid MechCue track count");
+        if (settings.DisplayMode is not (null or "selected" or "checked" or "all")) throw new InvalidDataException("Invalid graph display mode");
         if (settings.Speed is < 0.1m or > 10 || settings.DragStep is < 0 or > 10000) throw new InvalidDataException("Invalid playback settings");
         if (settings.Tracks.Any(e => e?.Track?.Id == Guid.Empty) || settings.Tracks.Where(e => e?.Track != null).Select(e => e.Track.Id).Distinct().Count() != settings.Tracks.Count) throw new InvalidDataException("Duplicate or invalid track IDs");
         foreach (var entry in settings.Tracks)

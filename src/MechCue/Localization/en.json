@@ -173,5 +173,9 @@
   "表示": "View",
   "データ": "Data",
   "接続操作": "Connection",
-  "再生": "Playback"
+  "再生": "Playback",
+  "選択のみ": "Selected only",
+  "選択＋チェック": "Selected + checked",
+  "全機構": "All tracks",
+  "グラフ表示": "Graph display"
 }

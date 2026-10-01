@@ -172,7 +172,7 @@ public partial class MainForm
         grid.CellValueChanged += (_, _) => MarkDocumentSettingsChanged();
         grid.UserDeletedRow += (_, _) => MarkDocumentSettingsChanged();
         foreach (var number in new[] { speed, dragStep }) number.ValueChanged += (_, _) => MarkDocumentSettingsChanged();
-        foreach (var option in new[] { loop, collision, overlay }) option.CheckedChanged += (_, _) => MarkDocumentSettingsChanged();
+        foreach (var option in new[] { loop, collision }) option.CheckedChanged += (_, _) => MarkDocumentSettingsChanged();
     }
     void MarkDocumentSettingsChanged()
     {
@@ -203,7 +203,7 @@ public partial class MainForm
         PausePlayback(); live.Checked = false; history.Clear(); restorationWarnings.Clear();
         tracks.Clear(); tracks.AddRange(settings.Tracks.Select(entry => entry.Track));
         plot.Hidden.Clear(); foreach (var entry in settings.Tracks.Where(entry => entry.Hidden)) plot.Hidden.Add(entry.Track);
-        speed.Value = settings.Speed; dragStep.Value = settings.DragStep; loop.Checked = settings.Loop; collision.Checked = settings.Collision; overlay.Checked = settings.Overlay;
+        speed.Value = settings.Speed; dragStep.Value = settings.DragStep; loop.Checked = settings.Loop; collision.Checked = settings.Collision; overlay.SelectedIndex = (settings.DisplayMode ?? (settings.Overlay ? "checked" : "selected")) switch { "selected" => 0, "all" => 2, _ => 1 }; plot.DisplayMode = ChartDisplayMode; RefreshLegend();
         foreach (var entry in settings.Tracks)
             if (entry.Target != null && bridge.RestoreTarget(entry.Track, entry.Target) is string warning) restorationWarnings.Add(warning);
         time.Value = 0; lastCheckedTime = null; RefreshTracks(0);
@@ -217,7 +217,7 @@ public partial class MainForm
         new Track { Points = points }.Validate();
         if (bridge.BoundLabel(Current) != null && (Current.Kind != CurrentKind || Current.Axis != axis.Text)) throw new InvalidOperationException("駆動方法・軸を変更する前に割り当てを解除してください。");
         Current.Name = name.Text; Current.Kind = CurrentKind; Current.Axis = axis.Text; Current.Points = points;
-        return new DocumentSettings { Speed = speed.Value, DragStep = dragStep.Value, Loop = loop.Checked, Collision = collision.Checked, Overlay = overlay.Checked, Tracks = tracks.Select(track => new SavedTrack { Track = track, Hidden = plot.Hidden.Contains(track), Target = bridge.CaptureTarget(track) }).ToList() };
+        return new DocumentSettings { Speed = speed.Value, DragStep = dragStep.Value, Loop = loop.Checked, Collision = collision.Checked, Overlay = ChartDisplayMode != "selected", DisplayMode = ChartDisplayMode, Tracks = tracks.Select(track => new SavedTrack { Track = track, Hidden = plot.Hidden.Contains(track), Target = bridge.CaptureTarget(track) }).ToList() };
     }
     void WriteDocumentSettings()
     {

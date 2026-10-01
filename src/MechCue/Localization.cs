@@ -103,7 +103,7 @@ public partial class MainForm
         bool previousLoading = loading; loading = true;
         try
         {
-            foreach (var combo in new[] { kind, target })
+            foreach (var combo in new[] { kind, target, overlay })
             {
                 var selected = combo.SelectedItem;
                 var items = combo.Items.Cast<object>().ToArray();
