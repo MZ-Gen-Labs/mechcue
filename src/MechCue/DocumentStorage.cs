@@ -108,6 +108,7 @@ public sealed class SavedTrack
 }
 public sealed class DocumentSettings
 {
+    public SavedConcept? Concept { get; set; }
     public int Version { get; set; } = 1;
     public List<SavedTrack> Tracks { get; set; } = [];
     public decimal Speed { get; set; } = 1;
@@ -119,6 +120,7 @@ public sealed class DocumentSettings
     public static DocumentSettings Parse(string json)
     {
         var settings = JsonSerializer.Deserialize<DocumentSettings>(json) ?? throw new InvalidDataException("Empty MechCue settings");
+        if(settings.Concept is {} c) { c.Model.Validate(); c.Model.ValidateValues(c.Baseline); if(c.Tracks.Count!=c.Model.Axes.Count || c.Tracks.Values.Distinct().Count()!=c.Tracks.Count || c.Tracks.Values.Any(id=>!settings.Tracks.Any(t=>t.Track.Id==id)) || c.Model.Axes.Any(a=>!c.Tracks.ContainsKey(a.Id))) throw new InvalidDataException("Invalid concept chart mapping"); }
         if (settings.Version != 1) throw new InvalidDataException("Unsupported MechCue settings version: " + settings.Version);
         if (settings.Tracks == null || settings.Tracks.Count is < 1 or > 10000) throw new InvalidDataException("Invalid MechCue track count");
         if (settings.DisplayMode is not (null or "selected" or "checked" or "all")) throw new InvalidDataException("Invalid graph display mode");

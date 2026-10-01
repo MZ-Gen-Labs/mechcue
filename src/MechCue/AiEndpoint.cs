@@ -88,6 +88,7 @@ public partial class MainForm
             int index=args.GetProperty("trackNumber").GetInt32();if(index<1 || index>tracks.Count)throw new ArgumentOutOfRangeException("trackNumber");return tracks[index-1];
         }
         if(method=="get_state")return AiState();
+        if(method=="import_concept"){if(!bridge.Connected)throw new InvalidOperationException("Connect MechCue to the concept assembly before importing axes.");ImportConceptAxes(args.GetProperty("manifestPath").GetString()!);return AiState();}
         if(method=="stop"){PausePlayback();return AiState();}
         if(method=="play"){StartPlayback();return AiState();}
         if(method=="seek"){
@@ -126,6 +127,7 @@ public partial class MainForm
             default:throw new InvalidOperationException("Unknown MechCue command: "+method);
         }
         foreach(var points in changes.Values){new Track{Points=points}.Validate();if(points[^1].Time>100000)throw new ArgumentOutOfRangeException("time");}
+        foreach(var change in changes)bridge.ValidateConceptPoints(change.Key,change.Value);
         history.Push(changes.Keys.Select(t=>(t,t.Points.ToList())).ToList());
         foreach(var change in changes)change.Key.Points=change.Value;
         RefreshTracks(trackList.SelectedIndex);MarkDocumentSettingsChanged();status.Text="AIからグラフを編集しました。";

@@ -31,6 +31,8 @@ public partial class MainForm
     void ConfigureDataMenu()
     {
         foreach (var action in new[] { HostAction.Save, HostAction.JsonOpen, HostAction.JsonSave, HostAction.TableExport, HostAction.TableImport }) AddMenu(dataMenu, action);
+        var conceptItem = new ToolStripMenuItem { Text = "概略軸を取り込む", Tag = "concept-import" };
+        conceptItem.Click += (_,_)=>Guard(()=>ImportConceptAxes()); dataMenu.Items.Add(conceptItem);
         var logs = new ToolStripMenuItem { Text = "ログフォルダー", Tag = "logs" };
         logs.Click += (_, _) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", DiagnosticLog.DirectoryPath) { UseShellExecute = true });
         dataMenu.Items.Add(logs);
@@ -55,6 +57,7 @@ public partial class MainForm
         foreach (var menu in new[] { dataMenu, viewMenu })
             foreach (var item in menu.Items.OfType<ToolStripMenuItem>())
                 if (item.Tag is HostAction action) { item.Text = HostCommands.Caption(action); item.ToolTipText = HostCommands.Hint(action); item.Checked = IsHostActionChecked(action); }
+                else if (Equals(item.Tag,"concept-import")){item.Text=UiText.IsJapanese?"概略軸を取り込む":"Import concept axes";item.ToolTipText=UiText.IsJapanese?"概略モデルの全軸を現在値で登録します。":"Register all concept axes at their current values.";}
                 else if (Equals(item.Tag, "logs")) item.Text = UiText.IsJapanese ? "ログフォルダー" : "Log folder";
     }
     Control PanelHeading(string text, HostAction action)

@@ -44,11 +44,11 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==29,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==30,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('29 tools and read-only annotations')
+    checks.append('30 tools and read-only annotations')
     catalog=tool('solidedge_list_concept_templates')
     assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
@@ -86,6 +86,8 @@ try:
             time.sleep(.1)
         raise AssertionError('Test session missing')
     sid=own_session(host.pid);context={'sessionId':sid}
+    tool('mechcue_import_concept_axes',context|{'manifestPath':'C:/__missing_concept__/mechcue-concept.json'},True)
+    checks.append('Concept import into disconnected session rejected without touching CAD')
     original=tool('mechcue_get_state',context);assert len(original['tracks'])==3 and not original['connected']
     state=tool('mechcue_set_keyframe',context|{'trackNumber':1,'time':2,'value':100});assert state['tracks'][0]['points'][1]['value']==100
     state=tool('mechcue_set_keyframe',context|{'trackId':state['tracks'][0]['id'],'time':1,'value':75});assert any(p['time']==1 and p['value']==75 for p in state['tracks'][0]['points'])

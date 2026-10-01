@@ -8,6 +8,8 @@ public static partial class SelfTest
             var model=ConceptMachine.Create(kind,500,300,300); var home=model.Poses(model.Values);
             var values=new Dictionary<string,double>(model.Values) { ["X"]=100,["Y"]=50,["Z"]=20 };
             var moved=model.Poses(values);
+            var measured=Bridge.MeasureConcept(model,moved);
+            Check(values.All(p=>Math.Abs(measured[p.Key]-p.Value)<1e-7),"Concept current-value measurement");
             Check(home["base"].SequenceEqual(moved["base"]),"Concept base stays fixed");
             string dependent=kind=="gantry"?"gripper":"workpiece";
             Check(Math.Abs(moved[dependent][12]-home[dependent][12]-.1)<1e-10,"Nested X motion");
@@ -17,6 +19,7 @@ public static partial class SelfTest
             if(kind=="mill5") {
                 values["A"]=90; values["C"]=90; moved=model.Poses(values);
                 Check(Math.Abs(moved["workpiece"][13]-(.05-.08))<1e-10 && Math.Abs(moved["workpiece"][14]-.35)<1e-10,"A pivot and child C preserve parent-local rotation");
+                measured=Bridge.MeasureConcept(model,moved);Check(values.All(p=>Math.Abs(measured[p.Key]-p.Value)<1e-7),"Rotated concept measurement");
                 Check(Math.Abs(moved["workpiece"][2]-1)<1e-10,"Nested A/C orientation");
             }
             try { values["X"]=251; model.Poses(values); throw new Exception("Travel limit accepted"); } catch(ArgumentException) { }
@@ -61,6 +64,21 @@ public sealed partial class Bridge
                 CadPoseConcept(expected,manifest,System.Text.Json.JsonSerializer.Serialize(values));
                 var wanted=model.Poses(values);
                 foreach(var b in model.Bodies)if(!ConceptSame(Matrix(CadOccurrence(document,model.Bodies.IndexOf(b)+1)),wanted[b.Id]))throw new Exception("Native dependent pose mismatch");
+                var chartBridge=new Bridge(application,document);var chartTracks=chartBridge.ImportConcept(manifest,[new Track()]);
+                if(chartBridge.BindingCount!=model.Axes.Count || chartBridge.ImportConcept(manifest,chartTracks).Count!=chartTracks.Count)throw new Exception("Chart import/duplicate count mismatch");
+                foreach(var a in model.Axes){var t=chartTracks.Single(t=>t.Name==a.Id);if(t.Points.Any(p=>Math.Abs(p.Value-values[a.Id])>1e-6))throw new Exception("Chart current value mismatch");}
+                chartBridge.Apply(0);
+                foreach(var b in model.Bodies)if(!ConceptSame(Matrix(CadOccurrence(document,model.Bodies.IndexOf(b)+1)),wanted[b.Id]))throw new Exception("Chart import jumped");
+                var xTrack=chartTracks.Single(t=>t.Name=="X");xTrack.Points=[new(0,100),new(4,150)];chartBridge.Apply(4);
+                if(Math.Abs(Matrix(CadOccurrence(document,model.Bodies.FindIndex(b=>b.Parent=="X")+1))[12]-.15)>1e-8)throw new Exception("Chart X movement failed");
+                xTrack.Points=[new(0,999),new(4,999)];
+                try{chartBridge.Apply(0);throw new Exception("Chart range accepted");}catch(ArgumentException){}
+                xTrack.Points=[new(0,100),new(4,150)];
+                var settings=new DocumentSettings{Concept=chartBridge.CaptureConcept(),Tracks=chartTracks.Select(t=>new SavedTrack{Track=t}).ToList()};
+                DocumentSettings.Parse(settings.Json());chartBridge.PrepareDocumentSave();chartBridge.WriteSettings(settings.Json());chartBridge.SaveDocument();chartBridge.Disconnect();
+                if(kind=="mill3") { using var form=new MainForm(hostedApplication:application);form.VerifyConceptUi(manifest); }
+                checks.Add("PASS: "+kind+" chart import at current pose, repeat without duplicates, playback/range, embedded settings");
+                wanted=model.Poses(values);
                 values["X"]=999;
                 try{CadPoseConcept(expected,manifest,System.Text.Json.JsonSerializer.Serialize(values));throw new Exception("Travel limit accepted");}catch(ArgumentException){}
                 foreach(var b in model.Bodies)if(!ConceptSame(Matrix(CadOccurrence(document,model.Bodies.IndexOf(b)+1)),wanted[b.Id]))throw new Exception("Invalid pose changed geometry");
@@ -68,6 +86,7 @@ public sealed partial class Bridge
                 CadPoseConcept(expected,manifest,System.Text.Json.JsonSerializer.Serialize(model.Values));
                 Call(document,"Close",false);owned.Remove(document);
                 CadOpen(expected);document=Get(application,"ActiveDocument");owned.Add(document);CadReadConcept(expected,manifest);
+                var restoredBridge=new Bridge(application,document);var loaded=DocumentSettings.Parse(restoredBridge.ReadSettings()!);restoredBridge.RestoreConcept(loaded.Concept!,loaded.Tracks.Select(t=>t.Track));if(restoredBridge.BindingCount!=model.Axes.Count)throw new Exception("Restored chart assignments missing");restoredBridge.Apply(4);restoredBridge.Disconnect();
                 checks.Add("PASS: "+kind+" saved/reopened, native dimensions, dependent axis poses, range/identity rejection");
                 Call(document,"Close",false);owned.Remove(document);
             }

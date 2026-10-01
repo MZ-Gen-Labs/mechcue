@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace MechCue;
@@ -19,8 +19,8 @@ public sealed partial class Bridge
     public Bridge(object hostedApplication) { this.hostedApplication = hostedApplication; }
     internal Bridge(object application, object document) { app = application; doc = document; }
     public bool Connected => doc != null;
-    public int BindingCount => bindings.Count;
-    public string? BoundLabel(Track track) => bindings.TryGetValue(track, out var b) ? b.Target.Label : null;
+    public int BindingCount => bindings.Count + conceptTracks.Count;
+    public string? BoundLabel(Track track) => ConceptLabel(track) ?? (bindings.TryGetValue(track, out var b) ? b.Target.Label : null);
     public List<Target> TargetsFromSelection(string kind)
     {
         Check();
@@ -164,6 +164,7 @@ public sealed partial class Bridge
     public void Bind(Track track, Target target, bool activate = true)
     {
         Check();
+        if(concept!=null) throw new InvalidOperationException("概略軸の登録中は通常の駆動先を追加できません。");
         track.Validate();
         string expected = track.Kind.StartsWith("部品") ? "Matrix" : track.Kind == "角度拘束" ? "Angle" : "Offset";
         if (target.Property != expected) throw new InvalidOperationException("駆動方法と選択した対象が一致しません。");
@@ -219,13 +220,14 @@ public sealed partial class Bridge
     public void Unbind(Track track)
     {
         Check(false);
+        if(IsConcept(track)) throw new InvalidOperationException("概略軸の個別解除はできません。切断で一括解除できます。");
         unresolved.Remove(track);
         if (!bindings.TryGetValue(track, out var binding)) return;
         RestoreBinding(binding);
         bindings.Remove(track);
         Call(Get(Get(app!, "ActiveWindow"), "View"), "Update");
     }
-    void ForgetConnection() { DetachDocumentEvents(); bindings.Clear(); unresolved.Clear(); doc = null; app = null; }
+    void ForgetConnection() { DetachDocumentEvents(); ClearConcept(); bindings.Clear(); unresolved.Clear(); doc = null; app = null; }
     void Check(bool requireActive = true)
     {
         if (doc == null || app == null) throw new InvalidOperationException("先にSolid Edgeに接続してください。");
@@ -283,6 +285,7 @@ public sealed partial class Bridge
     public void ApplyChecked(double time)
     {
         Check();
+        var conceptBefore = ConceptSnapshot();
         var before = bindings.Values.Select(b => (b.Target, Value: b.Target.Property == "Matrix" ? (object)Matrix(b.Target.Com) : Get(b.Target.Com, b.Target.Property))).ToList();
         // Refuse to start from an interfering or unverified position.
         EnsureNoInterference();
@@ -291,6 +294,7 @@ public sealed partial class Bridge
         {
             try
             {
+                RestoreConceptSnapshot(conceptBefore);
                 foreach (var b in before)
                     if (b.Target.Property == "Matrix") Call(b.Target.Com, "PutMatrix", b.Value, true);
                     else Set(b.Target.Com, b.Target.Property, b.Value);
@@ -336,7 +340,8 @@ public sealed partial class Bridge
     public void Apply(double time)
     {
         Check();
-        if (bindings.Count == 0) throw new InvalidOperationException("駆動先が未登録です。グラフを選び、対象を選択して『駆動先を登録』を押してください。");
+        if (BindingCount == 0) throw new InvalidOperationException("駆動先が未登録です。グラフを選び、対象を選択して『駆動先を登録』を押してください。");
+        ApplyConcept(time);
         foreach (var (track, b) in bindings)
         {
             double value = track.At(time);
@@ -350,6 +355,7 @@ public sealed partial class Bridge
     public void Restore()
     {
         Check(false);
+        RestoreConceptBaseline();
         foreach (var b in bindings.Values)
         {
             b.Active = true;
@@ -366,6 +372,7 @@ public sealed partial class Bridge
         {
             Check(false);
             var errors = new List<Exception>();
+            try { RestoreConceptBaseline(); } catch(Exception ex) { errors.Add(ex); }
             foreach (var b in bindings.Values)
                 try { RestoreBinding(b); } catch (Exception ex) { errors.Add(ex); }
             if (errors.Count > 0) throw new AggregateException("基準姿勢または固定拘束の復元に失敗しました。", errors);

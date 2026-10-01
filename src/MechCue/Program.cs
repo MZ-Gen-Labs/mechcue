@@ -288,13 +288,13 @@ public partial class MainForm : Form
         if (loading) return;
         loading = true; var t = Current; name.Text = t.Name; kind.SelectedItem = t.Kind; axis.SelectedItem = t.Axis;
         grid.Rows.Clear(); foreach (var p in t.Points) grid.Rows.Add(p.Time, p.Value);
-        loading = false; UpdateAxisHelp(); plot.Selected = trackList.SelectedIndex; RefreshLegend(); plot.Invalidate(); if (refreshTargets) Guard(PopulateTargets);
+        loading = false; UpdateAxisHelp(); kind.Enabled = !bridge.IsConcept(Current); if(bridge.IsConcept(Current)) axis.Enabled=false; plot.Selected = trackList.SelectedIndex; RefreshLegend(); plot.Invalidate(); if (refreshTargets) Guard(PopulateTargets);
     }
     void PopulateTargets()
     {
         string? previous = bridge.BoundLabel(Current) ?? (target.SelectedItem as Target)?.Label;
         target.Items.Clear();
-        if (bridge.Connected) target.Items.AddRange(bridge.Targets(CurrentKind).ToArray());
+        if (bridge.Connected && !bridge.IsConcept(Current)) target.Items.AddRange(bridge.Targets(CurrentKind).ToArray());
         if (previous != null) target.SelectedItem = target.Items.Cast<Target>().FirstOrDefault(t => t.Label == previous);
     }
     void Commit() => CommitEditor(true);
@@ -302,7 +302,7 @@ public partial class MainForm : Form
     {
         grid.EndEdit();
         var points = grid.Rows.Cast<DataGridViewRow>().Where(r => !r.IsNewRow).Select(r => new KeyPoint(double.Parse(Convert.ToString(r.Cells[0].Value)!, CultureInfo.CurrentCulture), double.Parse(Convert.ToString(r.Cells[1].Value)!, CultureInfo.CurrentCulture))).ToList();
-        var candidate = new Track { Points = points }; candidate.Validate();
+        var candidate = new Track { Points = points }; candidate.Validate(); bridge.ValidateConceptPoints(Current,points);
         if (bridge.BoundLabel(Current) != null && (CurrentKind != Current.Kind || axis.Text != Current.Axis)) throw new InvalidOperationException("この機構の割り当てを解除してから、駆動方法・軸を変更してください。全体の切断は不要です。");
         if (!Current.Points.SequenceEqual(points)) Remember(Current);
         Current.Name = name.Text; Current.Kind = CurrentKind; Current.Axis = axis.Text; Current.Points = points;

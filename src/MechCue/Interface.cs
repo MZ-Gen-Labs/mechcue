@@ -185,6 +185,7 @@ public partial class MainForm
     }
     void ReadCurrentValues()
     {
+        if(bridge.IsConcept(Current)){PausePlayback();live.Checked=false;Commit();double current=bridge.ConceptCurrentValue(Current);Remember(Current);Current.Points=Current.Points.Select(p=>p with {Value=current}).ToList();LoadTrack();MarkDocumentSettingsChanged();status.Text="概略軸の現在値を全点に設定しました。";return;}
         if (target.SelectedItem is not Target chosen) throw new InvalidOperationException("駆動先を選んでください。");
         PausePlayback(); live.Checked = false; Commit();
         double value = bridge.CurrentValue(Current, chosen);
@@ -251,7 +252,7 @@ public partial class MainForm
         }
         split.SplitterDistance = 180; workspace.SplitterDistance = Math.Max(300, workspace.Width - 260); vertical.SplitterDistance = Math.Max(150, vertical.Height - 180);
         if (split.IsSplitterFixed || workspace.IsSplitterFixed || vertical.IsSplitterFixed || vertical.Panel2.Height < 60) throw new Exception("Resizable panel splitters failed");
-        if (dataMenu.Items.Count != 6 || top.Controls.OfType<Button>().Any(b => Equals(b.Tag,"保存") || Equals(b.Tag,"表を書き出し"))) throw new Exception("Data menu consolidation failed");
+        if (dataMenu.Items.Count != 7 || top.Controls.OfType<Button>().Any(b => Equals(b.Tag,"保存") || Equals(b.Tag,"表を書き出し"))) throw new Exception("Data menu consolidation failed");
         int originalDistance = vertical.SplitterDistance;
         vertical.Panel2MinSize = 0; vertical.SplitterDistance = vertical.Height - vertical.SplitterWidth - 42;
         PerformLayout(); Application.DoEvents();

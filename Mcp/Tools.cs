@@ -19,6 +19,8 @@ public static class MechCueTools
             try{var session=JsonSerializer.Deserialize<AiSession>(File.ReadAllText(file));if(session!=null && session.Pipe=="MechCue-"+session.Id && Guid.TryParseExact(session.Id,"N",out _) && !System.Diagnostics.Process.GetProcessById(session.ProcessId).HasExited)sessions.Add(session);}catch(IOException){}catch(JsonException){}catch(ArgumentException){}catch(System.ComponentModel.Win32Exception){}
         return sessions;
     }
+    [McpServerTool,Description("Import concept-machine axes into an enabled MechCue window connected to that assembly. Creates constant tracks from measured current pose without moving CAD; repeated import preserves existing tracks. Stops playback and disables CAD reflection. manifestPath absolute; optional sessionId. Save to CAD persists mappings.")]
+    public static Task<string> mechcue_import_concept_axes(string manifestPath,string sessionId="",CancellationToken cancellationToken=default)=>Send("import_concept",new{manifestPath},sessionId,cancellationToken);
     static async Task<string> Send(string method,object args,string sessionId,CancellationToken cancellationToken)
     {
         var sessions=mechcue_list_sessions() is List<AiSession> found ? found : new List<AiSession>();
