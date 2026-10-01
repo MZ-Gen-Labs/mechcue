@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.2.0-alpha.2',
+    [string]$Version = '0.2.0-alpha.3',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -48,6 +48,9 @@ if ($WithMcp) {
     Copy-Item -LiteralPath (Join-Path $taskRoot 'Mcp/README.md'),(Join-Path $taskRoot 'Mcp/mcp-config.example.json'),(Join-Path $taskRoot 'LICENSE'),(Join-Path $taskRoot 'THIRD_PARTY_NOTICES.md') -Destination $taskMcp
     & $PythonPath (Join-Path $PSScriptRoot 'Test-Mcp.py') --mechcue (Join-Path $taskStandalone 'MechCue.exe') --mcp (Join-Path $taskMcp 'MechCue.Mcp.exe') --report (Join-Path $taskOutput 'mcp-test-result.txt')
     if ($LASTEXITCODE -ne 0) { throw 'MCP protocol and UI integration test failed' }
+    Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/CONCEPT_TARGETS.md') -Destination (Join-Path $taskMcp 'CONCEPT_TARGETS.md')
+    $taskMcpReadme = Join-Path $taskMcp 'README.md'
+    [IO.File]::WriteAllText($taskMcpReadme, [IO.File]::ReadAllText($taskMcpReadme).Replace('../docs/CONCEPT_TARGETS.md','CONCEPT_TARGETS.md'))
     Compress-Archive -Path (Join-Path $taskMcp '*') -DestinationPath (Join-Path $taskDistribution "MechCue-$Version-MCP-win-x64.zip")
 }
 if ($WithAddIn) {

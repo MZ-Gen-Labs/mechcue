@@ -44,11 +44,16 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==25,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==29,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
-    for name in ['solidedge_list_planes','solidedge_list_features']:
+    for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('25 tools and read-only annotations')
+    checks.append('29 tools and read-only annotations')
+    catalog=tool('solidedge_list_concept_templates')
+    assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
+    tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
+    tool('solidedge_set_concept_pose',{'expectedDocument':'test.asm','manifestPath':'test.json','valuesJson':'{}'},True)
+    checks.append('Concept catalog without CAD and creation/pose permission gates')
     tool('solidedge_new_document',{'kind':'part'},True)
     tool('solidedge_extrude_profile',{'expectedDocument':'test.par','shape':'rectangle','depthMm':10,'widthMm':20,'heightMm':30},True)
     tool('solidedge_save_document',{'expectedDocument':'test.par','outputPath':'test.par'},True)
@@ -61,6 +66,12 @@ try:
         message=str(result)
         if value=='write': assert 'kind must be part' in message,message
         else: assert 'kind must be part' not in message,message
+    mode('write')
+    result=tool('solidedge_create_concept_machine',{'type':'invalid','outputDirectory':'unused'},True)
+    assert 'type must be' in str(result),result
+    result=tool('solidedge_create_concept_machine',{'type':'mill5','outputDirectory':'unused','xTravelMm':0},True)
+    assert 'travel must be' in str(result),result
+    checks.append('Invalid concept inputs rejected before CAD connection')
     settings_path.write_text('invalid',encoding='utf-8')
     assert 'kind must be part' not in str(tool('solidedge_new_document',{'kind':'invalid'},True))
     settings_path.unlink()

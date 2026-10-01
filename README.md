@@ -72,7 +72,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 ./scripts/Build.ps1 -WithAddIn -WithMcp
 ```
 
-成果物は`artifacts/0.2.0-alpha.2/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
+成果物は`artifacts/0.2.0-alpha.3/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
@@ -90,4 +90,8 @@ ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrerelease�
 製品名・ファイル名・プロジェクト名・ProgIDをMechCueへ統一しています。CLSIDは既存のものを使用します。
 [MIT License](LICENSE)。Solid Edgeは別途ライセンスが必要です。[第三者情報](THIRD_PARTY_NOTICES.md)を参照してください。
 
-0.2.0-alpha.2はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
+0.2.0-alpha.3はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
+
+### 構想モデルの生成
+
+0.2.0-alpha.3では工作機械3/4/5軸と直交搬送装置の概略モデル生成・軸連動MCPを追加しています。[適用ターゲットと使い方](docs/CONCEPT_TARGETS.md)を参照してください。

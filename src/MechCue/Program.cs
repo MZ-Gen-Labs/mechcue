@@ -20,6 +20,12 @@ static class Program
             catch { Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length is 2 or 3 && args[0] == "--concept-integration-test")
+        {
+            try { ApplicationConfiguration.Initialize(); Application.OleRequired(); Bridge.VerifyConceptInSolidEdge(args[1], args.Length == 3 ? args[2] : ""); }
+            catch { Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Contains("--self-test")) { SelfTest.Run(); return; }
         if (args.Contains("--inspect-addins"))
         {
