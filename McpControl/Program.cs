@@ -7,6 +7,8 @@ static class Program
 {
     [STAThread] static void Main(string[] args)
     {
+        if(args.Length==2 && args[0]=="--shutdown-for-update") { Environment.ExitCode=McpUpdate.StopForUpdate(args[1]); return; }
+        if(McpUpdate.Updating()) return;
         ApplicationConfiguration.Initialize();
         if (args.Contains("--self-test")) { TrayContext.Verify(); return; }
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Environment.UserName + "|" + McpAccessSettings.SettingsPath)))[..24];
@@ -21,6 +23,8 @@ static class Program
 }
 sealed class TrayContext : ApplicationContext
 {
+    readonly Control dispatcher = new();
+    readonly McpShutdownSignal shutdown;
     readonly NotifyIcon tray;
     readonly ContextMenuStrip menu = new();
     readonly Dictionary<string, ToolStripMenuItem> choices = new();
@@ -29,6 +33,8 @@ sealed class TrayContext : ApplicationContext
         : mode switch { "chart" => "No Solid Edge access", "read" => "Read and select only", _ => "Allow creation and editing" };
     public TrayContext(bool testing = false)
     {
+        _ = dispatcher.Handle;
+        shutdown = new McpShutdownSignal(()=> { if(!dispatcher.IsDisposed) dispatcher.BeginInvoke(()=>ExitThread()); });
         var version = typeof(TrayContext).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0];
         var title = new ToolStripMenuItem("MechCue MCP " + version) { Enabled = false }; menu.Items.Add(title);
         foreach (string mode in new[] { "chart", "read", "write" }) {
@@ -68,7 +74,7 @@ sealed class TrayContext : ApplicationContext
     }
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { refresh.Stop(); refresh.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
+        if (disposing) { shutdown.Dispose(); dispatcher.Dispose(); refresh.Stop(); refresh.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
         base.Dispose(disposing);
     }
     internal static void Verify()

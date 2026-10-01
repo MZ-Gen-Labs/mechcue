@@ -111,6 +111,14 @@ Source: "{#McpDir}\*"; DestDir: "{app}\MCP"; Excludes: "MechCue.exe,*.pdb"; Flag
 Source: "{#ProjectRoot}\Installer\MCP-Guide.html"; DestDir: "{app}\MCP"; Flags: ignoreversion; Components: mcp
 #endif
 
+#if HasMcp == "1"
+Source: "{#McpDir}\control\MechCue.Mcp.Control.exe"; DestDir: "{tmp}\MechCueUpdate"; Flags: dontcopy
+Source: "{#McpDir}\control\MechCue.Mcp.Control.dll"; DestDir: "{tmp}\MechCueUpdate"; Flags: dontcopy
+Source: "{#McpDir}\control\MechCue.Mcp.Control.deps.json"; DestDir: "{tmp}\MechCueUpdate"; Flags: dontcopy
+Source: "{#McpDir}\control\MechCue.Mcp.Control.runtimeconfig.json"; DestDir: "{tmp}\MechCueUpdate"; Flags: dontcopy
+Source: "{#McpDir}\control\MechCue.dll"; DestDir: "{tmp}\MechCueUpdate"; Flags: dontcopy
+#endif
+
 [Registry]
 Root: HKLM; Subkey: "Software\Classes\CLSID\{{79B86022-7C7D-4768-A3A7-CF8EBD1F7826}"; ValueType: string; ValueName: ""; ValueData: "MechCue Time Chart"; Flags: uninsdeletekey
 Root: HKLM; Subkey: "Software\Classes\CLSID\{{79B86022-7C7D-4768-A3A7-CF8EBD1F7826}"; ValueType: dword; ValueName: "AutoConnect"; ValueData: "1"
@@ -138,6 +146,39 @@ Name: "{autoprograms}\MechCue MCP\{cm:McpFolder}"; Filename: "{app}\MCP"; Compon
 #endif
 
 [Code]
+procedure ClearMcpUpdateMarker;
+begin
+  DeleteFile(ExpandConstant('{app}\MCP\.update-in-progress'));
+end;
+
+procedure DeinitializeSetup;
+begin
+  ClearMcpUpdateMarker;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then ClearMcpUpdateMarker;
+end;
+
+function StopMcpForUpdate: String;
+#if HasMcp == "1"
+var ExitCode: Integer;
+#endif
+begin
+  Result := '';
+#if HasMcp == "1"
+  if not FileExists(ExpandConstant('{app}\MCP\MechCue.Mcp.exe')) then Exit;
+  ExtractTemporaryFiles('{tmp}\MechCueUpdate\*');
+  Log('Stopping MCP server and tray controller in this installation');
+  if not Exec(ExpandConstant('{tmp}\MechCueUpdate\MechCue.Mcp.Control.exe'),
+    '--shutdown-for-update "' + ExpandConstant('{app}') + '"', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
+    Result := 'MCPの終了処理を起動できませんでした。MCP接続と設定アイコンを終了して再試行してください。'
+  else if ExitCode <> 0 then
+    Result := 'MCPが処理中か、終了できませんでした。AIからの操作を停止し、MCP接続を終了して再試行してください。';
+#endif
+end;
+
 function AddInClsid(Param: String): String;
 begin
   Result := '{79B86022-7C7D-4768-A3A7-CF8EBD1F7826}';
@@ -188,4 +229,5 @@ begin
       { No running instance accessible; Restart Manager also checks files in use. }
     end;
   end;
+  if Result = '' then Result := StopMcpForUpdate;
 end;

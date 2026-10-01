@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.2.0-alpha.5',
+    [string]$Version = '0.2.0-alpha.6',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -48,6 +48,8 @@ if ($WithMcp) {
     Copy-Item -LiteralPath (Join-Path $taskRoot 'Mcp/README.md'),(Join-Path $taskRoot 'Mcp/mcp-config.example.json'),(Join-Path $taskRoot 'LICENSE'),(Join-Path $taskRoot 'THIRD_PARTY_NOTICES.md') -Destination $taskMcp
     & $PythonPath (Join-Path $PSScriptRoot 'Test-Mcp.py') --mechcue (Join-Path $taskStandalone 'MechCue.exe') --mcp (Join-Path $taskMcp 'MechCue.Mcp.exe') --report (Join-Path $taskOutput 'mcp-test-result.txt')
     if ($LASTEXITCODE -ne 0) { throw 'MCP protocol and UI integration test failed' }
+    & $PythonPath (Join-Path $PSScriptRoot 'Test-McpUpdate.py') --mcp (Join-Path $taskMcp 'MechCue.Mcp.exe') --report (Join-Path $taskOutput 'mcp-update-test-result.txt')
+    if ($LASTEXITCODE -ne 0) { throw 'MCP update shutdown test failed' }
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/CONCEPT_TARGETS.md') -Destination (Join-Path $taskMcp 'CONCEPT_TARGETS.md')
     $taskMcpReadme = Join-Path $taskMcp 'README.md'
     [IO.File]::WriteAllText($taskMcpReadme, [IO.File]::ReadAllText($taskMcpReadme).Replace('../docs/CONCEPT_TARGETS.md','CONCEPT_TARGETS.md'))
@@ -59,6 +61,7 @@ if ($WithAddIn) {
     if ($LASTEXITCODE -ne 0) { throw 'Add-in build failed' }
     & dotnet run --project (Join-Path $taskRoot 'tools\ComContractCheck\ComContractCheck.csproj') -c Release "-p:RestoreConfigFile=$taskRoot\NuGet.Config"
     if ($LASTEXITCODE -ne 0) { throw 'COM contract checks failed' }
+    if ($WithMcp) { & (Join-Path $PSScriptRoot 'Test-InstallerUpdate.ps1') -McpDirectory $taskMcp -OutputDirectory (Join-Path $taskOutput 'installer-update-test') }
     $taskInstaller = Join-Path $taskOutput 'installer'
     & (Join-Path $taskRoot 'Installer\Build-Installer.ps1') -PayloadDirectory $taskAddIn -McpDirectory $taskMcp -OutputDirectory $taskInstaller -Version $Version
     & powershell.exe -NoProfile -STA -File (Join-Path $PSScriptRoot 'Test-Installer.ps1') -Path (Join-Path $taskInstaller 'MechCue-Setup.exe')

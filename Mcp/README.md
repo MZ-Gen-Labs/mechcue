@@ -159,3 +159,5 @@ MCP本体はAIアプリが自動起動するstdioサーバーです。常駐す�
 `mechcue_import_concept_axes`は接続済みのMechCue画面に全軸を登録します。現在の部品姿勢を測定して一定のグラフを作り、再取り込みでは編集を保持します。CAD保存で軸定義と割り当てもアセンブリ内に保存できます。
 
 Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechcue_switch_pattern`, `mechcue_rename_pattern`, `mechcue_delete_pattern`. Chart edits affect the active pattern; targets remain shared. Switching pauses, rewinds and disables CAD reflection without moving CAD. Save to CAD persists all patterns.
+
+更新時はインストーラーが、インストール先のMCP本体とトレイ設定を終了します。更新中の自動再起動は一時停止します。AIとのMCP接続は更新後に再接続してください。トレイ設定アイコンの終了だけではMCP本体は終了しません。旧版は専用の終了通知を持たないため、インストール先を確認してMCPプロセスのみ終了します。Solid Edgeや他フォルダのMCPは対象にしません。
