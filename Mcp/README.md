@@ -115,7 +115,7 @@ AIは新規作成・開く・保存の戻り値にある `fullName` を、次の
 - 初回の押し出しがベース形状になります。追加押し出しは既存形状につながる必要があります。単一ボディのオーダード部品が対象です。既存部品のモードを自動変更しません。
 - 部品配置のXYZはアセンブリの絶対座標です。回転はX→Y→Zの順です。既存拘束が姿勢を制限する場合はエラーになります。
 - 平面拘束は基準平面同士を対象とします。ベースだけ固定し、拘束する側の部品は `ground=false` で配置してください。面・円筒面・エッジを用いる拘束は未対応です。
-- 図面ビューの位置はシート上のmm、縮尺1は1:1です。保存済み3Dモデルを参照します。寸法・公差・表面性状の自動記入は未対応です。
+- 図面ビューの位置はシート上のmm、縮尺1は1:1です。保存済み3Dモデルを参照します。0.2.0-alpha.8から主要寸法の自動配置に対応します。公差・表面性状の自動決定は未対応です。
 - 回転体・ロフト・スイープ・フィレット・パターン・専用穴フィーチャー・変数変更は今後の拡張対象です。円の切り抜きで基本的な穴形状は作れます。
 
 ### 保存・失敗時の扱い
@@ -161,3 +161,5 @@ MCP本体はAIアプリが自動起動するstdioサーバーです。常駐す�
 Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechcue_switch_pattern`, `mechcue_rename_pattern`, `mechcue_delete_pattern`. Chart edits affect the active pattern; targets remain shared. Switching pauses, rewinds and disables CAD reflection without moving CAD. Save to CAD persists all patterns.
 
 更新時はインストーラーが、インストール先のMCP本体とトレイ設定を終了します。更新中の自動再起動は一時停止します。AIとのMCP接続は更新後に再接続してください。トレイ設定アイコンの終了だけではMCP本体は終了しません。旧版は専用の終了通知を持たないため、インストール先を確認してMCPプロセスのみ終了します。Solid Edgeや他フォルダのMCPは対象にしません。
+
+図面の正面候補判定・必要ビュー追加・主要寸法配置は [図面MCPの案内](../docs/DRAWING_AUTOMATION.md) を参照してください。追加コマンド：solidedge_plan_drawing、solidedge_list_drawing_views、solidedge_auto_drawing、solidedge_complete_drawing、solidedge_dimension_drawing_view。

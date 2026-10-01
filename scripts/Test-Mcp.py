@@ -44,11 +44,11 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==35,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==40,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
-    for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine']:
+    for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('35 tools and read-only annotations')
+    checks.append('40 tools and read-only annotations')
     catalog=tool('solidedge_list_concept_templates')
     assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
@@ -72,6 +72,10 @@ try:
     result=tool('solidedge_create_concept_machine',{'type':'mill5','outputDirectory':'unused','xTravelMm':0},True)
     assert 'travel must be' in str(result),result
     checks.append('Invalid concept inputs rejected before CAD connection')
+    bad=tool('solidedge_plan_drawing',{'expectedDocument':'unused','frontOrientation':'bad'},True);assert 'frontOrientation' in str(bad),bad
+    bad=tool('solidedge_dimension_drawing_view',{'expectedDocument':'unused','viewNumber':1,'maxDimensions':0},True);assert 'maxDimensions' in str(bad),bad
+    bad=tool('solidedge_complete_drawing',{'expectedDocument':'unused','dimensionMode':'bad'},True);assert 'dimensionMode' in str(bad),bad
+    checks.append('Invalid drawing direction and dimension options rejected before CAD connection')
     settings_path.write_text('invalid',encoding='utf-8')
     assert 'kind must be part' not in str(tool('solidedge_new_document',{'kind':'invalid'},True))
     settings_path.unlink()
