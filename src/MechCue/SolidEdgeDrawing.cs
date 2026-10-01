@@ -56,7 +56,7 @@ public sealed partial class Bridge
     {
         var doc=CadDocument(CadApplication(),expectedDocument,".dft",false);var sheet=Get(doc,"ActiveSheet");var views=Get(sheet,"DrawingViews");var result=new List<object>();
         for(int i=1;i<=Convert.ToInt32(Get(views,"Count"));i++){var v=GetItem(views,i);int n=DrawingOrientation(v);result.Add(new {number=i,name=Get(v,"Name"),modelPath=Get(Get(v,"ModelLink"),"FileName"),orientation=DrawingPlanning.Orientations.FirstOrDefault(p=>p.Value==n).Key??"custom",orientationId=n,scale=Get(v,"ScaleFactor"),sheetRangeMm=DrawingRange(v).Select(x=>x*1000),lines=Get(Get(v,"DVLines2d"),"Count"),circles=Get(Get(v,"DVCircles2d"),"Count")});}
-        var dims=Get(sheet,"Dimensions");var details=new List<object>();for(int i=1;i<=Convert.ToInt32(Get(dims,"Count"));i++){var dimension=GetItem(dims,i);details.Add(new {number=i,valueNative=Convert.ToDouble(Get(dimension,"Value")),unitsType=Get(dimension,"UnitsType"),statusId=Get(dimension,"StatusOfDimension"),mechCueId=DrawingTag(dimension)});}
+        var dims=Get(sheet,"Dimensions");var details=new List<object>();for(int i=1;i<=Convert.ToInt32(Get(dims,"Count"));i++){var dimension=GetItem(dims,i);details.Add(new {number=i,valueNative=Convert.ToDouble(Get(dimension,"Value")),unitsType=Get(dimension,"UnitsType"),statusId=Get(dimension,"StatusOfDimension"),mechCueId=DrawingTag(dimension),sheetLineMm=DrawingDimensionLine(dimension,DrawingTag(dimension))});}
         return new {fullName=CadName(doc),sheet=Get(sheet,"Name"),views=result,dimensions=Get(dims,"Count"),dimensionDetails=details};
     }
     public static object CadAutoDrawing(string expectedDocument,string outputPath,string templatePath="",string frontOrientation="auto",bool includeIsometric=true,string dimensionMode="features")
@@ -93,6 +93,59 @@ public sealed partial class Bridge
     static (double x,double y) DrawingSheetPoint(object view,double x,double y){object[] a=[x,y,0d,0d];CadCallRef(view,"ViewToSheet",[2,3],a);return(Convert.ToDouble(a[2]),Convert.ToDouble(a[3]));}
     static string? DrawingTag(object dimension){try{return Convert.ToString(Get(NamedItem(NamedItem(Get(dimension,"AttributeSets"),"MechCueDrawing"),"Id"),"Value"));}catch{return null;}}
     static void DrawingTag(object dimension,string id){var set=Call(Get(dimension,"AttributeSets"),"Add","MechCueDrawing");var a=Call(set,"Add","Id",8);Set(a,"Value",id);}
+    static double[] DrawingRelatedPoint(object dimension,int index)
+    {
+        object[] a=[index,new System.Runtime.InteropServices.DispatchWrapper(null),0d,0d,0d,false];
+        CadCallRef(dimension,"GetRelated",[1,2,3,4,5],a);return [Convert.ToDouble(a[2]),Convert.ToDouble(a[3])];
+    }
+    static bool DrawingDimensionHorizontal(string id,double[] a,double[] b) => id.EndsWith("overall-width")||id.EndsWith("-x")||(!id.EndsWith("overall-height")&&!id.EndsWith("-y")&&Math.Abs(b[0]-a[0])>Math.Abs(b[1]-a[1]));
+    static double? DrawingDimensionLine(object dimension,string? id)
+    {
+        if(id==null||id.Contains("/diameter/"))return null;
+        try {var a=DrawingRelatedPoint(dimension,0);var b=DrawingRelatedPoint(dimension,1);return (a[DrawingDimensionHorizontal(id,a,b)?1:0]+Convert.ToDouble(Get(dimension,"TrackDistance")))*1000;}catch{return null;}
+    }
+    static (List<object> placements,List<string> warnings) DrawingArrange(object sheet,int selectedView=0)
+    {
+        var placements=new List<object>();var warnings=new List<string>();var views=Get(sheet,"DrawingViews");
+        var bounds=new List<(int number,string key,double[] box)>();
+        for(int i=1;i<=Convert.ToInt32(Get(views,"Count"));i++) {
+            var view=GetItem(views,i);if(DrawingOrientation(view)==9)continue;var points=new List<(double x,double y)>();
+            var lines=Get(view,"DVLines2d");for(int j=1;j<=Convert.ToInt32(Get(lines,"Count"));j++){var line=GetItem(lines,j);foreach(string method in new[]{"GetStartPoint","GetEndPoint"}){object[] a=[0d,0d];CadCallRef(line,method,[0,1],a);points.Add(DrawingSheetPoint(view,Convert.ToDouble(a[0]),Convert.ToDouble(a[1])));}}
+            if(points.Count==0)continue;
+            bounds.Add((i,Convert.ToString(Get(view,"Key"))??i.ToString(),[points.Min(p=>p.x),points.Min(p=>p.y),points.Max(p=>p.x),points.Max(p=>p.y)]));
+        }
+        var rows=new List<(object dimension,int view,string id,bool horizontal,double value,double origin,double edge)>();var dimensions=Get(sheet,"Dimensions");
+        for(int i=1;i<=Convert.ToInt32(Get(dimensions,"Count"));i++) {
+            var dimension=GetItem(dimensions,i);string? id=DrawingTag(dimension);if(id==null||id.Contains("/diameter/"))continue;
+            try {
+                var a=DrawingRelatedPoint(dimension,0);var b=DrawingRelatedPoint(dimension,1);
+                var candidates=bounds.Where(v=>id.StartsWith(v.key+"/",StringComparison.Ordinal)).ToList();
+                if(candidates.Count==0&&id.Contains("/step-")) {
+                    // Legacy step IDs identify the model, not the view. Require an unambiguous geometric match.
+                    candidates=bounds.Where(v=>new[]{a,b}.All(p=>p[0]>=v.box[0]-1e-7&&p[0]<=v.box[2]+1e-7&&p[1]>=v.box[1]-1e-7&&p[1]<=v.box[3]+1e-7)).ToList();
+                }
+                if(candidates.Count!=1){warnings.Add($"Dimension {i}: view ownership is ambiguous; placement retained.");continue;}
+                var owner=candidates[0];if(selectedView!=0&&owner.number!=selectedView)continue;
+                bool horizontal=DrawingDimensionHorizontal(id,a,b);rows.Add((dimension,owner.number,id,horizontal,Math.Abs(Convert.ToDouble(Get(dimension,"Value"))),a[horizontal?1:0],owner.box[horizontal?1:0]));
+            }catch(Exception e){warnings.Add($"Dimension {i}: {e.GetBaseException().Message}");}
+        }
+        foreach(var group in rows.GroupBy(r=>(r.view,r.horizontal))) {
+            int lane=0;foreach(var row in group.OrderBy(r=>r.value).ThenBy(r=>r.id,StringComparer.Ordinal)) {
+                double offset=.009+.007*lane++,track=row.edge-row.origin-offset;
+                try {if(Math.Abs(Convert.ToDouble(Get(row.dimension,"TrackDistance"))-track)>1e-7)Set(row.dimension,"TrackDistance",track);
+                    placements.Add(new {viewNumber=row.view,mechCueId=row.id,horizontal=row.horizontal,valueMm=row.value*1000,sheetLineMm=DrawingDimensionLine(row.dimension,row.id),distanceFromGeometryMm=offset*1000});
+                }catch(Exception e){warnings.Add($"{row.id}: {e.GetBaseException().Message}");}
+            }
+        }
+        return(placements,warnings);
+    }
+    public static object CadArrangeDrawingDimensions(string expectedDocument,int viewNumber=0)
+    {
+        if(viewNumber<0)throw new ArgumentOutOfRangeException(nameof(viewNumber));
+        var doc=CadDocument(CadApplication(),expectedDocument,".dft");var sheet=Get(doc,"ActiveSheet");
+        if(viewNumber>Convert.ToInt32(Get(Get(sheet,"DrawingViews"),"Count")))throw new ArgumentOutOfRangeException(nameof(viewNumber));
+        var result=DrawingArrange(sheet,viewNumber);return new {fullName=CadName(doc),placements=result.placements,warnings=result.warnings,saved=false};
+    }
     static (List<object> dimensions,List<string> warnings) DrawingDimensions(object sheet,object view,int number,string mode,bool horizontal,bool vertical,int maximum)
     {
         var results=new List<object>();var warnings=new List<string>();var collection=Get(sheet,"Dimensions");var existing=new HashSet<string>();for(int i=1;i<=Convert.ToInt32(Get(collection,"Count"));i++){string? id=DrawingTag(GetItem(collection,i));if(id!=null)existing.Add(id);}
@@ -132,6 +185,7 @@ public sealed partial class Bridge
                 Linear(line.Start,line.End,x,"step-"+id,length,x?xLane++:yLane++);
             }
         }
+        var arrangement=DrawingArrange(sheet,number);warnings.AddRange(arrangement.warnings);
         if(horizontal&&left==null&&circles.Count>0)warnings.Add($"View {number}: round silhouette; diameter replaces linear extent.");return(results,warnings);
     }
     public static object CadDimensionDrawingView(string expectedDocument,int viewNumber,string dimensionMode="features",int maxDimensions=12)

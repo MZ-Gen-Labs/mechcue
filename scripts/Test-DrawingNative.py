@@ -56,6 +56,22 @@ try:
         return path,result
     draft,result=drawing(plate,'plate-drawing')
     check(sorted(round(d['valueMm'],3) for d in result['dimensions'])==[10,12,25,30,55,80,90,120],'Plate overall, thickness, diameter and hole positions')
+    def check_lanes(document, label):
+        before=tool('solidedge_list_drawing_views',{'expectedDocument':document})
+        arranged=tool('solidedge_arrange_drawing_dimensions',{'expectedDocument':document})
+        after=tool('solidedge_list_drawing_views',{'expectedDocument':document})
+        check(not arranged['warnings'],label+' arrangement has no warnings')
+        check(before['dimensionDetails']==after['dimensionDetails'],label+' arrangement is idempotent and preserves native values')
+        groups={}
+        native={d['mechCueId']:d for d in after['dimensionDetails']}
+        for row in arranged['placements']:
+            groups.setdefault((row['viewNumber'],row['horizontal']),[]).append(row)
+            check(abs(native[row['mechCueId']]['sheetLineMm']-row['sheetLineMm'])<.001,label+' native dimension line matches placement')
+        for rows in groups.values():
+            rows.sort(key=lambda r:r['valueMm'])
+            check(all(a['sheetLineMm']>b['sheetLineMm']+.001 for a,b in zip(rows,rows[1:])),label+' larger dimensions are farther outside')
+        return arranged
+    check_lanes(draft,'Plate')
     repeat=tool('solidedge_dimension_drawing_view',{'expectedDocument':draft,'viewNumber':1});check(not repeat['added'] and not repeat['warnings'],'Dimension repeat avoids duplicates')
     repeat=tool('solidedge_complete_drawing',{'expectedDocument':draft});check(not repeat['addedViews'] and not repeat['dimensions'],'Existing complete draft avoids duplicate views and dimensions')
     proposal=tool('solidedge_plan_drawing',{'expectedDocument':draft});check('Existing' in proposal['plan']['Reason'],'Existing front retained')
@@ -68,6 +84,7 @@ try:
     check(len(result['views']['views'])==2 and sorted(round(d['valueMm'],3) for d in result['dimensions'])==[40,50],'Cylinder uses two views and diameter/length')
     step=save_part('step','polygon',depthMm=15,pointsJson=json.dumps([{'x':0,'y':0},{'x':100,'y':0},{'x':100,'y':35},{'x':60,'y':35},{'x':60,'y':70},{'x':0,'y':70}]))
     path,result=drawing(step,'step-drawing',includeIsometric=False)
+    check_lanes(path,'Step')
     check(any(d['kind'].startswith('step-') for d in result['dimensions']),'Step dimensions added')
     ids=[(d['kind'],round(d['valueMm'],3)) for d in result['dimensions'] if d['kind'].startswith('step-')];check(len(ids)==len(set(ids)),'Step dimensions deduplicated across views')
     doc=tool('solidedge_new_document',{'kind':'draft','templatePath':str(templates/'iso metric draft.dft')})['fullName']

@@ -47,3 +47,9 @@ python scripts/Test-DrawingNative.py --mcp artifacts/0.2.0-alpha.8/mcp/MechCue.M
 既存ユーザーデータの形状は変更せず、テスト部品・図面を別途生成します。テスト文書は確認用に開いたまま残します。寸法値、円筒のビュー省略、追加の重複防止、既存図面の補完、アセンブリ更新への追従を確認し、`result.json`へ記録します。
 
 APIの根拠：[DrawingView](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgeDraft~DrawingView_members.html)、[寸法コレクション](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgeFrameworkSupport~Dimensions_members.html)。実機の引数と定数はSolid Edge 2026の型定義で確認しています。
+
+## Dimension placement
+
+Linear dimensions are arranged independently per view and direction: smallest nearest the geometry, largest outermost. Horizontal dimensions are below the view and vertical dimensions to its left, with an initial 9 mm gap and 7 mm lane spacing on the sheet. Diameter callouts retain their placement.
+
+Use `solidedge_arrange_drawing_dimensions(expectedDocument, viewNumber=0)` to rearrange existing MechCue dimensions without adding dimensions or saving. `0` processes all views on the active sheet. Values and model associations are preserved; manually created dimensions are untouched. Ambiguous ownership in older overlapping views is reported and left unchanged. This ordering reduces extension-line crossings for nested dimensions; it does not provide general collision avoidance for all annotations or adjacent views. Inspect the result before saving.
