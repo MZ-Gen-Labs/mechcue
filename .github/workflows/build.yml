@@ -17,6 +17,9 @@ jobs:
       - name: Verify Python test runtime
         shell: pwsh
         run: python --version
+      - name: Verify release list chronology
+        shell: pwsh
+        run: python scripts/Test-ReleaseList.py
       - name: Prepare Inno Setup compiler
         shell: pwsh
         run: ./scripts/Setup-InnoCI.ps1

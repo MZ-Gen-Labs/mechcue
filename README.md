@@ -39,6 +39,8 @@ Windows x64、Solid Edge 2026、.NET 8 Desktop Runtime（x64）が必要です�
 4. 「Solid Edgeへ反映」をオンにして時間カーソルを動かします。
 
 アドインのみ必要な場合は`MechCue-<version>-AddIn-Setup.exe`を選びます。独立版のEXEは含みません。
+**日時順のリリース一覧**：`Open-Release-List.cmd` を実行すると、同じバージョン内を時刻・秒まで比較して古い順に表示します。Draftを含む最新情報をGitHubから取得します。[起動・ログイン手順](docs/RELEASE_LIST.md)。
+
 両版入りは`MechCue-<version>-Setup.exe`です。独立版は配置先の`MechCue.exe`、または配布ZIPで起動します。
 構成を切り替える場合は、既存版をアンインストールしてから導入してください。
 画面の「使い方」、[操作ガイド](docs/USER_GUIDE.md)、[セットアップ手順](Installer/README.md)を参照してください。

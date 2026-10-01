@@ -35,3 +35,7 @@ GITHUB_TOKENを使い、Release作成ジョブだけcontents: writeを許可し�
 MCP用の依存はMcp/packages.lock.jsonで固定し、Mcp/NuGet.Configでnuget.orgを指定します。ビルド検査にはPython 3が必要です（配布先では不要）。依存パッケージのメタデータ・ライセンスをMCP ZIPへ同梱します。
 
 0.1.0は2026-10-01に正式版として公開しました。0.2.0系の開発版は下書きのPrereleaseとして扱います。正式版を公開する際は、配布ファイル・バージョン・検証結果を確認し、明示的にPrereleaseとDraftを解除します。
+
+## 日時順の一覧
+
+GitHub標準の一覧で同日アルファ版の順番が前後する場合は、ルートの `Open-Release-List.cmd` を使用します。GitHubのリリース作成日時を時刻・秒まで比較し、同じベースバージョン内では新しいものを後ろに表示します。Draftもログイン権限に従って読み込み、公開状態は変更しません。[使い方](RELEASE_LIST.md)。
