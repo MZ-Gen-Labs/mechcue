@@ -4,7 +4,7 @@
 
 MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート編集ツールです。
 点や線分をドラッグして動作を編集し、共通の時間カーソルで複数の機構を確認します。
-アドイン版と独立版は同じ編集画面・グラフデータを使います。0.1.0を正式版として公開し、0.2.0系でSolid Edge操作のMCP拡張を開発しています。
+アドイン版と独立版は同じ編集画面・グラフデータを使います。0.2.0の正式版では、Solid Edge操作のMCP、構想モデル生成、図面・3D PMI作成を利用できます。構想検討・動作確認向けのツールです。
 
 ## できること
 
@@ -29,6 +29,8 @@ MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート�
 PLC接続・プログラム読み込み、加減速モデル、負荷計算は未対応です。
 
 MCPを使う場合はインストーラーで「MCPサーバー」をチェックし、MechCueの「AI接続」をオンにします。追加のMCP ZIPでの配布も継続します。[MCP導入・接続設定](Mcp/README.md)を参照してください。
+
+[0.2.0の変更点と対応範囲](docs/releases/0.2.0.md)。
 
 ## はじめる
 
@@ -77,7 +79,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 ./scripts/Build.ps1 -WithAddIn -WithMcp
 ```
 
-成果物は`artifacts/0.2.0-alpha.12/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
+成果物は`artifacts/0.2.0/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
