@@ -202,6 +202,7 @@ public partial class MainForm : Form
             if (warning != null) MessageBox.Show(this, UiText.Text(warning), UiText.Text("切断"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
         RefreshTracks(0);
+        ConfigureDiagnostics();
         ConfigureAi();
         ConfigureLanguage();
         ConfigureDocumentPersistence();
@@ -234,7 +235,7 @@ public partial class MainForm : Form
     }
     void Add(Control parent, string label, Action action)
     {
-        var b = new Button { Text = UiText.CommandLabel(label), Tag = label, Image = CommandIcons.Create(label), TextImageRelation = TextImageRelation.ImageBeforeText, AutoSize = true }; commandHints.SetToolTip(b, UiText.CommandHint(label)); b.Click += (_, _) => Guard(action); b.Disposed += (_, _) => b.Image?.Dispose(); parent.Controls.Add(b);
+        var b = new Button { Text = UiText.CommandLabel(label), Tag = label, Image = CommandIcons.Create(label), TextImageRelation = TextImageRelation.ImageBeforeText, AutoSize = true }; commandHints.SetToolTip(b, UiText.CommandHint(label)); b.Click += (_, _) => { DiagnosticLog.Write("button", new { label, layout = DiagnosticState() }); Guard(action); }; b.Disposed += (_, _) => b.Image?.Dispose(); parent.Controls.Add(b);
     }
     void Guard(Action action) { try { action(); } catch (Exception ex) { PausePlayback(); live.Checked = false; Error(ex); } finally { if (!bridge.Connected) target.Items.Clear(); UpdateConnection(); } }
     void UpdateConnection()
@@ -245,7 +246,7 @@ public partial class MainForm : Form
         if (documentSettingsDirty && bridge.Connected) connection.Text += " / 設定変更あり：CAD保存";
         connection.ForeColor = live.Checked ? Color.DarkGreen : Color.DarkOrange;
     }
-    void Error(Exception ex) { status.Text = "停止：" + (ex.InnerException ?? ex).Message; if(aiExecuting){aiError=ex;return;} MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
+    void Error(Exception ex) { DiagnosticLog.Error("ui-error", ex, DiagnosticState()); status.Text = "停止：" + (ex.InnerException ?? ex).Message; if(aiExecuting){aiError=ex;return;} MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
     void RefreshTracks(int selected) { loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
         foreach (var t in tracks) trackList.Items.Add(t.Name, !plot.Hidden.Contains(t));
         foreach (Control control in legend.Controls.Cast<Control>().ToArray()) control.Dispose();

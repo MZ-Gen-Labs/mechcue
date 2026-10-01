@@ -108,10 +108,16 @@ public partial class MainForm
         Add(toolbar, "元に戻す", Undo);
         plot.PointSelected = (index, point) =>
         {
-            if (point < grid.Rows.Count && !grid.Rows[point].IsNewRow)
+            DiagnosticLog.Write("select-point", new { index, point, layout = DiagnosticState() });
+            if (point >= 0 && point < grid.Rows.Count && !grid.Rows[point].IsNewRow)
             {
                 grid.ClearSelection(); grid.Rows[point].Selected = true;
-                grid.FirstDisplayedScrollingRowIndex = point;
+                // WinForms throws when the grid has only enough space for its header.
+                if (grid.Visible && grid.ClientSize.Height > grid.ColumnHeadersHeight + grid.Rows[point].Height + 4)
+                {
+                    try { grid.FirstDisplayedScrollingRowIndex = point; }
+                    catch (InvalidOperationException ex) { DiagnosticLog.Error("scroll-point", ex, DiagnosticState()); }
+                }
             }
         };
     }
@@ -223,8 +229,15 @@ public partial class MainForm
         }
         split.SplitterDistance = 180; workspace.SplitterDistance = Math.Max(300, workspace.Width - 260); vertical.SplitterDistance = Math.Max(150, vertical.Height - 180);
         if (split.IsSplitterFixed || workspace.IsSplitterFixed || vertical.IsSplitterFixed || vertical.Panel2.Height < 60) throw new Exception("Resizable panel splitters failed");
-        if (dataMenu.Items.Count != 5 || top.Controls.OfType<Button>().Any(b => Equals(b.Tag,"保存") || Equals(b.Tag,"表を書き出し"))) throw new Exception("Data menu consolidation failed");
+        if (dataMenu.Items.Count != 6 || top.Controls.OfType<Button>().Any(b => Equals(b.Tag,"保存") || Equals(b.Tag,"表を書き出し"))) throw new Exception("Data menu consolidation failed");
+        int originalDistance = vertical.SplitterDistance;
+        vertical.Panel2MinSize = 0; vertical.SplitterDistance = vertical.Height - vertical.SplitterWidth - 42;
+        PerformLayout(); Application.DoEvents();
+        plot.PointSelected?.Invoke(0, 1);
+        if (!grid.Rows[1].Selected) throw new Exception("Tiny grid point selection failed");
+        vertical.SplitterDistance = originalDistance; vertical.Panel2MinSize = 60;
         SetCompact(true);
+        plot.PointSelected?.Invoke(0, 1);
         if (!split.Panel1Collapsed || !workspace.Panel2Collapsed || !vertical.Panel2Collapsed || plot.EditMode || time.Parent != compactBar) throw new Exception("Compact graph/playback layout failed");
         Application.DoEvents();
         var originalCompactSize = Size;

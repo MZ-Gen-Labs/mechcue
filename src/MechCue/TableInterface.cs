@@ -10,6 +10,7 @@ public partial class MainForm
 {
     public void ExecuteHostAction(HostAction action) => Guard(() =>
     {
+        DiagnosticLog.Write("host-command", new { action = action.ToString(), layout = DiagnosticState() });
         switch(action)
         {
             case HostAction.Play: TogglePlayback(); break;

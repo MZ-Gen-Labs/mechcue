@@ -112,7 +112,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
     sealed record HostWindow(IntPtr Handle) : IWin32Window;
     static void Report(Exception ex)
     {
-        Log(ex.ToString()); MessageBox.Show(UiText.Text(ex.Message), UiText.Text("MechCue アドイン"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+        DiagnosticLog.Error("addin", ex); Log(ex.ToString()); MessageBox.Show(UiText.Text(ex.Message), UiText.Text("MechCue アドイン"), MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
     static void Log(string message)
     {

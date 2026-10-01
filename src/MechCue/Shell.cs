@@ -31,6 +31,9 @@ public partial class MainForm
     void ConfigureDataMenu()
     {
         foreach (var action in new[] { HostAction.Save, HostAction.JsonOpen, HostAction.JsonSave, HostAction.TableExport, HostAction.TableImport }) AddMenu(dataMenu, action);
+        var logs = new ToolStripMenuItem { Text = "ログフォルダー", Tag = "logs" };
+        logs.Click += (_, _) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", DiagnosticLog.DirectoryPath) { UseShellExecute = true });
+        dataMenu.Items.Add(logs);
         var button = new Button { Text = "データ ▾", Tag = "データ ▾", AutoSize = true };
         button.Click += (_, _) => dataMenu.Show(button, new Point(0, button.Height)); top.Controls.Add(button);
         Disposed += (_, _) => dataMenu.Dispose();
@@ -51,6 +54,7 @@ public partial class MainForm
         foreach (var menu in new[] { dataMenu, viewMenu })
             foreach (var item in menu.Items.OfType<ToolStripMenuItem>())
                 if (item.Tag is HostAction action) { item.Text = HostCommands.Caption(action); item.ToolTipText = HostCommands.Hint(action); item.Checked = IsHostActionChecked(action); }
+                else if (Equals(item.Tag, "logs")) item.Text = UiText.IsJapanese ? "ログフォルダー" : "Log folder";
     }
     Control PanelHeading(string text, HostAction action)
     {

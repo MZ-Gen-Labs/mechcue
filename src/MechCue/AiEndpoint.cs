@@ -71,14 +71,15 @@ public partial class MainForm
                 var result=HandleAi(request);if(aiError!=null)throw aiError;
                 completion.TrySetResult(result);
             }
-            catch(Exception ex){completion.TrySetException(ex);}
+            catch(Exception ex){DiagnosticLog.Error("mcp", ex, DiagnosticState());completion.TrySetException(ex);}
             finally{aiExecuting=false;aiError=null;}
-        }); }catch(Exception ex){completion.TrySetException(ex);}
+        }); }catch(Exception ex){DiagnosticLog.Error("mcp", ex, DiagnosticState());completion.TrySetException(ex);}
         return completion.Task;
     }
     internal object HandleAi(JsonElement request)
     {
         string method=request.GetProperty("method").GetString() ?? "";
+        if (method != "get_state") DiagnosticLog.Write("mcp-command", new { method, state = DiagnosticState() });
         var args=request.TryGetProperty("args",out var a)?a:JsonSerializer.SerializeToElement(new{});
         double Number(string key)=>args.GetProperty(key).GetDouble();
         Track Target()
