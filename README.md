@@ -95,3 +95,5 @@ ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrerelease�
 ### 構想モデルの生成
 
 0.2.0-alpha.4では工作機械3/4/5軸と直交搬送装置の概略モデル生成・軸連動MCPを追加しています。[適用ターゲットと使い方](docs/CONCEPT_TARGETS.md)を参照してください。
+
+名前付き動作の保存・切り替え: [動作パターン](docs/MOTION_PATTERNS.md)。

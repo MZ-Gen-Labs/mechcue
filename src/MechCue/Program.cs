@@ -66,7 +66,7 @@ static class Program
         ApplicationConfiguration.Initialize();
         if (args.Contains("--smoke-test"))
         {
-            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface();
+            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface(); form.VerifyMotionPatterns();
             using var image = new Bitmap(form.Width, form.Height); form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size));
             image.Save(Path.Combine(AppContext.BaseDirectory, "preview.png")); form.Close(); return;
         }
@@ -222,6 +222,7 @@ public partial class MainForm : Form
             if (warning != null) MessageBox.Show(this, UiText.Text(warning), UiText.Text("切断"), MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
         RefreshTracks(0);
+        ConfigurePatterns();
         ConfigureDiagnostics();
         ConfigureAi();
         ConfigureLanguage();
@@ -240,6 +241,7 @@ public partial class MainForm : Form
                 if (!string.Equals(title, "fourbar.asm", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("fourbar.asmを開いてください。");
                 tracks.Clear(); tracks.Add(new Track { Name = "四節リンク・支点間距離", Points = [new(0, 215.9), new(2, 216.9), new(4, 215.9)] });
                 RefreshTracks(0);
+                ResetPatterns();
                 var driver = bridge.Targets("距離拘束").Single(t => t.Label == "拘束 #5 / Offset");
                 bridge.Bind(Current, driver); target.SelectedItem = target.Items.Cast<Target>().First(t => t.Label == driver.Label);
                 status.Text = "fourbar.asmに接続済み：拘束 #5 を登録。『Solid Edgeへ反映』をオンにしてグラフをドラッグしてください。";
@@ -308,16 +310,18 @@ public partial class MainForm : Form
         Current.Name = name.Text; Current.Kind = CurrentKind; Current.Axis = axis.Text; Current.Points = points;
         int i = trackList.SelectedIndex; RefreshTracks(i, refreshTargets); status.Text = "グラフを更新しました。";
     }
-    void SaveFile() { Commit(); using var d = new SaveFileDialog { Filter = UiText.Text("タイムチャート|*.json"), FileName = "motion.json" }; if (d.ShowDialog() == DialogResult.OK) File.WriteAllText(d.FileName, JsonSerializer.Serialize(tracks, new JsonSerializerOptions { WriteIndented = true })); }
+    void SaveFile() { Commit(); using var d = new SaveFileDialog { Filter = UiText.Text("タイムチャート|*.json"), FileName = "motion.json" }; if (d.ShowDialog() == DialogResult.OK) File.WriteAllText(d.FileName, CaptureChartPatterns().Json()); }
     void LoadFile()
     {
         if (bridge.Connected) throw new InvalidOperationException("ファイルを開く前に切断してください。");
         using var d = new OpenFileDialog { Filter = UiText.Text("タイムチャート|*.json") }; if (d.ShowDialog() != DialogResult.OK) return;
-        var loaded = JsonSerializer.Deserialize<List<Track>>(File.ReadAllText(d.FileName)) ?? throw new InvalidOperationException("ファイルが空です。");
+        string json = File.ReadAllText(d.FileName);
+        if(json.TrimStart().StartsWith("{")) { var settings = DocumentSettings.Parse(json); if(settings.Concept != null || settings.Tracks.Any(t=>t.Target != null)) throw new InvalidDataException("Use CAD to restore target assignments"); RestoreDocumentSettings(settings); MarkDocumentSettingsChanged(); return; }
+        var loaded = JsonSerializer.Deserialize<List<Track>>(json) ?? throw new InvalidOperationException("ファイルが空です。");
         if (loaded.Count == 0) throw new InvalidOperationException("グラフがありません。");
         if (loaded.Any(t => t == null || t.Id == Guid.Empty) || loaded.Select(t => t.Id).Distinct().Count() != loaded.Count) throw new InvalidDataException("Invalid track IDs");
         foreach (var t in loaded) { t.Validate(); if (!kind.Items.Contains(t.Kind) || !axis.Items.Contains(t.Axis)) throw new InvalidOperationException("駆動方法または軸が不正です。"); }
-        PausePlayback(); history.Clear(); tracks.Clear(); tracks.AddRange(loaded); RefreshTracks(0);
+        PausePlayback(); history.Clear(); tracks.Clear(); tracks.AddRange(loaded); RefreshTracks(0); ResetPatterns();
     }
 }
 class Plot : Control

@@ -109,6 +109,8 @@ public sealed class SavedTrack
 public sealed class DocumentSettings
 {
     public SavedConcept? Concept { get; set; }
+    public List<MotionPattern> Patterns { get; set; } = [];
+    public Guid ActivePatternId { get; set; }
     public int Version { get; set; } = 1;
     public List<SavedTrack> Tracks { get; set; } = [];
     public decimal Speed { get; set; } = 1;
@@ -121,7 +123,7 @@ public sealed class DocumentSettings
     {
         var settings = JsonSerializer.Deserialize<DocumentSettings>(json) ?? throw new InvalidDataException("Empty MechCue settings");
         if(settings.Concept is {} c) { c.Model.Validate(); c.Model.ValidateValues(c.Baseline); if(c.Tracks.Count!=c.Model.Axes.Count || c.Tracks.Values.Distinct().Count()!=c.Tracks.Count || c.Tracks.Values.Any(id=>!settings.Tracks.Any(t=>t.Track.Id==id)) || c.Model.Axes.Any(a=>!c.Tracks.ContainsKey(a.Id))) throw new InvalidDataException("Invalid concept chart mapping"); }
-        if (settings.Version != 1) throw new InvalidDataException("Unsupported MechCue settings version: " + settings.Version);
+        if (settings.Version is not (1 or 2)) throw new InvalidDataException("Unsupported MechCue settings version: " + settings.Version);
         if (settings.Tracks == null || settings.Tracks.Count is < 1 or > 10000) throw new InvalidDataException("Invalid MechCue track count");
         if (settings.DisplayMode is not (null or "selected" or "checked" or "all")) throw new InvalidDataException("Invalid graph display mode");
         if (settings.Speed is < 0.1m or > 10 || settings.DragStep is < 0 or > 10000) throw new InvalidDataException("Invalid playback settings");
@@ -139,6 +141,8 @@ public sealed class DocumentSettings
                 if (target.ReferenceKey != null && Convert.FromBase64String(target.ReferenceKey).Length == 0) throw new InvalidDataException("Empty reference key");
             }
         }
+        if(settings.Patterns == null || settings.Patterns.Count > 500) throw new InvalidDataException("Invalid patterns");
+        if(settings.Patterns.Count > 0) { if(settings.Patterns.Any(p=>p==null) || settings.Patterns.Select(p=>p.Id).Distinct().Count()!=settings.Patterns.Count || settings.Patterns.Select(p=>p.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=settings.Patterns.Count || !settings.Patterns.Any(p=>p.Id==settings.ActivePatternId)) throw new InvalidDataException("Invalid pattern identity"); foreach(var p in settings.Patterns) p.Validate(settings.Tracks.Select(t=>t.Track.Id)); }
         return settings;
     }
     public string Json() => JsonSerializer.Serialize(this);

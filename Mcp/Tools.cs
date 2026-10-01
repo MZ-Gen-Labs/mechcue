@@ -21,6 +21,16 @@ public static class MechCueTools
     }
     [McpServerTool,Description("Import concept-machine axes into an enabled MechCue window connected to that assembly. Creates constant tracks from measured current pose without moving CAD; repeated import preserves existing tracks. Stops playback and disables CAD reflection. manifestPath absolute; optional sessionId. Save to CAD persists mappings.")]
     public static Task<string> mechcue_import_concept_axes(string manifestPath,string sessionId="",CancellationToken cancellationToken=default)=>Send("import_concept",new{manifestPath},sessionId,cancellationToken);
+    [McpServerTool(ReadOnly=true),Description("List named motion patterns, their IDs, descriptions, durations and playback options; target bindings are shared across patterns.")]
+    public static Task<string> mechcue_list_patterns(string sessionId="",CancellationToken cancellationToken=default)=>Send("list_patterns",new{},sessionId,cancellationToken);
+    [McpServerTool,Description("Switch named motion pattern by stable patternId or exact patternName. Retains current edits and CAD bindings, stops playback, disables CAD reflection and rewinds. Does not move CAD.")]
+    public static Task<string> mechcue_switch_pattern(string patternId="",string patternName="",string sessionId="",CancellationToken cancellationToken=default)=>Send("switch_pattern",new{patternId,patternName},sessionId,cancellationToken);
+    [McpServerTool,Description("Create and select a uniquely named motion pattern. duplicate=true copies current keyframes; false creates constant graphs at the current chart values. Shares CAD bindings; stops playback and disables reflection. Save to CAD persists all patterns.")]
+    public static Task<string> mechcue_create_pattern(string name,bool duplicate=true,string sessionId="",CancellationToken cancellationToken=default)=>Send("create_pattern",new{name,duplicate},sessionId,cancellationToken);
+    [McpServerTool,Description("Rename a motion pattern and optionally edit its description. Select by ID or exact current name; defaults to active pattern. Names must be unique, 1–100 characters.")]
+    public static Task<string> mechcue_rename_pattern(string name,string patternId="",string patternName="",string? description=null,string sessionId="",CancellationToken cancellationToken=default)=>Send("rename_pattern",new{name,patternId,patternName,description},sessionId,cancellationToken);
+    [McpServerTool(Destructive=true),Description("Delete a named motion pattern by ID or exact name; defaults to active pattern. Cannot delete the last pattern. If deleting the active pattern, stops playback, disables reflection and selects another pattern. Shared CAD bindings remain.")]
+    public static Task<string> mechcue_delete_pattern(string patternId="",string patternName="",string sessionId="",CancellationToken cancellationToken=default)=>Send("delete_pattern",new{patternId,patternName},sessionId,cancellationToken);
     static async Task<string> Send(string method,object args,string sessionId,CancellationToken cancellationToken)
     {
         var sessions=mechcue_list_sessions() is List<AiSession> found ? found : new List<AiSession>();

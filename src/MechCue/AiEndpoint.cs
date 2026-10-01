@@ -88,6 +88,18 @@ public partial class MainForm
             int index=args.GetProperty("trackNumber").GetInt32();if(index<1 || index>tracks.Count)throw new ArgumentOutOfRangeException("trackNumber");return tracks[index-1];
         }
         if(method=="get_state")return AiState();
+        if(method=="list_patterns") { StoreActivePattern(); return new { activePatternId=activePattern, patterns=patterns.Select(p=>new { id=p.Id,name=p.Name,description=p.Description,duration=p.Points.Values.Max(ps=>ps[^1].Time),speed=p.Speed,loop=p.Loop,collision=p.Collision }) }; }
+        if(method is "switch_pattern" or "create_pattern" or "rename_pattern" or "delete_pattern") {
+            EnsurePatterns();
+            Guid PatternId() => args.TryGetProperty("patternId",out var pid) && !string.IsNullOrEmpty(pid.GetString()) ? Guid.Parse(pid.GetString()!) : args.TryGetProperty("patternName",out var pn) && !string.IsNullOrEmpty(pn.GetString()) ? patterns.Single(p=>string.Equals(p.Name,pn.GetString(),StringComparison.OrdinalIgnoreCase)).Id : activePattern;
+            switch(method) {
+                case "switch_pattern": SwitchPattern(PatternId()); break;
+                case "create_pattern": CreatePattern(args.GetProperty("name").GetString()!,args.TryGetProperty("duplicate",out var dup) && dup.GetBoolean()); break;
+                case "rename_pattern": RenamePattern(PatternId(),args.GetProperty("name").GetString()!,args.TryGetProperty("description",out var desc)?desc.GetString():null); break;
+                case "delete_pattern": DeletePattern(PatternId()); break;
+            }
+            return AiState();
+        }
         if(method=="import_concept"){if(!bridge.Connected)throw new InvalidOperationException("Connect MechCue to the concept assembly before importing axes.");ImportConceptAxes(args.GetProperty("manifestPath").GetString()!);return AiState();}
         if(method=="stop"){PausePlayback();return AiState();}
         if(method=="play"){StartPlayback();return AiState();}
@@ -134,7 +146,7 @@ public partial class MainForm
         return AiState();
     }
     object AiState()=>new {
-        sessionId=aiEndpoint?.Session.Id,connected=bridge.Connected,playing=timer.Enabled,applyToCad=live.Checked,time=(double)time.Value,status=status.Text,
+        activePatternId=activePattern,patternName=patterns.FirstOrDefault(p=>p.Id==activePattern)?.Name,sessionId=aiEndpoint?.Session.Id,connected=bridge.Connected,playing=timer.Enabled,applyToCad=live.Checked,time=(double)time.Value,status=status.Text,
         tracks=tracks.Select((t,i)=>new {number=i+1,id=t.Id,name=t.Name,kind=t.Kind,axis=t.Axis,unit=Plot.IsAngle(t)?"deg":"mm",target=bridge.BoundLabel(t) ?? bridge.PendingLabel(t),points=t.Points.Select(p=>new{time=p.Time,value=p.Value}).ToArray()}).ToArray()
     };
 }

@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw
 import io, struct
 root=Path(__file__).resolve().parent
 entries=[]
-for command in range(36):
+for command in range(42):
  for base,size,mono in [(101,16,False),(102,32,False),(103,16,True),(104,32,True)]:
     rid=base+command*10
     scale=4
@@ -17,7 +17,8 @@ for command in range(36):
         red=(0,0,0) if mono else (200,48,48)
         def box(coords,fill=None):d.rectangle(tuple(int(v*size*scale/32) for v in coords),outline=blue,fill=fill,width=max(1,int(size*scale/16)))
         def line(coords,color=blue):d.line([(int(x*size*scale/32),int(y*size*scale/32)) for x,y in coords],fill=color,width=max(2,int(size*scale/12)))
-        if k==0:
+        if k==41:box((6,4,13,28),blue);box((19,4,26,28),blue)
+        elif k==0:
             line([(4,3),(4,28),(29,28)])
             line([(5,24),(13,10),(20,20),(29,5)])
             line([(16,3),(16,28)],red)
@@ -50,7 +51,11 @@ for command in range(36):
             if k==28:line([(7,18),(13,24),(25,9)],green)
             if k==29:line([(5,27),(27,5)],red)
             if k==30:line([(4,24),(12,7),(21,7),(28,24)],green)
-        elif k==35:box((6,4,13,28),blue);box((19,4,26,28),blue)
+        elif k in (35,36,37):
+            box((3,4,29,28));line([(4,11),(28,11)]);line([(8,18),(23,18)],green)
+            if k==36: box((11,8,28,25))
+            if k==37: line([(9,24),(9,14),(24,14)],green)
+        elif k==40: box((7,8,25,28));line([(4,6),(28,6)],red)
         else:box((4,3,28,29),blue)
         if mono:im=im.resize((size,size)).convert('L').point(lambda x:255 if x>128 else 0).convert('RGB')
         else:im=im.resize((size,size),Image.Resampling.LANCZOS)

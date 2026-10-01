@@ -4,7 +4,7 @@ public enum HostAction {
     Connect=8, Disconnect=9, Restore=10, JsonOpen=11, JsonSave=12, TableExport=13, TableImport=14,
     Apply=15, Collision=16, Loop=17, Overlay=18, Edit=19, Review=20, Undo=21, Help=22,
     AddTrack=23, Update=24, SelectedPart=25, AllTargets=26, ReadCurrent=27, Highlight=28,
-    Assign=29, Unassign=30, Preset=31, Ai=32, TracksPanel=33, SettingsPanel=34, PointsPanel=35
+    Assign=29, Unassign=30, Preset=31, Ai=32, TracksPanel=33, SettingsPanel=34, PointsPanel=35, PatternSwitch=36, PatternDuplicate=37, PatternManage=38, PatternNew=39, PatternRename=40, PatternDelete=41
 }
 public partial class MainForm
 {
@@ -13,6 +13,7 @@ public partial class MainForm
         DiagnosticLog.Write("host-command", new { action = action.ToString(), layout = DiagnosticState() });
         switch(action)
         {
+            case HostAction.PatternSwitch: case HostAction.PatternDuplicate: case HostAction.PatternManage: case HostAction.PatternNew: case HostAction.PatternRename: case HostAction.PatternDelete: PatternAction(action); break;
             case HostAction.Play: TogglePlayback(); break;
             case HostAction.Stop: PausePlayback(); break;
             case HostAction.Maximize: WindowState=FormWindowState.Maximized; break;
@@ -74,8 +75,8 @@ public partial class MainForm
                 if(current!=null && (bridge.BoundLabel(current)!=null || bridge.PendingLabel(current)!=null) && (current.Kind!=imported.Kind || current.Axis!=imported.Axis))throw new InvalidOperationException("割り当て済みの機構の駆動方法・軸は変更できません。先に解除してください。");
             }
         PausePlayback();live.Checked=false;
-        if(!bridge.Connected){ history.Clear();tracks.Clear();tracks.AddRange(loaded); }
-        else foreach(var imported in loaded)
+        CommitEditor(false);
+        foreach(var imported in loaded)
         {
             var current=tracks.SingleOrDefault(t=>t.Id==imported.Id);
             if(current==null){tracks.Add(imported);continue;}

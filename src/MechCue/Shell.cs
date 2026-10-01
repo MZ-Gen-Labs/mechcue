@@ -49,12 +49,13 @@ public partial class MainForm
     }
     void RefreshMenus()
     {
+        commandHints.SetToolTip(patternChoice, UiText.IsJapanese ? "動作を切り替えます。再生を停止し、反映をオフにして先頭へ戻ります。" : "Switch motion; stop playback, disable CAD reflection and rewind.");
         commandHints.SetToolTip(live, HostCommands.Hint(HostAction.Apply));
         commandHints.SetToolTip(collision, HostCommands.Hint(HostAction.Collision));
         commandHints.SetToolTip(loop, UiText.IsJapanese ? "最後まで再生したら先頭から繰り返します。" : "Repeat from the beginning after reaching the end.");
         commandHints.SetToolTip(overlay, UiText.IsJapanese ? "選択のみ／選択＋チェック／全機構。編集対象はチェックを外しても表示します。" : "Selected only / Selected + checked / All tracks. The edit target stays visible even when unchecked.");
         commandHints.SetToolTip(aiAccess, HostCommands.Hint(HostAction.Ai));
-        foreach (var menu in new[] { dataMenu, viewMenu })
+        foreach (var menu in new[] { dataMenu, viewMenu, patternMenu })
             foreach (var item in menu.Items.OfType<ToolStripMenuItem>())
                 if (item.Tag is HostAction action) { item.Text = HostCommands.Caption(action); item.ToolTipText = HostCommands.Hint(action); item.Checked = IsHostActionChecked(action); }
                 else if (Equals(item.Tag,"concept-import")){item.Text=UiText.IsJapanese?"概略軸を取り込む":"Import concept axes";item.ToolTipText=UiText.IsJapanese?"概略モデルの全軸を現在値で登録します。":"Register all concept axes at their current values.";}

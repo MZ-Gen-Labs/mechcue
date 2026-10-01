@@ -23,7 +23,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
     {
         application = Application;
         addIn = (SE.ISEAddInEx)AddInInstance;
-        addIn.GuiVersion = 11;
+        addIn.GuiVersion = 12;
         addIn.Description = "\nMechCue";
         var container = (IConnectionPointContainer)addIn.AddInEvents;
         var eventsId = typeof(SE.ISEAddInEvents).GUID;
@@ -97,7 +97,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
             if (action == HostAction.Play)
             {
                 MenuItemText = UiText.IsJapanese ? (chart.IsPlaying ? "一時停止" : "再生") : (chart.IsPlaying ? "Pause" : "Play");
-                if (chart.IsPlaying) BitmapID = 451;
+                if (chart.IsPlaying) BitmapID = 511;
             }
         }
     }

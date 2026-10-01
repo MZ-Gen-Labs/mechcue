@@ -42,7 +42,7 @@ public partial class MainForm
                 MinimumSize = new(1180, 740); Bounds = editBounds; WindowState = editWindowState;
             }
             split.Panel1Collapsed = enabled || tracksHidden; workspace.Panel2Collapsed = enabled || settingsHidden; vertical.Panel2Collapsed = enabled || pointsHidden;
-            chartHeading.Visible = !enabled;
+            chartHeading.Visible = true;
             top.Visible = !enabled; compactBar.Visible = enabled; status.Visible = connection.Visible = !enabled;
 
             plot.EditMode = !enabled && !reviewMode.Checked;
@@ -92,8 +92,8 @@ public partial class MainForm
             "② Solid Edgeに接続し、機構ごとに駆動先を登録\nCADで部品を選択して候補を表示し、対象を強調して確認します。割り当て変更は、その機構の解除だけで行えます。\n\n" +
             "③『Solid Edgeへ反映』をオンにして動作確認\n時間カーソルを動かすか再生します。反映がオフならCADは動きません。\n\n" +
             "値：距離はmm、角度は度。拘束は絶対値、部品移動・回転は登録時からの変化量、部品座標はアセンブリ内の絶対座標です。\n\n" +
-            "CAD保存でグラフ・駆動先・再生設定をアセンブリ内へ保存できます。保存時は基準姿勢へ戻ります。次回接続時に復元し、反映はオフで開始します。JSON保存はグラフの書き出しです。PLC読み込みは未対応です。" :
-            "1. Edit keyframes: drag vertically; Ctrl also moves time. Shift seeks; Esc cancels.\n\n2. Connect and assign a target to each track. Select a CAD part to find targets.\n\n3. Enable Apply to Solid Edge and play or move the time cursor.\n\nDistances use mm; angles use degrees. Constraints and Absolute position use absolute values. Relative translation/rotation use changes from the assigned pose.\n\nSave to CAD stores charts, targets and playback settings inside the assembly and restores the reference pose. Reconnect to restore settings with CAD reflection off. JSON Save exports charts only. PLC input is not supported.",
+            "CAD保存でグラフ・駆動先・再生設定をアセンブリ内へ保存できます。保存時は基準姿勢へ戻ります。次回接続時に復元し、反映はオフで開始します。JSON保存は全動作パターンの書き出しです。駆動先は含みません。PLC読み込みは未対応です。" :
+            "1. Edit keyframes: drag vertically; Ctrl also moves time. Shift seeks; Esc cancels.\n\n2. Connect and assign a target to each track. Select a CAD part to find targets.\n\n3. Enable Apply to Solid Edge and play or move the time cursor.\n\nDistances use mm; angles use degrees. Constraints and Absolute position use absolute values. Relative translation/rotation use changes from the assigned pose.\n\nSave to CAD stores charts, targets and playback settings inside the assembly and restores the reference pose. Reconnect to restore settings with CAD reflection off. JSON Save exports all motion patterns without CAD target assignments. PLC input is not supported.",
             "MechCue — Quick start", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
     readonly Label axisHelp = new() { Width = 255, Height = 150, ForeColor = Color.FromArgb(80, 100, 125) };

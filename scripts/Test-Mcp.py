@@ -44,11 +44,11 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==30,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==35,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('30 tools and read-only annotations')
+    checks.append('35 tools and read-only annotations')
     catalog=tool('solidedge_list_concept_templates')
     assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
@@ -102,6 +102,18 @@ try:
     state=tool('mechcue_play',context);assert state['playing'] and state['time']<4
     state=tool('mechcue_stop',context);assert not state['playing'];checks.append('Seek, playback from end and stop')
     tool('mechcue_resample',context|{'endTime':10,'step':0},True)
+    listing=tool('mechcue_list_patterns',context);first=listing['activePatternId'];assert len(listing['patterns'])==1
+    before=tool('mechcue_get_state',context)
+    state=tool('mechcue_create_pattern',context|{'name':'Large demo','duplicate':True});second=state['activePatternId'];assert state['tracks']==before['tracks'] and not state['applyToCad'] and state['time']==0
+    state=tool('mechcue_reset_values',context|{'trackNumber':1,'value':222})
+    state=tool('mechcue_switch_pattern',context|{'patternId':first});assert state['tracks']==before['tracks']
+    state=tool('mechcue_switch_pattern',context|{'patternName':'Large demo'});assert all(p['value']==222 for p in state['tracks'][0]['points'])
+    state=tool('mechcue_rename_pattern',context|{'name':'Collision demo','description':'Intentional collision'});assert state['patternName']=='Collision demo'
+    tool('mechcue_create_pattern',context|{'name':'Collision demo'},True)
+    state=tool('mechcue_delete_pattern',context|{'patternId':second});assert state['activePatternId']==first
+    tool('mechcue_delete_pattern',context,True)
+    assert len(tool('mechcue_list_patterns',context)['patterns'])==1
+    checks.append('Named patterns: independent edits, ID/name switching, rename/description, delete, shared track IDs, last-pattern and duplicate-name protection')
     host2=launch([str(pathlib.Path(a.mechcue).resolve()),'--enable-ai']);sid2=own_session(host2.pid)
     tool('mechcue_get_state',error=True)
     other=tool('mechcue_get_state',{'sessionId':sid2});assert other['tracks'][1]['points'][0]['value']==0;checks.append('Multiple windows require explicit session selection; edits remain isolated')

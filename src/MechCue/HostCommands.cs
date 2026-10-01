@@ -1,7 +1,7 @@
 namespace MechCue;
 public static class HostCommands
 {
-    public static HostAction[] RibbonActions => Enum.GetValues<HostAction>().Where(a => a is not (HostAction.Stop or HostAction.Minimize or HostAction.Maximize)).ToArray();
+    public static HostAction[] RibbonActions => Enum.GetValues<HostAction>().Where(a => a is not (HostAction.Stop or HostAction.Minimize or HostAction.Maximize or HostAction.PatternNew or HostAction.PatternRename or HostAction.PatternDelete)).ToArray();
     public static string Caption(HostAction action) => UiText.Text(action switch {
         (HostAction)1 => "タイムチャート",
         (HostAction)2 => "再生 / 一時停止",
@@ -38,6 +38,12 @@ public static class HostCommands
         (HostAction)33 => "機構一覧",
         (HostAction)34 => "選択中の設定",
         (HostAction)35 => "数値編集",
+        HostAction.PatternSwitch => UiText.IsJapanese ? "動作切替" : "Switch motion",
+        HostAction.PatternDuplicate => UiText.IsJapanese ? "動作複製" : "Duplicate motion",
+        HostAction.PatternManage => UiText.IsJapanese ? "動作管理" : "Manage motions",
+        HostAction.PatternNew => UiText.IsJapanese ? "新規作成" : "New motion",
+        HostAction.PatternRename => UiText.IsJapanese ? "名前変更" : "Rename",
+        HostAction.PatternDelete => UiText.IsJapanese ? "削除" : "Delete",
         _ => "MechCue" });
     public static bool IsToggle(HostAction action) => action is HostAction.Apply or HostAction.Collision or HostAction.Loop or HostAction.Edit or HostAction.Review or HostAction.Ai or HostAction.TracksPanel or HostAction.SettingsPanel or HostAction.PointsPanel;
     public static string Hint(HostAction action) => action switch {
@@ -88,5 +94,6 @@ public static class HostCommands
         (HostAction)33 => "表示",
         (HostAction)34 => "表示",
         (HostAction)35 => "表示",
+        HostAction.PatternSwitch or HostAction.PatternDuplicate or HostAction.PatternManage => UiText.IsJapanese ? "動作" : "Motion",
         _ => "表示" });
 }

@@ -209,6 +209,7 @@ public partial class MainForm
             if (entry.Target != null && bridge.RestoreTarget(entry.Track, entry.Target) is string warning) restorationWarnings.Add(warning);
         if(settings.Concept!=null) try { bridge.RestoreConcept(settings.Concept,tracks); } catch(Exception ex) { bridge.RetainConcept(settings.Concept); restorationWarnings.Add("概略軸："+ex.Message); }
         time.Value = 0; lastCheckedTime = null; RefreshTracks(0);
+        patterns.Clear(); patterns.AddRange(settings.Patterns); activePattern = settings.ActivePatternId; StoreActivePattern(); RefreshPatternChoice();
         status.Text = restorationWarnings.Count == 0 ? "アセンブリからグラフと駆動先を復元しました。反映はオフです。" : "要再割り当て：" + string.Join(" / ", restorationWarnings);
     }
     DocumentSettings CaptureDocumentSettings()
@@ -219,7 +220,8 @@ public partial class MainForm
         new Track { Points = points }.Validate();
         if (bridge.BoundLabel(Current) != null && (Current.Kind != CurrentKind || Current.Axis != axis.Text)) throw new InvalidOperationException("駆動方法・軸を変更する前に割り当てを解除してください。");
         Current.Name = name.Text; Current.Kind = CurrentKind; Current.Axis = axis.Text; Current.Points = points;
-        return new DocumentSettings { Concept = bridge.CaptureConcept(), Speed = speed.Value, DragStep = dragStep.Value, Loop = loop.Checked, Collision = collision.Checked, Overlay = ChartDisplayMode != "selected", DisplayMode = ChartDisplayMode, Tracks = tracks.Select(track => new SavedTrack { Track = track, Hidden = plot.Hidden.Contains(track), Target = bridge.CaptureTarget(track) }).ToList() };
+        StoreActivePattern();
+        return new DocumentSettings { Version = 2, Patterns = patterns, ActivePatternId = activePattern, Concept = bridge.CaptureConcept(), Speed = speed.Value, DragStep = dragStep.Value, Loop = loop.Checked, Collision = collision.Checked, Overlay = ChartDisplayMode != "selected", DisplayMode = ChartDisplayMode, Tracks = tracks.Select(track => new SavedTrack { Track = track, Hidden = plot.Hidden.Contains(track), Target = bridge.CaptureTarget(track) }).ToList() };
     }
     void WriteDocumentSettings()
     {
