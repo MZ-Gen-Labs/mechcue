@@ -173,3 +173,7 @@ Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechc
 
 
 0.2.0-alpha.12では、同じビュー・方向・基準の穴位置寸法を同じ座標なら1つにまとめます。旧版の重複は`solidedge_arrange_drawing_dimensions`で整理でき、`removedDuplicates`で削除結果を確認できます。異なる基準・方向、手作業の寸法は保持します。円位置の対象を最大8箇所に拡張しました。
+
+## 単一部品の強度・変形解析
+
+0.3.0-alpha.01から、Solid Edge Simulationの線形静解析をMCPで操作できます。材料適用、解析スタディ作成、固定面・力・圧力、メッシュ生成、解析実行、相当応力・変位の取得と表示に対応します。単一ソリッドの `.par` が対象で、Simulationの機能・ライセンスが必要です。[手順・機能一覧・制限](../docs/SIMULATION_AUTOMATION.md)を参照してください。

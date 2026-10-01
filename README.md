@@ -104,3 +104,5 @@ ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrerelease�
 0.2.0-alpha.4では工作機械3/4/5軸と直交搬送装置の概略モデル生成・軸連動MCPを追加しています。[適用ターゲットと使い方](docs/CONCEPT_TARGETS.md)を参照してください。
 
 名前付き動作の保存・切り替え: [動作パターン](docs/MOTION_PATTERNS.md)。
+
+次の開発系列は0.3.0です。alpha.01から単一部品の強度・変形解析MCPを追加します。[Simulationの操作と対応範囲](docs/SIMULATION_AUTOMATION.md)。alpha版はGitHubの下書きリリースとして配布します。

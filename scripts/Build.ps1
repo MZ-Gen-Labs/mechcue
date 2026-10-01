@@ -55,8 +55,9 @@ if ($WithMcp) {
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/CONCEPT_TARGETS.md') -Destination (Join-Path $taskMcp 'CONCEPT_TARGETS.md')
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/DRAWING_AUTOMATION.md') -Destination (Join-Path $taskMcp 'DRAWING_AUTOMATION.md')
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/PMI_AUTOMATION.md') -Destination (Join-Path $taskMcp 'PMI_AUTOMATION.md')
+    Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/SIMULATION_AUTOMATION.md') -Destination (Join-Path $taskMcp 'SIMULATION_AUTOMATION.md')
     $taskMcpReadme = Join-Path $taskMcp 'README.md'
-    [IO.File]::WriteAllText($taskMcpReadme, [IO.File]::ReadAllText($taskMcpReadme).Replace('../docs/CONCEPT_TARGETS.md','CONCEPT_TARGETS.md').Replace('../docs/DRAWING_AUTOMATION.md','DRAWING_AUTOMATION.md').Replace('../docs/PMI_AUTOMATION.md','PMI_AUTOMATION.md'))
+    [IO.File]::WriteAllText($taskMcpReadme, [IO.File]::ReadAllText($taskMcpReadme).Replace('../docs/CONCEPT_TARGETS.md','CONCEPT_TARGETS.md').Replace('../docs/DRAWING_AUTOMATION.md','DRAWING_AUTOMATION.md').Replace('../docs/PMI_AUTOMATION.md','PMI_AUTOMATION.md').Replace('../docs/SIMULATION_AUTOMATION.md','SIMULATION_AUTOMATION.md'))
     Compress-Archive -Path (Join-Path $taskMcp '*') -DestinationPath (Join-Path $taskDistribution "MechCue-$Version-MCP-win-x64.zip")
 }
 if ($WithAddIn) {
