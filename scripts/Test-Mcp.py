@@ -92,7 +92,12 @@ try:
     bad=tool('solidedge_auto_pmi',{'expectedDocument':'unused','maxDimensions':0},True);assert 'maxDimensions' in str(bad),bad
     checks.append('PMI write permissions and invalid options rejected before CAD access')
     simulation_bad=[
-        ('solidedge_create_simulation_study',{'meshSizeMm':0},'meshSizeMm'),
+        ('solidedge_create_simulation_study',{'meshSizeMm':-1},'meshSizeMm'),
+        ('solidedge_create_simulation_study',{'meshLevel':0},'meshLevel'),
+        ('solidedge_create_simulation_study',{'meshLevel':11},'meshLevel'),
+        ('solidedge_run_simulation',{'studyNumber':1,'meshLevel':-1},'meshLevel'),
+        ('solidedge_run_simulation',{'studyNumber':1,'meshLevel':11},'meshLevel'),
+        ('solidedge_run_simulation',{'studyNumber':1,'meshLevel':8,'meshSizeMm':3},'not both'),
         ('solidedge_run_simulation',{'studyNumber':1,'meshSizeMm':-1},'meshSizeMm'),
         ('solidedge_add_simulation_fixed',{'studyNumber':1,'faceIdsJson':'[1]'},'faceIdsJson'),
         ('solidedge_add_simulation_load',{'studyNumber':1,'kind':'bad','value':1},'kind'),

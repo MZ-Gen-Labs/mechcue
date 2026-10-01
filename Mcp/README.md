@@ -179,3 +179,5 @@ Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechc
 0.3.0-alpha.01から、Solid Edge Simulationの線形静解析をMCPで操作できます。材料適用、解析スタディ作成、固定面・力・圧力、メッシュ生成、解析実行、相当応力・変位の取得と表示に対応します。単一ソリッドの `.par` が対象で、Simulationの機能・ライセンスが必要です。[手順・機能一覧・制限](../docs/SIMULATION_AUTOMATION.md)を参照してください。
 
 0.3.0-alpha.02では `solidedge_get_automation_settings` と `solidedge_set_display_alerts` を追加しました。解析の `suppressAlerts=true` は処理後に設定を戻します。メッシュサイズの単位を修正し、`regenerateMesh=true` で再生成できます。
+
+0.3.0-alpha.03から `meshLevel=1..10` でSolid Edgeのメッシュスライダーを指定できます。新規スタディの既定値は5です。実際のサイズは形状から自動計算し、一覧に細かさとサイズを併記します。
