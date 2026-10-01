@@ -163,3 +163,5 @@ Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechc
 更新時はインストーラーが、インストール先のMCP本体とトレイ設定を終了します。更新中の自動再起動は一時停止します。AIとのMCP接続は更新後に再接続してください。トレイ設定アイコンの終了だけではMCP本体は終了しません。旧版は専用の終了通知を持たないため、インストール先を確認してMCPプロセスのみ終了します。Solid Edgeや他フォルダのMCPは対象にしません。
 
 図面の正面候補判定・必要ビュー追加・主要寸法配置は [図面MCPの案内](../docs/DRAWING_AUTOMATION.md) を参照してください。追加コマンド：solidedge_plan_drawing、solidedge_list_drawing_views、solidedge_auto_drawing、solidedge_complete_drawing、solidedge_dimension_drawing_view。
+
+0.2.0-alpha.10以降、MCPを選択してインストールすると、通常のセットアップ完了後に設定アイコンを自動起動します。また、共通スタートアップに登録し、Windowsへのログイン時（再起動後を含む）にも各ユーザーの権限で起動します。保存済みのアクセス設定を維持し、同じユーザーではアイコンを重複表示しません。サイレントインストールでは完了直後の起動を省略し、次回ログイン時に起動します。アンインストール時はスタートアップのショートカットも削除します。MCP本体は引き続きAIアプリが起動します。
