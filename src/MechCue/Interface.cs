@@ -17,6 +17,9 @@ public partial class MainForm
             compactBar.Controls.Add(time);
             compactBar.Controls.Add(new Label { Text = "速度", AutoSize = true, Name = "compactSpeed" });
             compactBar.Controls.Add(speed); compactBar.Controls.Add(loop); compactBar.Controls.Add(live); compactBar.Controls.Add(collision);
+            int position = compactBar.Controls.OfType<Button>().Count();
+            foreach (var control in new Control[] { compactBar.Controls["compactTime"]!, time, compactBar.Controls["compactSpeed"]!, speed, loop, live, collision })
+                compactBar.Controls.SetChildIndex(control, position++);
             time.Width = 85; speed.Width = 55;
             WindowState = FormWindowState.Normal; MinimumSize = new(650, 400); Size = new(900, 550);
         }
@@ -31,6 +34,7 @@ public partial class MainForm
             MinimumSize = new(1180, 740); Bounds = editBounds; WindowState = editWindowState;
         }
         split.Panel1Collapsed = enabled || tracksHidden; workspace.Panel2Collapsed = enabled || settingsHidden; vertical.Panel2Collapsed = enabled || pointsHidden;
+        chartHeading.Visible = !enabled;
         top.Visible = !enabled; compactBar.Visible = enabled; status.Visible = connection.Visible = !enabled;
         if (!enabled) {
             split.SplitterDistance = Math.Clamp(panelSizes.Tracks, split.Panel1MinSize, Math.Max(split.Panel1MinSize, split.Width - split.SplitterWidth - split.Panel2MinSize));

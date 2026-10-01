@@ -83,6 +83,7 @@ public partial class MainForm : Form
     readonly bool hostedDocumentWindow;
     Rectangle editBounds;
     FormWindowState editWindowState;
+    readonly Label chartHeading = Heading("タイムチャート");
     readonly Plot plot = new() { Dock = DockStyle.Fill };
     readonly Label status = new() { Dock = DockStyle.Bottom, Height = 34, Text = "点・線分：上下へ移動 / Ctrl＋ドラッグ：時間も移動 / 空白・Shift：時刻変更 / Esc：取消" };
     readonly Label connection = new() { Dock = DockStyle.Bottom, Height = 30, Text = "未接続：Solid Edgeに接続 → 駆動先を登録 → Solid Edgeへ反映をオン", ForeColor = Color.DarkOrange };
@@ -152,7 +153,7 @@ public partial class MainForm : Form
         ConfigurePreset(editor);
         vertical = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 360, SplitterWidth = 8 };
         vertical.Panel1.Controls.Add(plot); vertical.Panel1.Controls.Add(legend); vertical.Panel2.Controls.Add(grid);
-        vertical.Panel1.Controls.Add(Heading("タイムチャート"));
+        vertical.Panel1.Controls.Add(chartHeading);
         vertical.Panel2.Controls.Add(PanelHeading("選択機構の点を数値で編集", HostAction.PointsPanel));
         workspace = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel2, SplitterWidth = 8 };
         ConfigureEditorWidth(editor);
