@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text.Json;
 
 namespace MechCue;
@@ -84,6 +84,14 @@ public partial class MainForm
         if (!sourceText.TryGetValue(control, out var original)) return;
         bool previous = translating; translating = true;
         control.Text = control is Button && control.Tag is string key ? UiText.CommandLabel(key) : UiText.Text(original);
+        if (control.Parent == compactBar && control is Button button)
+        {
+            if (Equals(button.Tag, "▶ 再生") || Equals(button.Tag, "停止")) button.Text = "";
+            else if (Equals(button.Tag, "編集画面へ戻る")) button.Text = UiText.IsJapanese ? "戻る" : "Back";
+        }
+        if (compact && control == live) control.Text = UiText.IsJapanese ? "反映" : "Apply";
+        if (compact && control == collision) control.Text = UiText.IsJapanese ? "干渉" : "Collision";
+        if (compact && control == loop) control.Text = UiText.IsJapanese ? "反復" : "Loop";
         if (control is Button) commandHints.SetToolTip(control, UiText.CommandHint(control.Tag as string ?? original));
         translating = previous;
     }
@@ -104,7 +112,8 @@ public partial class MainForm
             }
         }
         finally { loading = previousLoading; }
-        plot.RefreshLanguage(); plot.Invalidate();
+        plot.RefreshLanguage();
+        if (compact) FitCompactBar(); plot.Invalidate();
     }
     void StartPlayback()
     {

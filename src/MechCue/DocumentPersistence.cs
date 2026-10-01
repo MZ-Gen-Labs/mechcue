@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace MechCue;
@@ -14,7 +14,7 @@ public sealed partial class Bridge
     internal string? ReadSettings() { Check(); return DocumentStorage.Read(doc!); }
     internal void WriteSettings(string json) { Check(false); DocumentSettings.Parse(json); DocumentStorage.Write(doc!, json); }
     internal void SaveDocument() { Check(); Call(doc!, "Save"); }
-    internal bool AttachDocumentEvents(Action beforeSave, Action? beforeClose = null)
+    internal bool AttachDocumentEvents(Action beforeSave, Action? beforeClose = null, Action? afterDeactivate = null)
     {
         DetachDocumentEvents();
         if (!Marshal.IsComObject(doc!)) return false;
@@ -24,7 +24,7 @@ public sealed partial class Bridge
             var container = (System.Runtime.InteropServices.ComTypes.IConnectionPointContainer)documentEvents;
             var id = typeof(IMechCueApplicationEvents).GUID;
             container.FindConnectionPoint(ref id, out saveConnection);
-            saveSink = new ApplicationEventSink(doc!, beforeSave, beforeClose ?? (() => { }));
+            saveSink = new ApplicationEventSink(doc!, beforeSave, beforeClose ?? (() => { }), afterDeactivate);
             saveConnection!.Advise(saveSink, out saveCookie);
             return true;
         }
@@ -189,7 +189,11 @@ public partial class MainForm
         status.Text = "接続：" + title;
         var json = bridge.ReadSettings();
         if (json != null) RestoreDocumentSettings(DocumentSettings.Parse(json));
-        bridge.AttachDocumentEvents(BeforeDocumentSave, () => { timer.Stop(); live.Checked = false; });
+        bridge.AttachDocumentEvents(BeforeDocumentSave, () =>
+        {
+            timer.Stop(); live.Checked = false;
+            if (hostedDocumentWindow) ShutdownFromHost();
+        }, () => { if (hostedDocumentWindow && !IsDisposed) ShutdownFromHost(); });
         documentReady = true; documentSettingsDirty = false;
         PopulateTargets();
         if (json == null) status.Text = "接続：" + title + " / CAD保存で設定をアセンブリ内に保存できます。";

@@ -16,6 +16,7 @@ public partial class MainForm
             compactBar.Controls.Add(time);
             compactBar.Controls.Add(new Label { Text = "速度", AutoSize = true, Name = "compactSpeed" });
             compactBar.Controls.Add(speed); compactBar.Controls.Add(loop); compactBar.Controls.Add(live); compactBar.Controls.Add(collision);
+            time.Width = 85; speed.Width = 55;
             WindowState = FormWindowState.Normal; MinimumSize = new(650, 400); Size = new(900, 550);
         }
         else
@@ -25,12 +26,36 @@ public partial class MainForm
                 top.Controls.Add(control); top.Controls.SetChildIndex(control, playbackPositions[control]);
             }
             foreach (Control label in compactBar.Controls.Cast<Control>().Where(c => c.Name.StartsWith("compact")).ToArray()) label.Dispose();
+            time.Width = 100; speed.Width = 65;
             MinimumSize = new(1180, 740); Bounds = editBounds; WindowState = editWindowState;
         }
         split.Panel1Collapsed = enabled; workspace.Panel2Collapsed = enabled; vertical.Panel2Collapsed = enabled;
         top.Visible = !enabled; compactBar.Visible = enabled; status.Visible = connection.Visible = !enabled;
         plot.EditMode = !enabled && !reviewMode.Checked;
+        RefreshLanguage();
+        if (enabled) FitCompactBar();
         plot.Invalidate();
+    }
+    void FitCompactBar()
+    {
+        compactBar.SuspendLayout();
+        foreach (Control control in compactBar.Controls)
+        {
+            control.Margin = new Padding(2, 3, 2, 3);
+            if (control is Button button)
+            {
+                button.AutoSize = false;
+                button.Size = new Size(Equals(button.Tag, "編集画面へ戻る") ? 65 : 32, 28);
+                button.AccessibleName = UiText.CommandLabel(button.Tag as string ?? "");
+            }
+        }
+        commandHints.SetToolTip(live, UiText.IsJapanese ? "現在時刻の値をSolid Edgeへ反映します。" : "Apply the current time values to Solid Edge.");
+        commandHints.SetToolTip(collision, UiText.IsJapanese ? "干渉を検出したら動作を停止します。" : "Stop playback when interference is detected.");
+        compactBar.ResumeLayout(true);
+        int width = compactBar.Controls.Cast<Control>().Sum(c => c.Width + c.Margin.Horizontal) + compactBar.Padding.Horizontal;
+        int height = compactBar.Controls.Cast<Control>().Max(c => c.Height + c.Margin.Vertical) + compactBar.Padding.Vertical;
+        compactBar.Height = height;
+        MinimumSize = new(Math.Max(650, width + Width - ClientSize.Width), 400);
     }
     void ShowQuickStart()
     {
@@ -175,6 +200,30 @@ public partial class MainForm
         SetCompact(true);
         if (!split.Panel1Collapsed || !workspace.Panel2Collapsed || !vertical.Panel2Collapsed || plot.EditMode || time.Parent != compactBar) throw new Exception("Compact graph/playback layout failed");
         Application.DoEvents();
+        var originalCompactSize = Size;
+        var compactLanguage = UiText.Mode;
+        foreach (var lang in new[] { "ja", "en" })
+        {
+            UiText.SetMode(lang, false);
+            Size = MinimumSize; PerformLayout(); Application.DoEvents();
+            if (compactBar.WrapContents || compactBar.AutoScroll) throw new Exception("Compact toolbar wraps or scrolls");
+            foreach (Control control in compactBar.Controls)
+                if (control.Right > compactBar.ClientSize.Width || control.Bottom > compactBar.ClientSize.Height)
+                    throw new Exception("Compact toolbar clips: " + control.Text);
+            foreach (var button in compactBar.Controls.OfType<Button>().Where(b => Equals(b.Tag, "▶ 再生") || Equals(b.Tag, "停止")))
+                if (button.Text != "" || button.Image == null || string.IsNullOrEmpty(commandHints.GetToolTip(button)))
+                    throw new Exception("Compact playback icon/hint missing");
+        }
+        UiText.SetMode(compactLanguage, false); Size = originalCompactSize;
+        object firstDocument = new(), otherDocument = new();
+        int closed = 0, switched = 0;
+        var sink = new ApplicationEventSink(firstDocument, () => { }, () => closed++, () => switched++);
+        sink.AfterActiveDocumentChange(firstDocument); sink.BeforeDocumentClose(otherDocument);
+        if (closed != 0 || switched != 0) throw new Exception("Unrelated document event closed window");
+        sink.AfterActiveDocumentChange(otherDocument); sink.BeforeDocumentClose(firstDocument);
+        if (closed != 1 || switched != 1) throw new Exception("Target lifecycle events missed");
+        sink.AfterActiveDocumentChange(null!); if (switched != 2) throw new Exception("No active document event missed");
+        sink.BeforeQuit(); if (closed != 2) throw new Exception("Host quit event missed");
         using (var snapshot = new Bitmap(Width, Height))
         {
             DrawToBitmap(snapshot, new Rectangle(Point.Empty, Size));

@@ -77,9 +77,10 @@ public partial class MainForm : Form
     readonly NumericUpDown dragStep = new() { DecimalPlaces = 4, Minimum = 0, Maximum = 10000, Increment = 0.1m, Value = 0.1m };
     SplitContainer split = null!, workspace = null!, vertical = null!;
     FlowLayoutPanel top = null!;
-    readonly FlowLayoutPanel compactBar = new() { Dock = DockStyle.Top, Height = 80, Padding = new Padding(8), Visible = false, AutoScroll = true };
+    readonly FlowLayoutPanel compactBar = new() { Dock = DockStyle.Top, Height = 42, Padding = new Padding(4), Visible = false, AutoScroll = false, WrapContents = false };
     readonly Dictionary<Control, int> playbackPositions = new();
     bool compact;
+    readonly bool hostedDocumentWindow;
     Rectangle editBounds;
     FormWindowState editWindowState;
     readonly Plot plot = new() { Dock = DockStyle.Fill };
@@ -97,6 +98,7 @@ public partial class MainForm : Form
     Track Current => tracks[Math.Max(0, trackList.SelectedIndex)];
     public MainForm(bool fourbarDemo = false, object? hostedApplication = null,bool enableAi=false)
     {
+        hostedDocumentWindow = hostedApplication != null;
         bridge = hostedApplication == null ? new Bridge() : new Bridge(hostedApplication);
         Text = hostedApplication == null ? "MechCue 独立版 — Solid Edge タイムチャート" : "MechCue アドイン版 — Solid Edge タイムチャート";
         var version = typeof(MainForm).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
@@ -224,6 +226,7 @@ public partial class MainForm : Form
     }
     public void ShutdownFromHost()
     {
+        if (IsDisposed) return;
         timer.Stop(); live.Checked = false;
         try { StageOnClose(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine(ex); }
         bridge.Disconnect(); Dispose();
@@ -330,6 +333,7 @@ class Plot : Control
     public static Color TrackColor(int index) => Colors[index % Colors.Length];
     public Plot()
     {
+        SetStyle(ControlStyles.ResizeRedraw, true);
         DoubleBuffered = true; BackColor = Color.FromArgb(246, 248, 252); TabStop = true;
         RefreshLanguage();
     }

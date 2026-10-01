@@ -57,3 +57,8 @@ alpha.17：両版入り・アドイン専用セットアップに選択式のMCP
 ## alpha.18: ribbon registration and version display
 
 Commands now carry distinct GUID/local-ID names. Registration uses SetAddInInfoEx output runtime IDs, without duplicate AddCommand registration. GUI version 7 rebuilds the saved ribbon on upgrade. Native API verification on running Solid Edge 2026 registered all seven commands (runtime IDs 62004–62010) and accepted large button styles. Bitmap resources are checked in the compiled DLL. Visual appearance and persistence after closing/reopening Solid Edge still require user verification. Live check adds a separate verification group in the current session. Window titles display the informational version (excluding source hash) in standalone and add-in modes, including compact mode.
+
+
+## alpha.19: compact toolbar, resize, document lifetime
+
+Plot enables ResizeRedraw to invalidate the full chart on resizing. Compact playback buttons are icon-only with tooltips; Back/Apply/Collision/Loop labels are shortened. The toolbar never wraps and minimum window width follows the measured control widths, including language and DPI scaling. Smoke checks exercise Japanese/English at minimum width and ensure all toolbar controls fit, playback icons and hints exist, and document lifecycle dispatch filters the correct target. Add-in windows stop, stage modified settings and disconnect/dispose when their target closes or another document becomes active; standalone windows keep their existing behavior. Native document close/switch and continuous resize appearance require user verification on Solid Edge.

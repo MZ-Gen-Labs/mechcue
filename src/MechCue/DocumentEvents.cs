@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace MechCue;
 [ComVisible(true), Guid("90223887-09CD-11D1-BA07-080036230602"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -22,9 +22,9 @@ public interface IMechCueApplicationEvents
     void BeforeDocumentSave([MarshalAs(UnmanagedType.IDispatch)] object document);
 }
 [ComVisible(true), ClassInterface(ClassInterfaceType.None)]
-public sealed class ApplicationEventSink(object target, Action beforeSave, Action beforeClose) : IMechCueApplicationEvents
+public sealed class ApplicationEventSink(object target, Action beforeSave, Action beforeClose, Action? afterDeactivate = null) : IMechCueApplicationEvents
 {
-    public void AfterActiveDocumentChange(object document) { }
+    public void AfterActiveDocumentChange(object document) { if (!SameDocument(target, document)) afterDeactivate?.Invoke(); }
     public void AfterCommandRun(int command) { }
     public void AfterDocumentOpen(object document) { }
     public void AfterDocumentPrint(object document, int hdc, ref double modelToDc, ref int rect) { }
@@ -38,10 +38,11 @@ public sealed class ApplicationEventSink(object target, Action beforeSave, Actio
     public void BeforeDocumentPrint(object document, int hdc, ref double modelToDc, ref int rect) { }
     public void BeforeEnvironmentDeactivate(object environment) { }
     public void BeforeWindowDeactivate(object window) { }
-    public void BeforeQuit() { }
+    public void BeforeQuit() { beforeClose(); }
     public void BeforeDocumentSave(object document) { if (SameDocument(target, document)) beforeSave(); }
     internal static bool SameDocument(object expected, object actual)
     {
+        if (expected == null || actual == null) return false;
         if (Equals(expected, actual)) return true;
         if (!Marshal.IsComObject(expected) || !Marshal.IsComObject(actual)) return false;
         IntPtr first = IntPtr.Zero, second = IntPtr.Zero;
