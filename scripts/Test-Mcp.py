@@ -40,9 +40,15 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==13,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==25,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
-    checks.append('13 tools and read-only annotations')
+    for name in ['solidedge_list_planes','solidedge_list_features']:
+        assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
+    checks.append('25 tools and read-only annotations')
+    tool('solidedge_new_document',{'kind':'part'},True)
+    tool('solidedge_extrude_profile',{'expectedDocument':'test.par','shape':'rectangle','depthMm':10,'widthMm':20,'heightMm':30},True)
+    tool('solidedge_save_document',{'expectedDocument':'test.par','outputPath':'test.par'},True)
+    checks.append('CAD mutations disabled without explicit write flag')
     def own_session(pid):
         end=time.monotonic()+15
         while time.monotonic()<end:

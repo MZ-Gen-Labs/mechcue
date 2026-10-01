@@ -11,14 +11,14 @@
 Solid Edge付属DLL、CADモデル、個人のグラフ、診断結果をコミットしないでください。
 公開前に[実機確認](VALIDATION.md)を終え、画面画像と短い操作動画をREADMEへ追加すると試してもらいやすくなります。
 
-Windowsと.NET 8 SDKで`./scripts/Build.ps1 -WithAddIn -WithMcp -Version 0.1.0-alpha.24`を実行します。
+Windowsと.NET 8 SDKで`./scripts/Build.ps1 -WithAddIn -WithMcp -Version 0.2.0-alpha.1`を実行します。
 Solid Edge本体・付属DLLは不要です。出力先が存在する場合は別の`-OutputDirectory`を指定します。
 両版入りセットアップ、アドイン専用セットアップ、独立版ZIP、MCP ZIPの配布物だけが`artifacts/<version>/release`へ入り、SHA256SUMS.txtも出力します。
 
 `build.yml`はPR・main更新・手動実行で共通テスト、画面、COM定義、パッケージを検証します。
 成果物はActionsのArtifactsから取得できます。CAD駆動や管理者登録は自動確認の対象外です。
 
-`release.yml`は`v0.1.0-alpha.24`などのタグ送信で同じビルドを行い、Releaseへ添付します。
+`release.yml`は`v0.2.0-alpha.1`などのタグ送信で同じビルドを行い、Releaseへ添付します。
 タグのバージョンをアプリとセットアップへ渡します。**ドラフトのPrerelease**として作成します。
 **アルファ版は利用者の指定により下書きのまま保持し、一般公開しません。** リリース本文と成果物を更新しても `draft=false` にしないでください。実機結果と内容を点検し、下書きから配布物を取得します。
 
@@ -33,3 +33,5 @@ GITHUB_TOKENを使い、Release作成ジョブだけcontents: writeを許可し�
 コンパイラー入力とセットアップ情報を検査しますが、実際の導入・削除は実機で確認してください。
 
 MCP用の依存はMcp/packages.lock.jsonで固定し、Mcp/NuGet.Configでnuget.orgを指定します。ビルド検査にはPython 3が必要です（配布先では不要）。依存パッケージのメタデータ・ライセンスをMCP ZIPへ同梱します。
+
+0.1.0は2026-10-01に正式版として公開しました。0.2.0系の開発版は下書きのPrereleaseとして扱います。正式版を公開する際は、配布ファイル・バージョン・検証結果を確認し、明示的にPrereleaseとDraftを解除します。

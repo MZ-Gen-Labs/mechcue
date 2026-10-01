@@ -5,7 +5,7 @@ public sealed partial class Bridge
     {
         System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(CLSIDFromProgID("SolidEdge.Application",out var id));GetActiveObject(ref id,IntPtr.Zero,out var application);
         var document=Get(application,"ActiveDocument");string name=Convert.ToString(Get(document,"Name")) ?? "";
-        string fullName;try{fullName=Convert.ToString(Get(document,"FullName")) ?? name;}catch{fullName=name;}
+        string fullName = CadName(document);
         if(!string.IsNullOrEmpty(expectedDocument) && !string.Equals(fullName,expectedDocument,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Active document differs from expectedDocument. Read the active document again.");
         if(method=="document")return new {name,fullName,readOnly=Convert.ToBoolean(Get(document,"ReadOnly")),dirty=Convert.ToBoolean(Get(document,"Dirty"))};
         if(method is "parts" or "select_part")

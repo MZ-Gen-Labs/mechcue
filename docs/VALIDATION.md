@@ -77,3 +77,18 @@ User exception stack confirmed FirstDisplayedScrollingRowIndex failed from graph
 ## alpha.22: visible magenta in ribbon icons
 
 Solid Edge 2026 displayed the assumed magenta bitmap transparency key and antialiased fringes. Color bitmap backgrounds and antialiasing are now neutral white. GUI version 9 invalidates cached ribbon artwork. All color bitmap resources are checked for residual pure magenta pixels. Native ribbon appearance after upgrade still needs user verification. Includes alpha.21 small-grid scroll fix and operation diagnostics.
+## 0.2.0のSolid Edge操作MCP
+
+2026-10-01、Solid Edge 2026の実機で専用の新規文書を使って確認しました。
+
+- オーダードの矩形・円・多角形、有限切り抜き、正方向・負方向・対称・追加押し出し
+- ネイティブのフィーチャー状態がOKであること
+- 新規保存、保存先の上書き拒否、対象文書不一致の拒否
+- アセンブリへの部品配置、XYZとZ回転、固定の有無、基準平面拘束と解決済み状態
+- Solid Edge側の配置時の自動固定に対し、ground=falseで新規部品の固定を解除すること
+- 部品・アセンブリの図面ビュー、リンク再利用、ビュー更新、DFT保存、PDF生成
+- 編集を有効にした実際のMCP stdioサーバーから新規部品を作成し、押し出し、一覧、保存まで通ること
+
+ネイティブ検証コマンドと対応範囲は [MCPガイド](../Mcp/README.md) を参照してください。CIにはSolid Edgeがないため、ネイティブ形状作成はローカルの任意検証です。通常CIでは25ツールの定義・読み取り注釈・編集許可・MechCueグラフ操作の回帰検証を実施します。
+
+寸法・公差の自動記入、任意の面・エッジ拘束、回転体やロフト等の形状、CAD編集の一括Undoは未対応です。基本操作を追加した0.2.0-alpha.1は下書きリリースで確認を進めます。

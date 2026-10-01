@@ -1,4 +1,4 @@
-# MechCue MCP（第一段階）
+# MechCue MCP
 
 MechCueをAIから操作するローカルMCPサーバーです。独立版・アドイン版の両方に対応します。MCPサーバーは別プロセスで動作し、同じWindowsユーザーのMechCue画面と名前付きパイプで通信します。AIモデル・APIキーは同梱しません。
 
@@ -55,7 +55,7 @@ MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリ
 
 部品選択では文書取得結果の `fullName` を `expectedDocument` に必ず指定します。アクティブ文書が変わったら拒否します。部品・変数の読み取りでも文書指定を推奨します。選択は既存の選択を置き換え、形状・位置は変更しません。
 
-変数テーブルの値はSolid Edge内部単位です。距離はメートル、角度はラジアンで、MechCueのmm・度とは異なります。取得できないプロパティがある行は `error` を返します。この段階では直接の変数変更、部品移動、文書の作成・保存、任意のコード実行は公開していません。
+変数テーブルの値はSolid Edge内部単位です。距離はメートル、角度はラジアンで、MechCueのmm・度とは異なります。取得できないプロパティがある行は `error` を返します。0.1.0の正式版は読み取り・選択までです。0.2.0系では以下の専用ツールを追加しています。任意のコード実行は公開しません。
 
 ## 検証と開発
 
@@ -64,3 +64,70 @@ MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリ
 `./scripts/Build.ps1 -WithAddIn -WithMcp` で両版・MCP ZIPを作成します。テスト用PythonがPATHにない場合は `-PythonPath <python.exe>` を指定できます。Pythonは開発時の検査だけに使い、実行・配布先では不要です。
 
 `Test-Mcp.py` はstdio初期化・ツール列挙・実際のMechCue画面との通信・グラフ変更・一括Undo・複数画面の分離を検査します。起動したテスト用の独立版だけを終了し、利用者のCAD文書を保存しません。Solid Edge読み取りの実機検証は `--native-read`、専用コピー上の部品選択は既存の `--persistence-integration-test` で確認します。
+
+## 0.2.0：Solid Edgeの作成・編集
+
+モデル作成用の起動引数は `--allow-solidedge-write` です。これにより読み取りも有効になります。既存の `--allow-solidedge` だけでは作成・保存・部品移動は実行できません。MechCueの画面や「AI接続」は、Solid Edgeを直接操作するツールには不要です。
+
+```json
+{
+  "mcpServers": {
+    "mechcue": {
+      "command": "C:/Program Files/MechCue/MCP/MechCue.Mcp.exe",
+      "args": ["--allow-solidedge-write"]
+    }
+  }
+}
+```
+
+| ツール | 内容 |
+|---|---|
+| solidedge_new_document | 部品・アセンブリ・図面を新規作成。部品はオーダード |
+| solidedge_open_document | 保存済み文書を開く |
+| solidedge_save_document | 明示的な保存／新規パスへの保存 |
+| solidedge_list_planes | 基準平面の番号と名前。アセンブリではpartNumberで部品の平面を読む |
+| solidedge_list_features | 部品のフィーチャーと状態、モデリングモードを読む |
+| solidedge_extrude_profile | 矩形・円・多角形の有限押し出し／切り抜き |
+| solidedge_place_part | 保存済み部品・サブアセンブリを配置。固定を選択可能 |
+| solidedge_position_part | トップレベル部品の絶対座標・姿勢を設定 |
+| solidedge_mate_planes | 2部品の基準平面に平面拘束とオフセットを設定 |
+| solidedge_add_drawing_view | 保存済み3Dモデルから正面・上面・側面・等角などのビューを追加 |
+| solidedge_update_drawing | 図面内のビューを更新 |
+| solidedge_export_pdf | 図面を新規PDFファイルへ出力 |
+
+`list_planes` と `list_features` は読み取り用なので `--allow-solidedge` でも使えます。番号は1から始まります。
+
+### 操作の流れ
+
+1. 「オーダードの部品を新規作成して、基準平面の一覧を確認して」
+2. 「この平面上で幅60 mm、高さ40 mmの矩形を20 mm押し出して」
+3. 「同じ平面上のX=20、Y=20に半径5 mm、深さ20 mmの切り抜きを作って」
+4. 「指定したフォルダーに block.par として保存して」
+5. 「新規アセンブリに block.par を固定部品として配置し、別の部品を配置して」
+6. 「新規図面に保存済みアセンブリの正面・上面・等角ビューを配置して、図面とPDFを保存して」
+
+AIは新規作成・開く・保存の戻り値にある `fullName` を、次の編集の `expectedDocument` に使います。アクティブ文書が変わると操作を拒否します。未保存文書には拡張子がない名前が返る場合がありますが、その値をそのまま指定できます。
+
+### 単位と対応範囲
+
+- 新しい作成ツールの長さ・座標はmm、回転は度です。既存の `list_variables` は引き続き内部単位です。
+- 押し出しのXYは選んだ基準平面のローカル座標です。正方向・負方向・対称を指定できます。多角形は `pointsJson` に頂点を渡し、終点の重複は含めません。
+- 初回の押し出しがベース形状になります。追加押し出しは既存形状につながる必要があります。単一ボディのオーダード部品が対象です。既存部品のモードを自動変更しません。
+- 部品配置のXYZはアセンブリの絶対座標です。回転はX→Y→Zの順です。既存拘束が姿勢を制限する場合はエラーになります。
+- 平面拘束は基準平面同士を対象とします。ベースだけ固定し、拘束する側の部品は `ground=false` で配置してください。面・円筒面・エッジを用いる拘束は未対応です。
+- 図面ビューの位置はシート上のmm、縮尺1は1:1です。保存済み3Dモデルを参照します。寸法・公差・表面性状の自動記入は未対応です。
+- 回転体・ロフト・スイープ・フィレット・パターン・専用穴フィーチャー・変数変更は今後の拡張対象です。円の切り抜きで基本的な穴形状は作れます。
+
+### 保存・失敗時の扱い
+
+形状・配置・拘束・ビューの変更は自動保存しません。保存ツールを明示的に呼び出します。新規保存・PDF出力は既存の出力ファイルを上書きせず、フォルダーも自動作成しません。現在のファイルを保存するときは `outputPath` を省略します。
+
+CAD操作は一括Undoや自動ロールバックを保証しません。APIが途中で失敗した場合は部分的なフィーチャー・部品・拘束・ビューが残る可能性があります。失敗後は一覧とSolid Edge画面を確認してから次の操作を行ってください。診断ログに操作名と例外を記録します。
+
+### 実機検証
+
+0.2.0-alpha.1の開発時にSolid Edge 2026で、矩形・円・多角形、切り抜き、対称・負方向・追加押し出し、部品配置・回転・固定・平面拘束、部品とアセンブリの図面ビュー、更新、PDF出力を検証しています。テスト用の新規文書だけを保存・終了し、元の文書を復帰させます。
+
+手動の開発検証は `MechCue.exe --cad-integration-test <新規テストフォルダーの絶対パス>` です。起動中のSolid Edge 2026と標準のISO Metricテンプレートが必要です。ファイルと `result.txt` がテストフォルダーに残ります。第3引数にMCPのEXEパスを渡すと、編集を有効にした実際のstdio通信で新規部品作成・押し出し・フィーチャー確認・保存も検証します。通常の自動ビルドではSolid Edgeがないため、MCP通信・ツール定義・編集許可の確認までを行います。
+
+実装の根拠は、インストール済み2026のタイプライブラリとSiemensの公式API資料です：[押し出し](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgePart~Models~AddFiniteExtrudedProtrusion.html)、[部品配置](https://support.industrysoftware.automation.siemens.com/trainings/se/106/api/SolidEdgeAssembly~Occurrences~AddByFilename.html)、[図面ビュー](https://support.industrysoftware.automation.siemens.com/trainings/se/106/api/SolidEdgeDraft~DrawingViews~AddPartView.html)。

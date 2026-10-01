@@ -55,9 +55,20 @@ public static class MechCueTools
 public static class SolidEdgeTools
 {
     static readonly Lazy<StaWorker> worker=new(()=>new());
+    internal static Task<string> ExecuteCad(string operation, Func<object> action, bool write = true)
+    {
+        string flag = write ? "--allow-solidedge-write" : "--allow-solidedge";
+        var args = Environment.GetCommandLineArgs();
+        if (!args.Contains(flag) && !(!write && args.Contains("--allow-solidedge-write")))
+            throw new InvalidOperationException("Direct Solid Edge " + (write ? "editing" : "reading") + " is disabled. Start MCP with " + flag + ".");
+        return worker.Value.Run(() => {
+            try { var result = action(); DiagnosticLog.Write("mcp-cad-" + operation); return JsonSerializer.Serialize(result); }
+            catch (Exception error) { DiagnosticLog.Error("mcp-cad-" + operation, error); throw; }
+        });
+    }
     static Task<string> Read(string method,int part=0,string expected="")
     {
-        if(!Environment.GetCommandLineArgs().Contains("--allow-solidedge"))throw new InvalidOperationException("Direct Solid Edge access is disabled. Start MCP with --allow-solidedge to enable read and selection tools.");
+        if(!Environment.GetCommandLineArgs().Any(a=>a is "--allow-solidedge" or "--allow-solidedge-write"))throw new InvalidOperationException("Direct Solid Edge access is disabled. Start MCP with --allow-solidedge to enable read and selection tools.");
         return worker.Value.Run(()=>JsonSerializer.Serialize(Bridge.ReadSolidEdge(method,part,expected)));
     }
     [McpServerTool(ReadOnly=true),Description("Read the active Solid Edge document's name, fullName, read-only and dirty status. Requires server option --allow-solidedge; does not open or save files.")]
