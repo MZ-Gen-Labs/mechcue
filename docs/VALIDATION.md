@@ -52,3 +52,8 @@ alpha.15：実機ログでAddCommandBarButtonの範囲エラーを確認。各�
 alpha.16：公式C# SDKによるstdio初期化、13ツールの列挙、実際の独立版との名前付きパイプ通信、番号・ID指定での点編集、無効値の拒否、全機構の等間隔化と一括Undo、値リセット、時刻指定・終点からの再生・停止、複数画面の対象指定と分離、直接Solid Edgeアクセスのオプトインを自動確認します。接続済みの駆動先を保持してAI編集・UndoすることもUI検査します。Solid Edge 2026実機では文書・部品・変数テーブルの読み取り、文書不一致の拒否、専用テストアセンブリでの部品選択・解除を確認しました。アドイン側の名前付きパイプ接続は更新後の利用者確認が必要です。
 
 alpha.17：両版入り・アドイン専用セットアップに選択式のMCPコンポーネントを追加。MCP本体・依存DLL・ライセンス・設定例・HTML接続ガイドのコンパイラー入力と、アドイン専用版に独立版EXEが入らないことを検査します。インストール先はMCPサブフォルダーで、削除はInno Setupのアンインストール管理を使用します。実際の導入・選択画面・スタートメニュー・削除は利用者確認が必要です。
+
+
+## alpha.18: ribbon registration and version display
+
+Commands now carry distinct GUID/local-ID names. Registration uses SetAddInInfoEx output runtime IDs, without duplicate AddCommand registration. GUI version 7 rebuilds the saved ribbon on upgrade. Native API verification on running Solid Edge 2026 registered all seven commands (runtime IDs 62004–62010) and accepted large button styles. Bitmap resources are checked in the compiled DLL. Visual appearance and persistence after closing/reopening Solid Edge still require user verification. Live check adds a separate verification group in the current session. Window titles display the informational version (excluding source hash) in standalone and add-in modes, including compact mode.

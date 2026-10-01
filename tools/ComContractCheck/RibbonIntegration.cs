@@ -19,13 +19,11 @@ static class RibbonIntegration
                 foreach(var action in Enum.GetValues<HostAction>())
                 {
                     int bitmap=101+10*((int)action-1);string label=action switch { HostAction.Open=>"タイムチャート",HostAction.Play=>"再生",HostAction.Stop=>"停止",HostAction.Maximize=>"最大化",HostAction.Minimize=>"最小化",HostAction.Compact=>"最小表示",_=>"CAD保存" };
-                    Array names=new[]{"\n"+label+"\n"+label+"\n"+label};Array ids=new[]{(int)action};
-                    addin.SetAddInInfoEx(resource,"{26618395-09D6-11D1-BA07-080036230602}","MechCue",bitmap,bitmap+1,bitmap+2,bitmap+3,1,ref names,ref ids);
-                    // Open already exists in the reported broken ribbon. Repair only missing buttons.
-                    if(action!=HostAction.Open)
+                    Array names=new[]{typeof(MechCue.AddIn.TimeChartAddIn).GUID.ToString("B")+"_"+(int)action+"\n"+label+"\n"+label+"\n"+label};Array ids=new[]{(int)action};
+                    addin.SetAddInInfoEx(resource,"{26618395-09D6-11D1-BA07-080036230602}","MechCue\n検証",bitmap,bitmap+1,bitmap+2,bitmap+3,1,ref names,ref ids);
+                    // Opt-in live integration check; use a separate group until the add-in is updated.
                     {
-                        Console.WriteLine("AddCommand runtime: "+addin.AddCommand("{26618395-09D6-11D1-BA07-080036230602}",label,(int)action));
-                        var button=addin.AddCommandBarButton("{26618395-09D6-11D1-BA07-080036230602}","MechCue",(int)action);
+                        var button=addin.AddCommandBarButton("{26618395-09D6-11D1-BA07-080036230602}","MechCue\n検証",(int)action);
                         var style=(ICommandButtonStyle)button;style.Style=5;
                         if(style.Style!=5)throw new Exception("Large button style rejected");
                         Marshal.ReleaseComObject(button);

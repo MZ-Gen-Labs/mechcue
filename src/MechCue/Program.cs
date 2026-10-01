@@ -99,6 +99,10 @@ public partial class MainForm : Form
     {
         bridge = hostedApplication == null ? new Bridge() : new Bridge(hostedApplication);
         Text = hostedApplication == null ? "MechCue 独立版 — Solid Edge タイムチャート" : "MechCue アドイン版 — Solid Edge タイムチャート";
+        var version = typeof(MainForm).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0]
+            ?? typeof(MainForm).Assembly.GetName().Version?.ToString();
+        Text += " — " + version;
         Width = 1440; Height = 900; MinimumSize = new(1180, 740);
         BackColor = Color.FromArgb(239, 243, 248);
         Font = new Font("Yu Gothic UI", 10);

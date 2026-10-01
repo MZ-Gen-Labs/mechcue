@@ -23,7 +23,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
     {
         application = Application;
         addIn = (SE.ISEAddInEx)AddInInstance;
-        addIn.GuiVersion = 6;
+        addIn.GuiVersion = 7;
         addIn.Description = "\nMechCue";
         var container = (IConnectionPointContainer)addIn.AddInEvents;
         var eventsId = typeof(SE.ISEAddInEvents).GUID;
@@ -40,13 +40,11 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
             foreach (var action in Enum.GetValues<HostAction>())
             {
                 int resource=101+10*((int)action-1);
-                string commandName="\n" + Caption(action) + "\n" + Hint(action) + "\n" + Caption(action);
-                // Explicitly register the local ID before adding a button. Some hosts
-                // retain only the first command from SetAddInInfoEx during migration.
-                int runtimeId=addIn.AddCommand(EnvCatID,commandName,(int)action);
+                string commandName=typeof(TimeChartAddIn).GUID.ToString("B") + "_" + (int)action + "\n" + Caption(action) + "\n" + Hint(action) + "\n" + Caption(action);
                 Array names = new[] { commandName };
                 Array ids = new[] { (int)action };
                 addIn.SetAddInInfoEx(typeof(TimeChartAddIn).Assembly.Location, EnvCatID, "MechCue", resource, resource+1, resource+2, resource+3, 1, ref names, ref ids);
+                int runtimeId = (int)ids.GetValue(0)!;
                 runtimeCommands[runtimeId] = action;
                 Log($"Command {action}: runtime ID {runtimeId}, firstTime={bFirstTime}");
                 if (bFirstTime)
