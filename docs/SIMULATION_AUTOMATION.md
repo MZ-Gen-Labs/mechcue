@@ -49,9 +49,20 @@ AIへの指示例：
 
 `faceIdsJson` はJSON文字列の配列です。例：`["面一覧で返されたfaceId"]`。省略または `[]` は現在の選択面を使用します（選択ツール自身は空配列を拒否します）。面以外の選択や、現在の形状に存在しないIDは拒否します。形状を編集したら面一覧を取り直してください。
 
-`meshSizeMm` は0.1～1000 mm。実行時の0は既存値を保持します。メッシュ値は文書の長さ単位へ換算して設定します。結果出力では、相当応力と変位を要求するビットを既存設定に追加します。
+`meshSizeMm` は0.1～1000 mm。実行時の0は既存値を保持します。alpha.02からメッシュ値をAPIの内部単位（m）へ換算して設定します。alpha.01の設定値表示では実際の細かさを保証できなかったため、既存メッシュは再生成してください。結果出力では、相当応力と変位を要求するビットを既存設定に追加します。
 
 `resultKind=stress` はソリッドのミーゼス相当応力（MPa）、`displacement` は並進変位の合成値（mm）、`active` は現在のプロットです。ネイティブのタイプ番号・SI値も併記します。結果を読むだけでは表示プロットを切り替えません。最大・最小位置はSolid Edgeから返された値をmmへ換算します。局所ピークの位置はネイティブ表示でも確認してください。
+
+## アラート表示とメッシュ再生成（alpha.02）
+
+- `solidedge_get_automation_settings`：Solid Edge全体の `DisplayAlerts` を取得。
+- `solidedge_set_display_alerts`：`displayAlerts=false` でネイティブの確認表示を抑制、`true` で表示。前の値と変更後の値を返します。設定は部品単位ではなく、実行中のSolid Edge全体に適用され、明示的に戻すまで保持されます。
+- `solidedge_run_simulation` の `suppressAlerts=true`：この呼び出しの間だけ表示を抑制し、成功・例外のどちらでも元の値へ戻します。継続的にOFFへする必要がない場合はこちらを推奨します。
+- `regenerateMesh=true`：対象スタディの既存メッシュを削除して再生成します。形状・材料・固定・荷重条件を保持します。既存結果は無効になり、再解析が必要です。`meshSizeMm=2, regenerateMesh=true, suppressAlerts=true` で2 mmの再生成と解析を実行できます。
+
+一部のライセンス・外部ソルバーのダイアログは `DisplayAlerts` に従わない可能性があります。全メッセージの非表示や自動的な承認を保証する設定ではありません。Solid Edge自体が終了した場合、元の設定への復帰はできず通信エラーになります。
+
+[DisplayAlerts API](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgeFramework~Application~DisplayAlerts.html)
 
 ## 実行とエラーの扱い
 

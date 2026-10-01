@@ -44,11 +44,11 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==55,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==57,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
-    for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
+    for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('55 tools and read-only annotations')
+    checks.append('57 tools and read-only annotations')
     catalog=tool('solidedge_list_concept_templates')
     assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
@@ -66,7 +66,8 @@ try:
         ('solidedge_run_simulation',{'expectedDocument':'unused','studyNumber':1}),
         ('solidedge_apply_simulation_material',{'expectedDocument':'unused','materialName':'Steel'}),
         ('solidedge_show_simulation_results',{'expectedDocument':'unused','studyNumber':1})]:tool(name,arguments,True)
-    checks.append('CAD mutations disabled without explicit write flag')
+    tool('solidedge_set_display_alerts',{'displayAlerts':False},True)
+    checks.append('CAD mutations and application alert changes disabled without explicit write flag')
     def mode(value):
         temp=settings_path.with_suffix('.tmp');temp.write_text(json.dumps({'schema':1,'mode':value}),encoding='utf-8');temp.replace(settings_path)
     for value in ['read','write','chart','write','read']:
@@ -74,7 +75,9 @@ try:
         result=tool('solidedge_new_document',{'kind':'invalid'},True)
         message=str(result)
         if value=='write': assert 'kind must be part' in message,message
-        else: assert 'kind must be part' not in message,message
+        else:
+            assert 'kind must be part' not in message,message
+            tool('solidedge_set_display_alerts',{'displayAlerts':False},True)
     mode('write')
     result=tool('solidedge_create_concept_machine',{'type':'invalid','outputDirectory':'unused'},True)
     assert 'type must be' in str(result),result

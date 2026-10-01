@@ -76,7 +76,18 @@ public sealed partial class Bridge
         path = CadPath(path, ".par", ".asm", ".dft", ".psm");
         if (!File.Exists(path)) throw new FileNotFoundException("Document not found", path);
         var document = Call(Get(CadApplication(), "Documents"), "Open", path, Type.Missing);
+        CadActivateDocument(document);
         return CadInfo(document);
+    }
+    static void CadActivateDocument(object document)
+    {
+        var windows=Get(document,"Windows");
+        // Mesh deletion in Results can leave the document loaded without a window.
+        if(Convert.ToInt32(Get(windows,"Count"))==0)Call(document,"NewWindow",Type.Missing,Type.Missing);
+        Call(document,"Activate");
+        windows=Get(document,"Windows");
+        if(Convert.ToInt32(Get(windows,"Count"))>0)Call(GetItem(windows,1),"Activate");
+        Call(CadApplication(),"DoIdle");
     }
     public static object CadSave(string expectedDocument, string outputPath = "")
     {

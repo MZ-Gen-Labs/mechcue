@@ -7,6 +7,11 @@ using MechCue;
 public static class SolidEdgeCadTools
 {
     static Task<string> Execute(string operation, Func<object> action) => SolidEdgeTools.ExecuteCad(operation, action);
+    [McpServerTool(ReadOnly=true), Description("Read Solid Edge application automation settings, including DisplayAlerts. Requires Read/select or Creation/edit mode. Does not change the application or documents.")]
+    public static Task<string> solidedge_get_automation_settings()=>SolidEdgeTools.ExecuteCad("automation-settings",()=>Bridge.CadGetAutomationSettings(),false);
+    [McpServerTool, Description("Set Solid Edge Application.DisplayAlerts: false suppresses native alerts, true restores display. Application-wide until changed again, not document-specific. Returns previous and actual values; restore previous value after automation. Some solver/license dialogs may still appear. Requires Creation/edit mode; does not save or delete documents.")]
+    public static Task<string> solidedge_set_display_alerts(bool displayAlerts)=>Execute("display-alerts",()=>Bridge.CadSetDisplayAlerts(displayAlerts));
+
     [McpServerTool, Description("Create and activate a new part, assembly or draft. Parts use Ordered mode. Optional absolute templatePath must match the document type. Does not save or close existing documents. Requires Creation/edit mode in MechCue MCP tray settings.")]
     public static Task<string> solidedge_new_document(string kind, string templatePath = "") => Execute("new-document", () => Bridge.CadNew(kind, templatePath));
     [McpServerTool, Description("Open and activate an existing .par/.asm/.dft/.psm using an absolute path. Does not close or save existing documents. Requires Creation/edit mode in MechCue MCP tray settings.")]

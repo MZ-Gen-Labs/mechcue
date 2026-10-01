@@ -111,7 +111,7 @@ public sealed partial class Bridge
         bool nativeSolved=SimulationStatus(study,10);
         bool? current=nativeSolved?(bool?)Read("result verification",()=>SimulationResultsCurrent(doc,study)):false;
         return new {number,name=SimulationName(study),nativeSolved,resultsCurrent=current,studyType=SimulationInt(study,"GetStudyType"),meshType=SimulationInt(study,"GetMeshType"),
-            meshSizeMm=Read("mesh size",()=>SimulationDouble(SimulationOwner(study,"GetMeshOwner"),"GetMeshSizeValue")*SimulationLengthScale(doc)),
+            meshSizeMm=Read("mesh size",()=>SimulationDouble(SimulationOwner(study,"GetMeshOwner"),"GetMeshSizeValue")*1000),
             loads=Read("loads",()=>SimulationConditions(study,false)),constraints=Read("constraints",()=>SimulationConditions(study,true)),
             readyForMesh=Read("readyForMesh",()=>SimulationStatus(study,4)),readyForSolve=Read("readyForSolve",()=>SimulationStatus(study,5)),
             meshed=Read("meshed",()=>SimulationStatus(study,9)),solved=nativeSolved&&current==true,
@@ -139,20 +139,13 @@ public sealed partial class Bridge
         for(int i=1;i<=Convert.ToInt32(Get(owner,"Count"));i++)studies.Add(SimulationStudyInfo(doc,GetItem(owner,i),i,warnings));
         return new {fullName=CadName(doc),material=SimulationMaterial(doc),studies,warnings};
     }
-    // MeshSizeValue is in document display length units, unlike geometry (metres).
-    static double SimulationLengthScale(object doc)
-    {
-        double mmPerUnit=Convert.ToDouble(Call(Get(doc,"UnitsOfMeasure"),"ParseUnit",1,"1"))*1000;
-        if(!double.IsFinite(mmPerUnit)||mmPerUnit<=0)throw new InvalidOperationException("Could not resolve the document length unit.");
-        return mmPerUnit;
-    }
     static void SimulationMeshSize(double mm) { if(!double.IsFinite(mm)||mm<.1||mm>1000)throw new ArgumentOutOfRangeException(nameof(mm),"meshSizeMm must be 0.1..1000 mm."); }
     public static object CadCreateSimulationStudy(string expectedDocument,double meshSizeMm=5)
     {
         SimulationMeshSize(meshSizeMm);var doc=SimulationDocument(expectedDocument);SimulationRequireModelEnvironment();var owner=Get(doc,"StudyOwner");
         object[] a=[1,1,0d,0u,0u,0d,0d,"","",1052673u,new DispatchWrapper(null)];CadCallRef(owner,"AddStudy",[10],a);var study=a[10];
         var body=Get(GetItem(Get(doc,"Models"),1),"Body");Array geometries=new object[]{body};((ISimulationStudyGeometry)study).SetGeometries(ref geometries);
-        Call(SimulationOwner(study,"GetMeshOwner"),"SetMeshSizeValue",meshSizeMm/SimulationLengthScale(doc));
+        Call(SimulationOwner(study,"GetMeshOwner"),"SetMeshSizeValue",meshSizeMm/1000);
         var warnings=new List<string>();return new {fullName=CadName(doc),study=SimulationStudyInfo(doc,study,Convert.ToInt32(Get(owner,"Count")),warnings),warnings,saved=false};
     }
     public static object CadAddSimulationFixed(string expectedDocument,int studyNumber,string faceIdsJson="[]",string name="")
@@ -177,7 +170,12 @@ public sealed partial class Bridge
         if(name!="")Set(load,"Name",name);
         return new {fullName=CadName(doc),studyNumber,name=Get(load,"Name"),kind,value,unit=kind=="force"?"N":"MPa",faceIds=faces.Select(SimulationFaceId).ToArray(),saved=false};
     }
-    public static object CadRunSimulation(string expectedDocument,int studyNumber,bool meshOnly=false,double meshSizeMm=0)
+    public static object CadRunSimulation(string expectedDocument,int studyNumber,bool meshOnly=false,double meshSizeMm=0,bool suppressAlerts=false,bool regenerateMesh=false)
+    {
+        if(meshSizeMm!=0)SimulationMeshSize(meshSizeMm);
+        return CadWithSuppressedAlerts(suppressAlerts,()=>SimulationRunCore(expectedDocument,studyNumber,meshOnly,meshSizeMm,regenerateMesh));
+    }
+    static object SimulationRunCore(string expectedDocument,int studyNumber,bool meshOnly,double meshSizeMm,bool regenerateMesh)
     {
         if(meshSizeMm!=0)SimulationMeshSize(meshSizeMm);var doc=SimulationDocument(expectedDocument);var study=SimulationStudy(doc,studyNumber);
         if(!meshOnly) {
@@ -190,12 +188,19 @@ public sealed partial class Bridge
             if(!Enabled(constraints)||!Enabled(loads))throw new InvalidOperationException("Solving requires at least one active fixed condition and one active load. Review solidedge_list_simulation_studies.");
         }
         SimulationCheckStudySwitch(doc,study);
-        if(meshSizeMm!=0)Call(SimulationOwner(study,"GetMeshOwner"),"SetMeshSizeValue",meshSizeMm/SimulationLengthScale(doc));
         SimulationRemember(doc,study,"pending");
+        if(regenerateMesh) {
+            Call(SimulationOwner(study,"GetMeshOwner"),"DeleteAllMesh");
+            // Native mesh deletion can activate a different open document.
+            CadActivateDocument(doc);
+            CadDocument(CadApplication(),expectedDocument,".par");
+        }
+        if(meshSizeMm!=0)Call(SimulationOwner(study,"GetMeshOwner"),"SetMeshSizeValue",meshSizeMm/1000);
         Call(Get(doc,"StudyOwner"),"SetStudyActive",SimulationName(study));
         if(!meshOnly) {object[] options=[0u];CadCallRef(study,"GetResultOptions",[0],options);Call(study,"SetResultOptions",Convert.ToUInt32(options[0])|1052673u);}
         Call(study,"Solve",doc,meshOnly?1:0);
-        bool completed=SimulationStatus(study,meshOnly?9:10);
+        CadDocument(CadApplication(),expectedDocument,".par");
+        bool completed=SimulationStatus(study,meshOnly?9:10)&&!SimulationStatus(study,1)&&!SimulationStatus(study,2)&&(meshOnly||!SimulationStatus(study,3));
         if(!meshOnly&&completed)SimulationRemember(doc,study,SimulationFingerprint(doc,study));
         var warnings=new List<string>();var state=SimulationStudyInfo(doc,study,studyNumber,warnings);
         object[] error=[""];if(!meshOnly&&!completed)CadCallRef(study,"GetNastranErrorMessage",[0],error);

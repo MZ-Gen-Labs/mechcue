@@ -10,7 +10,7 @@ root.mkdir(parents=True);settings=root/'access.json';settings.write_text('{"sche
 env=os.environ.copy();env['MECHCUE_MCP_NO_TRAY']='1';env['MECHCUE_MCP_SETTINGS_PATH']=str(settings)
 startup=subprocess.STARTUPINFO();startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW;startup.wShowWindow=0
 server=subprocess.Popen([str(pathlib.Path(a.mcp).resolve())],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',env=env,startupinfo=startup)
-replies=queue.Queue();history=[];checks=[];errors=[];seq=0
+replies=queue.Queue();history=[];checks=[];errors=[];seq=0;original_alerts=None
 
 def output():
     for line in server.stdout:
@@ -39,6 +39,12 @@ def check(value,name):
     checks.append(name);print('PASS:',name,flush=True)
 try:
     request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'Native Simulation test','version':'1'}})
+    original_alerts=tool('solidedge_get_automation_settings')['displayAlerts']
+    changed=tool('solidedge_set_display_alerts',{'displayAlerts':not original_alerts})
+    check(changed['previousDisplayAlerts']==original_alerts and tool('solidedge_get_automation_settings')['displayAlerts']!=original_alerts,'DisplayAlerts read/write matches native application')
+    tool('solidedge_set_display_alerts',{'displayAlerts':original_alerts})
+    tool('solidedge_run_simulation',{'expectedDocument':'wrong.par','studyNumber':1,'suppressAlerts':True},True)
+    check(tool('solidedge_get_automation_settings')['displayAlerts']==original_alerts,'Scoped alerts restored after expected-document error')
     doc=tool('solidedge_new_document',{'kind':'part','templatePath':r'C:\Siemens\Solid Edge 2026\Template\ISO Metric\iso metric part.par'})['fullName']
     tool('solidedge_extrude_profile',{'expectedDocument':doc,'shape':'rectangle','widthMm':100,'heightMm':10,'depthMm':10})
     path=str(root/'cantilever.par');tool('solidedge_save_document',{'expectedDocument':doc,'outputPath':path});doc=path
@@ -72,7 +78,8 @@ try:
     load=state['studies'][1]['loads'][0];check(load['valueNative']==1500000 and set(load['faceIds'])==set(pressure_faces),'1.5 MPa pressure converts to Pa with two face assignments')
     mesh=tool('solidedge_run_simulation',{**target,'meshOnly':True});check(mesh['completed'] and mesh['study']['meshed'] and not mesh['study']['solved'],'Native mesh-only completion without solved results')
     check(not mesh['warnings'] and mesh['study']['loads'][0]['faceIds']==[high],'Condition faces remain readable after meshing')
-    solved=tool('solidedge_run_simulation',target);check(solved['completed'] and solved['study']['solved'] and not solved['study']['resultsError'],'Native Nastran static solve completed')
+    solved=tool('solidedge_run_simulation',{**target,'suppressAlerts':True});check(solved['completed'] and solved['study']['solved'] and not solved['study']['resultsError'],'Native Nastran static solve completed')
+    check(tool('solidedge_get_automation_settings')['displayAlerts']==original_alerts,'Scoped alerts restored after successful solve')
     stress=tool('solidedge_get_simulation_results',{**target,'resultKind':'stress'});displacement=tool('solidedge_get_simulation_results',{**target,'resultKind':'displacement'})
     check(stress['plotType']==60031 and stress['unit']=='MPa' and 40<stress['maximum']<90,'Von Mises stress in MPa matches cantilever order of magnitude')
     # Beam bending predicts F*L^3/(3*E*I). This is a broad independent physical check, not an accuracy certificate.
@@ -95,6 +102,9 @@ try:
     check(len(tool('solidedge_list_simulation_studies',base)['studies'])==2,'Rejected study creation preserves study count')
     (root/'result.json').write_text(json.dumps({'checks':checks,'document':doc,'stress100N':stress,'displacement100N':displacement,'displacement200N':double_disp,'beamPredictionMm':prediction},ensure_ascii=False,indent=2),encoding='utf-8')
 finally:
+    if original_alerts is not None:
+        try:tool('solidedge_set_display_alerts',{'displayAlerts':original_alerts})
+        except Exception as error:errors.append('Alert restore failed: '+str(error))
     (root/'test-result.txt').write_text('\n'.join('PASS: '+c for c in checks)+'\n',encoding='utf-8')
     (root/'stderr.txt').write_text(''.join(errors),encoding='utf-8');server.stdin.close()
     try:server.wait(timeout=5)
