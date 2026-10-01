@@ -11,14 +11,14 @@
 Solid Edge付属DLL、CADモデル、個人のグラフ、診断結果をコミットしないでください。
 公開前に[実機確認](VALIDATION.md)を終え、画面画像と短い操作動画をREADMEへ追加すると試してもらいやすくなります。
 
-Windowsと.NET 8 SDKで`./scripts/Build.ps1 -WithAddIn -WithMcp -Version 0.2.0-alpha.4`を実行します。
+Windowsと.NET 8 SDKで`./scripts/Build.ps1 -WithAddIn -WithMcp -Version 0.3.0-alpha.01`を実行します。
 Solid Edge本体・付属DLLは不要です。出力先が存在する場合は別の`-OutputDirectory`を指定します。
 両版入りセットアップ、アドイン専用セットアップ、独立版ZIP、MCP ZIPの配布物だけが`artifacts/<version>/release`へ入り、SHA256SUMS.txtも出力します。
 
 `build.yml`はPR・main更新・手動実行で共通テスト、画面、COM定義、パッケージを検証します。
 成果物はActionsのArtifactsから取得できます。CAD駆動や管理者登録は自動確認の対象外です。
 
-`release.yml`は`v0.2.0-alpha.4`などのタグ送信で同じビルドを行い、Releaseへ添付します。
+`release.yml`は`v0.3.0-alpha.01`などのタグ送信で同じビルドを行い、Releaseへ添付します。
 タグのバージョンをアプリとセットアップへ渡します。**ドラフトのPrerelease**として作成します。
 **アルファ版は利用者の指定により下書きのまま保持し、一般公開しません。** リリース本文と成果物を更新しても `draft=false` にしないでください。実機結果と内容を点検し、下書きから配布物を取得します。
 
@@ -39,3 +39,11 @@ MCP用の依存はMcp/packages.lock.jsonで固定し、Mcp/NuGet.Configでnuget.
 ## 日時順の一覧
 
 GitHub標準の一覧で同日アルファ版の順番が前後する場合は、ルートの `Open-Release-List.cmd` を使用します。GitHubのリリース作成日時を時刻・秒まで比較し、同じベースバージョン内では新しいものを後ろに表示します。Draftもログイン権限に従って読み込み、公開状態は変更しません。[使い方](RELEASE_LIST.md)。
+
+## 0.3.0以降のアルファ番号
+
+表示・タグ・配布ファイル名は `0.3.0-alpha.01`、`.02`、…、`.09`、`.10` のように最低2桁とします。新しい開発系列では `.01` から開始します。既存のタグや配布物の名前は変更しません。番号変更だけでリリースは作成せず、リリースを依頼された際に未使用の番号を選びます。
+
+.NET/NuGetでは数値のプレリリース識別子に先頭ゼロを使えません。`MechCueReleaseVersion` に表示用の番号を設定し、SDKの `Version` だけ `0.3.0-alpha.1` に正規化します。`Build.ps1` がこの変換を行います。画面の `InformationalVersion`、インストーラーの表示、タグ、配布ファイル名には2桁表記を保持します。`Directory.Build.props`、`scripts/Build.ps1`、`Installer/Build-Installer.ps1` の既定値を合わせて更新してください。
+
+プロジェクト専用スキルは [.agents/skills/mechcue-release/SKILL.md](../.agents/skills/mechcue-release/SKILL.md) に保存しています。バージョン変更、GitHubリリース、公開状態や一覧順の調整で参照してください。

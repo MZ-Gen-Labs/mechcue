@@ -79,7 +79,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 ./scripts/Build.ps1 -WithAddIn -WithMcp
 ```
 
-成果物は`artifacts/0.2.0/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
+成果物は`artifacts/0.3.0-alpha.01/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。

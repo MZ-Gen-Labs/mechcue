@@ -1,17 +1,19 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.2.0',
+    [string]$Version = '0.3.0-alpha.01',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
 $ErrorActionPreference = 'Stop'
 if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw 'Invalid version' }
+# Keep the requested display version; normalize only the SDK/NuGet identifier.
+$taskSdkVersion = [regex]::Replace($Version, '-alpha\.0([0-9])$', '-alpha.$1')
 $taskRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskOutput = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $taskRoot "artifacts\$Version" }
 if (Test-Path -LiteralPath $taskOutput) { throw "Use a new output directory to avoid packaging stale files: $taskOutput" }
 $taskStandalone = Join-Path $taskOutput 'standalone'
-& dotnet publish (Join-Path $taskRoot 'MechCue.csproj') -c Release --self-contained false -p:PlatformTarget=x64 "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$Version" -o $taskStandalone
+& dotnet publish (Join-Path $taskRoot 'MechCue.csproj') -c Release --self-contained false -p:PlatformTarget=x64 "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskStandalone
 if ($LASTEXITCODE -ne 0) { throw 'Standalone build failed' }
 foreach ($taskCheck in @('--self-test','--smoke-test')) {
     $taskProcess = Start-Process -FilePath (Join-Path $taskStandalone 'MechCue.exe') -ArgumentList $taskCheck -PassThru -Wait -WindowStyle Hidden
@@ -29,12 +31,12 @@ Compress-Archive -Path (Join-Path $taskPortable '*') -DestinationPath (Join-Path
 $taskMcp = $null
 if ($WithMcp) {
     $taskMcp = Join-Path $taskOutput 'mcp'
-    & dotnet restore (Join-Path $taskRoot 'Mcp/MechCue.Mcp.csproj') --configfile (Join-Path $taskRoot 'Mcp/NuGet.Config') --locked-mode
+    & dotnet restore (Join-Path $taskRoot 'Mcp/MechCue.Mcp.csproj') --configfile (Join-Path $taskRoot 'Mcp/NuGet.Config') --locked-mode "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version"
     if ($LASTEXITCODE -ne 0) { throw 'MCP locked dependency restore failed' }
-    & dotnet publish (Join-Path $taskRoot 'Mcp/MechCue.Mcp.csproj') -c Release --no-restore --self-contained false -p:DebugType=none -p:DebugSymbols=false "-p:Version=$Version" -o $taskMcp
+    & dotnet publish (Join-Path $taskRoot 'Mcp/MechCue.Mcp.csproj') -c Release --no-restore --self-contained false -p:DebugType=none -p:DebugSymbols=false "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskMcp
     if ($LASTEXITCODE -ne 0) { throw 'MCP build failed' }
     $taskControl = Join-Path $taskMcp 'control'
-    & dotnet publish (Join-Path $taskRoot 'McpControl/MechCue.Mcp.Control.csproj') -c Release --self-contained false "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$Version" -o $taskControl
+    & dotnet publish (Join-Path $taskRoot 'McpControl/MechCue.Mcp.Control.csproj') -c Release --self-contained false "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskControl
     if ($LASTEXITCODE -ne 0) { throw 'MCP tray controller build failed' }
     $taskOldSettings = $env:MECHCUE_MCP_SETTINGS_PATH
     try {
@@ -59,7 +61,7 @@ if ($WithMcp) {
 }
 if ($WithAddIn) {
     $taskAddIn = Join-Path $taskOutput 'addin'
-    & dotnet publish (Join-Path $taskRoot 'AddIn\MechCue.AddIn.csproj') -c Release --self-contained false "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$Version" -o $taskAddIn
+    & dotnet publish (Join-Path $taskRoot 'AddIn\MechCue.AddIn.csproj') -c Release --self-contained false "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskAddIn
     if ($LASTEXITCODE -ne 0) { throw 'Add-in build failed' }
     & dotnet run --project (Join-Path $taskRoot 'tools\ComContractCheck\ComContractCheck.csproj') -c Release "-p:RestoreConfigFile=$taskRoot\NuGet.Config"
     if ($LASTEXITCODE -ne 0) { throw 'COM contract checks failed' }

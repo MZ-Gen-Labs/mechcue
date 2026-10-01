@@ -1,6 +1,10 @@
 <Project>
   <PropertyGroup>
-    <Version Condition="'$(Version)' == ''">0.2.0</Version>
+    <MechCueReleaseVersion Condition="'$(MechCueReleaseVersion)' == '' and '$(Version)' != ''">$(Version)</MechCueReleaseVersion>
+    <MechCueReleaseVersion Condition="'$(MechCueReleaseVersion)' == ''">0.3.0-alpha.01</MechCueReleaseVersion>
+    <!-- NuGet numeric prerelease identifiers cannot contain leading zeroes. -->
+    <Version Condition="'$(Version)' == ''">$([System.Text.RegularExpressions.Regex]::Replace('$(MechCueReleaseVersion)', '-alpha\.0([0-9])$', '-alpha.$1'))</Version>
+    <InformationalVersion Condition="'$(InformationalVersion)' == ''">$(MechCueReleaseVersion)</InformationalVersion>
     <Product>MechCue</Product>
     <Copyright>Copyright (c) 2026 MechCue contributors</Copyright>
   </PropertyGroup>
