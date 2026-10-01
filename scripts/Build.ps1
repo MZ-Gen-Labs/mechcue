@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.2.0-alpha.10',
+    [string]$Version = '0.2.0-alpha.11',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -52,8 +52,9 @@ if ($WithMcp) {
     if ($LASTEXITCODE -ne 0) { throw 'MCP update shutdown test failed' }
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/CONCEPT_TARGETS.md') -Destination (Join-Path $taskMcp 'CONCEPT_TARGETS.md')
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/DRAWING_AUTOMATION.md') -Destination (Join-Path $taskMcp 'DRAWING_AUTOMATION.md')
+    Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/PMI_AUTOMATION.md') -Destination (Join-Path $taskMcp 'PMI_AUTOMATION.md')
     $taskMcpReadme = Join-Path $taskMcp 'README.md'
-    [IO.File]::WriteAllText($taskMcpReadme, [IO.File]::ReadAllText($taskMcpReadme).Replace('../docs/CONCEPT_TARGETS.md','CONCEPT_TARGETS.md').Replace('../docs/DRAWING_AUTOMATION.md','DRAWING_AUTOMATION.md'))
+    [IO.File]::WriteAllText($taskMcpReadme, [IO.File]::ReadAllText($taskMcpReadme).Replace('../docs/CONCEPT_TARGETS.md','CONCEPT_TARGETS.md').Replace('../docs/DRAWING_AUTOMATION.md','DRAWING_AUTOMATION.md').Replace('../docs/PMI_AUTOMATION.md','PMI_AUTOMATION.md'))
     Compress-Archive -Path (Join-Path $taskMcp '*') -DestinationPath (Join-Path $taskDistribution "MechCue-$Version-MCP-win-x64.zip")
 }
 if ($WithAddIn) {

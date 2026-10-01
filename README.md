@@ -24,6 +24,8 @@ MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート�
 - 0.2.0系：MCPからオーダードの押し出し・切り抜き、アセンブリ配置・平面拘束、図面ビュー・PDFを作成。
 - 図面MCP：正面候補の判定、第三角法のビュー追加、外形・円径・位置・段差の主要寸法を自動配置。[対応範囲と操作例](docs/DRAWING_AUTOMATION.md)。
 
+- 3D PMIのMCP：単一ボディ部品に外形・円径・位置・段差・傾斜角の参照寸法を追加し、モデルビューで表示を切り替え。[対応範囲と操作例](docs/PMI_AUTOMATION.md)。
+
 PLC接続・プログラム読み込み、加減速モデル、負荷計算は未対応です。
 
 MCPを使う場合はインストーラーで「MCPサーバー」をチェックし、MechCueの「AI接続」をオンにします。追加のMCP ZIPでの配布も継続します。[MCP導入・接続設定](Mcp/README.md)を参照してください。
@@ -75,7 +77,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 ./scripts/Build.ps1 -WithAddIn -WithMcp
 ```
 
-成果物は`artifacts/0.2.0-alpha.4/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
+成果物は`artifacts/0.2.0-alpha.11/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。

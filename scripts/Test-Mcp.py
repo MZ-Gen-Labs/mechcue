@@ -44,11 +44,11 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==41,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==44,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
-    for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views']:
+    for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('41 tools and read-only annotations')
+    checks.append('44 tools and read-only annotations')
     catalog=tool('solidedge_list_concept_templates')
     assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
@@ -57,6 +57,8 @@ try:
     tool('solidedge_new_document',{'kind':'part'},True)
     tool('solidedge_extrude_profile',{'expectedDocument':'test.par','shape':'rectangle','depthMm':10,'widthMm':20,'heightMm':30},True)
     tool('solidedge_save_document',{'expectedDocument':'test.par','outputPath':'test.par'},True)
+    tool('solidedge_auto_pmi',{'expectedDocument':'unused'},True)
+    tool('solidedge_show_pmi_view',{'expectedDocument':'unused','viewName':'MechCue PMI XY'},True)
     checks.append('CAD mutations disabled without explicit write flag')
     def mode(value):
         temp=settings_path.with_suffix('.tmp');temp.write_text(json.dumps({'schema':1,'mode':value}),encoding='utf-8');temp.replace(settings_path)
@@ -76,6 +78,9 @@ try:
     bad=tool('solidedge_dimension_drawing_view',{'expectedDocument':'unused','viewNumber':1,'maxDimensions':0},True);assert 'maxDimensions' in str(bad),bad
     bad=tool('solidedge_complete_drawing',{'expectedDocument':'unused','dimensionMode':'bad'},True);assert 'dimensionMode' in str(bad),bad
     checks.append('Invalid drawing direction and dimension options rejected before CAD connection')
+    bad=tool('solidedge_auto_pmi',{'expectedDocument':'unused','dimensionMode':'bad'},True);assert 'dimensionMode' in str(bad),bad
+    bad=tool('solidedge_auto_pmi',{'expectedDocument':'unused','maxDimensions':0},True);assert 'maxDimensions' in str(bad),bad
+    checks.append('PMI write permissions and invalid options rejected before CAD access')
     settings_path.write_text('invalid',encoding='utf-8')
     assert 'kind must be part' not in str(tool('solidedge_new_document',{'kind':'invalid'},True))
     settings_path.unlink()
