@@ -5,46 +5,64 @@ public partial class MainForm
     void SetCompact(bool enabled)
     {
         if (compact == enabled) return;
-        PausePlayback(); Commit(); compact = enabled;
-        var playback = new Control[] { time, speed, loop, live, collision };
-        if (enabled)
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        PausePlayback();
+        // Layout changes must not enumerate assembly targets through COM.
+        if (enabled) CommitEditor(false);
+        var layouts = new Control[] { this, top, compactBar, split, workspace, vertical };
+        foreach (var control in layouts) control.SuspendLayout();
+        try
         {
-            editBounds = Bounds; editWindowState = WindowState;
-            panelSizes = (split.SplitterDistance, workspace.Panel2.Width, vertical.Panel2.Height);
-            playbackPositions.Clear();
-            foreach (var control in playback) playbackPositions[control] = top.Controls.GetChildIndex(control);
-            compactBar.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true, Name = "compactTime" });
-            compactBar.Controls.Add(time);
-            compactBar.Controls.Add(new Label { Text = "速度", AutoSize = true, Name = "compactSpeed" });
-            compactBar.Controls.Add(speed); compactBar.Controls.Add(loop); compactBar.Controls.Add(live); compactBar.Controls.Add(collision);
-            int position = compactBar.Controls.OfType<Button>().Count();
-            foreach (var control in new Control[] { compactBar.Controls["compactTime"]!, time, compactBar.Controls["compactSpeed"]!, speed, loop, live, collision })
-                compactBar.Controls.SetChildIndex(control, position++);
-            time.Width = 85; speed.Width = 55;
-            WindowState = FormWindowState.Normal; MinimumSize = new(650, 400); Size = new(900, 550);
-        }
-        else
-        {
-            foreach (var control in playback.OrderBy(c => playbackPositions[c]))
+            compact = enabled;
+            var playback = new Control[] { time, speed, loop, live, collision };
+            if (enabled)
             {
-                top.Controls.Add(control); top.Controls.SetChildIndex(control, playbackPositions[control]);
+                editBounds = Bounds; editWindowState = WindowState;
+                panelSizes = (split.SplitterDistance, workspace.Panel2.Width, vertical.Panel2.Height);
+                playbackPositions.Clear();
+                foreach (var control in playback) playbackPositions[control] = top.Controls.GetChildIndex(control);
+                compactBar.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true, Name = "compactTime" });
+                compactBar.Controls.Add(time);
+                compactBar.Controls.Add(new Label { Text = "速度", AutoSize = true, Name = "compactSpeed" });
+                compactBar.Controls.Add(speed); compactBar.Controls.Add(loop); compactBar.Controls.Add(live); compactBar.Controls.Add(collision);
+                int position = compactBar.Controls.OfType<Button>().Count();
+                foreach (var control in new Control[] { compactBar.Controls["compactTime"]!, time, compactBar.Controls["compactSpeed"]!, speed, loop, live, collision })
+                    compactBar.Controls.SetChildIndex(control, position++);
+                time.Width = 85; speed.Width = 55;
+                WindowState = FormWindowState.Normal; MinimumSize = new(650, 400); Size = new(900, 550);
             }
-            foreach (Control label in compactBar.Controls.Cast<Control>().Where(c => c.Name.StartsWith("compact")).ToArray()) label.Dispose();
-            time.Width = 100; speed.Width = 65;
-            MinimumSize = new(1180, 740); Bounds = editBounds; WindowState = editWindowState;
+            else
+            {
+                foreach (var control in playback.OrderBy(c => playbackPositions[c]))
+                {
+                    top.Controls.Add(control); top.Controls.SetChildIndex(control, playbackPositions[control]);
+                }
+                foreach (Control label in compactBar.Controls.Cast<Control>().Where(c => c.Name.StartsWith("compact")).ToArray()) label.Dispose();
+                time.Width = 100; speed.Width = 65;
+                MinimumSize = new(1180, 740); Bounds = editBounds; WindowState = editWindowState;
+            }
+            split.Panel1Collapsed = enabled || tracksHidden; workspace.Panel2Collapsed = enabled || settingsHidden; vertical.Panel2Collapsed = enabled || pointsHidden;
+            chartHeading.Visible = !enabled;
+            top.Visible = !enabled; compactBar.Visible = enabled; status.Visible = connection.Visible = !enabled;
+
+            plot.EditMode = !enabled && !reviewMode.Checked;
+            foreach (Control control in compactBar.Controls) ApplyText(control);
+            RefreshPlayback();
+            RefreshMenus();
+            if (enabled) FitCompactBar();
         }
-        split.Panel1Collapsed = enabled || tracksHidden; workspace.Panel2Collapsed = enabled || settingsHidden; vertical.Panel2Collapsed = enabled || pointsHidden;
-        chartHeading.Visible = !enabled;
-        top.Visible = !enabled; compactBar.Visible = enabled; status.Visible = connection.Visible = !enabled;
-        if (!enabled) {
-            split.SplitterDistance = Math.Clamp(panelSizes.Tracks, split.Panel1MinSize, Math.Max(split.Panel1MinSize, split.Width - split.SplitterWidth - split.Panel2MinSize));
-            workspace.SplitterDistance = Math.Clamp(workspace.Width - workspace.SplitterWidth - panelSizes.Settings, workspace.Panel1MinSize, Math.Max(workspace.Panel1MinSize, workspace.Width - workspace.SplitterWidth - workspace.Panel2MinSize));
-            vertical.SplitterDistance = Math.Clamp(vertical.Height - vertical.SplitterWidth - panelSizes.Points, vertical.Panel1MinSize, Math.Max(vertical.Panel1MinSize, vertical.Height - vertical.SplitterWidth - vertical.Panel2MinSize));
+        finally
+        {
+            foreach (var control in layouts.Reverse()) control.ResumeLayout(true);
+
+            if (!enabled) {
+                split.SplitterDistance = Math.Clamp(panelSizes.Tracks, split.Panel1MinSize, Math.Max(split.Panel1MinSize, split.Width - split.SplitterWidth - split.Panel2MinSize));
+                workspace.SplitterDistance = Math.Clamp(workspace.Width - workspace.SplitterWidth - panelSizes.Settings, workspace.Panel1MinSize, Math.Max(workspace.Panel1MinSize, workspace.Width - workspace.SplitterWidth - workspace.Panel2MinSize));
+                vertical.SplitterDistance = Math.Clamp(vertical.Height - vertical.SplitterWidth - panelSizes.Points, vertical.Panel1MinSize, Math.Max(vertical.Panel1MinSize, vertical.Height - vertical.SplitterWidth - vertical.Panel2MinSize));
+            }
+            Invalidate(true);
+            DiagnosticLog.Write("compact-switch", new { enabled, elapsedMs = elapsed.ElapsedMilliseconds });
         }
-        plot.EditMode = !enabled && !reviewMode.Checked;
-        RefreshLanguage();
-        if (enabled) FitCompactBar();
-        plot.Invalidate();
     }
     void FitCompactBar()
     {
@@ -213,7 +231,7 @@ public partial class MainForm
         trackList.ClickAt(new Point(45, checkbox.Top + checkbox.Height / 2));
         if (trackList.SelectedIndex != 2 || trackList.GetItemChecked(2)) throw new Exception("Name click must select without toggling visibility");
         trackList.SetItemChecked(2, true); trackList.SelectedIndex = 0;
-        if (top.Controls.OfType<Button>().Concat(compactBar.Controls.OfType<Button>()).Any(b => Equals(b.Tag,"停止")) || HostCommands.RibbonActions.Contains(HostAction.Stop)) throw new Exception("Redundant stop button remains");
+        if (top.Controls.OfType<Button>().Concat(compactBar.Controls.OfType<Button>()).Any(b => Equals(b.Tag,"停止")) || HostCommands.RibbonActions.Any(a => a is HostAction.Stop or HostAction.Minimize or HostAction.Maximize)) throw new Exception("Redundant stop button remains");
         if (!aiAccess.Checked || aiEndpoint == null) throw new Exception("AI access must default on");
         time.Value = 1; TogglePlayback();
         if (!timer.Enabled) throw new Exception("Playback toggle did not start");
@@ -240,7 +258,12 @@ public partial class MainForm
         plot.PointSelected?.Invoke(0, 1);
         if (!grid.Rows[1].Selected) throw new Exception("Tiny grid point selection failed");
         vertical.SplitterDistance = originalDistance; vertical.Panel2MinSize = 60;
+        var retainedCandidate = new object();
+        target.Items.Add(retainedCandidate); target.SelectedItem = retainedCandidate;
+        grid.Rows[1].Cells[1].Value = 80d;
         SetCompact(true);
+        if (Current.Points[1].Value != 80d || !ReferenceEquals(target.SelectedItem, retainedCandidate))
+            throw new Exception("Compact switch lost pending values or reloaded CAD targets");
         plot.PointSelected?.Invoke(0, 1);
         if (!split.Panel1Collapsed || !workspace.Panel2Collapsed || !vertical.Panel2Collapsed || plot.EditMode || time.Parent != compactBar) throw new Exception("Compact graph/playback layout failed");
         Application.DoEvents();
@@ -274,6 +297,8 @@ public partial class MainForm
             snapshot.Save(Path.Combine(AppContext.BaseDirectory, "compact-preview.png"));
         }
         SetCompact(false);
+        if (!ReferenceEquals(target.SelectedItem, retainedCandidate)) throw new Exception("Editor restore reloaded CAD targets");
+        target.Items.Remove(retainedCandidate);
         if (split.Panel1Collapsed || workspace.Panel2Collapsed || vertical.Panel2Collapsed || time.Parent != top || !plot.EditMode) throw new Exception("Edit layout restoration failed");
         overlay.Checked = false; if (plot.Overlay) throw new Exception("Individual display toggle failed");
         overlay.Checked = true;

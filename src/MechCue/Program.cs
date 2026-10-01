@@ -248,7 +248,7 @@ public partial class MainForm : Form
         connection.ForeColor = live.Checked ? Color.DarkGreen : Color.DarkOrange;
     }
     void Error(Exception ex) { DiagnosticLog.Error("ui-error", ex, DiagnosticState()); status.Text = "停止：" + (ex.InnerException ?? ex).Message; if(aiExecuting){aiError=ex;return;} MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
-    void RefreshTracks(int selected) { loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
+    void RefreshTracks(int selected, bool refreshTargets = true) { loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
         foreach (var t in tracks) trackList.Items.Add(t.Name, !plot.Hidden.Contains(t));
         foreach (Control control in legend.Controls.Cast<Control>().ToArray()) control.Dispose();
         legend.Controls.Clear();
@@ -259,13 +259,14 @@ public partial class MainForm : Form
             label.Click += (_, _) => trackList.SelectedIndex = index;
             legend.Controls.Add(label);
         }
-        trackList.SelectedIndex = selected; loading = false; LoadTrack(); plot.Tracks = tracks; plot.Invalidate(); }
-    void LoadTrack()
+        trackList.SelectedIndex = selected; loading = false; LoadTrack(refreshTargets); plot.Tracks = tracks; plot.Invalidate(); }
+    void LoadTrack() => LoadTrack(true);
+    void LoadTrack(bool refreshTargets)
     {
         if (loading) return;
         loading = true; var t = Current; name.Text = t.Name; kind.SelectedItem = t.Kind; axis.SelectedItem = t.Axis;
         grid.Rows.Clear(); foreach (var p in t.Points) grid.Rows.Add(p.Time, p.Value);
-        loading = false; UpdateAxisHelp(); plot.Selected = trackList.SelectedIndex; plot.Invalidate(); Guard(PopulateTargets);
+        loading = false; UpdateAxisHelp(); plot.Selected = trackList.SelectedIndex; plot.Invalidate(); if (refreshTargets) Guard(PopulateTargets);
     }
     void PopulateTargets()
     {
@@ -274,7 +275,8 @@ public partial class MainForm : Form
         if (bridge.Connected) target.Items.AddRange(bridge.Targets(CurrentKind).ToArray());
         if (previous != null) target.SelectedItem = target.Items.Cast<Target>().FirstOrDefault(t => t.Label == previous);
     }
-    void Commit()
+    void Commit() => CommitEditor(true);
+    void CommitEditor(bool refreshTargets)
     {
         grid.EndEdit();
         var points = grid.Rows.Cast<DataGridViewRow>().Where(r => !r.IsNewRow).Select(r => new KeyPoint(double.Parse(Convert.ToString(r.Cells[0].Value)!, CultureInfo.CurrentCulture), double.Parse(Convert.ToString(r.Cells[1].Value)!, CultureInfo.CurrentCulture))).ToList();
@@ -282,7 +284,7 @@ public partial class MainForm : Form
         if (bridge.BoundLabel(Current) != null && (CurrentKind != Current.Kind || axis.Text != Current.Axis)) throw new InvalidOperationException("この機構の割り当てを解除してから、駆動方法・軸を変更してください。全体の切断は不要です。");
         if (!Current.Points.SequenceEqual(points)) Remember(Current);
         Current.Name = name.Text; Current.Kind = CurrentKind; Current.Axis = axis.Text; Current.Points = points;
-        int i = trackList.SelectedIndex; RefreshTracks(i); status.Text = "グラフを更新しました。";
+        int i = trackList.SelectedIndex; RefreshTracks(i, refreshTargets); status.Text = "グラフを更新しました。";
     }
     void SaveFile() { Commit(); using var d = new SaveFileDialog { Filter = UiText.Text("タイムチャート|*.json"), FileName = "motion.json" }; if (d.ShowDialog() == DialogResult.OK) File.WriteAllText(d.FileName, JsonSerializer.Serialize(tracks, new JsonSerializerOptions { WriteIndented = true })); }
     void LoadFile()

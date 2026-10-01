@@ -1,7 +1,7 @@
 namespace MechCue;
 public static class HostCommands
 {
-    public static HostAction[] RibbonActions => Enum.GetValues<HostAction>().Where(a => a != HostAction.Stop).ToArray();
+    public static HostAction[] RibbonActions => Enum.GetValues<HostAction>().Where(a => a is not (HostAction.Stop or HostAction.Minimize or HostAction.Maximize)).ToArray();
     public static string Caption(HostAction action) => UiText.Text(action switch {
         (HostAction)1 => "タイムチャート",
         (HostAction)2 => "再生 / 一時停止",
