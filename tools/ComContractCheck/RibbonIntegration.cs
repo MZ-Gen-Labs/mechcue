@@ -16,16 +16,16 @@ static class RibbonIntegration
                 var addins=Get(app,"AddIns");
                 var raw=addins.GetType().InvokeMember("Item",BindingFlags.InvokeMethod|BindingFlags.GetProperty,null,addins,["{79B86022-7C7D-4768-A3A7-CF8EBD1F7826}"])!;
                 var addin=(ISEAddInEx)raw;
-                foreach(var action in Enum.GetValues<HostAction>())
+                foreach(var action in HostCommands.RibbonActions)
                 {
-                    int bitmap=101+10*((int)action-1);string label=action switch { HostAction.Open=>"タイムチャート",HostAction.Play=>"再生",HostAction.Stop=>"停止",HostAction.Maximize=>"最大化",HostAction.Minimize=>"最小化",HostAction.Compact=>"最小表示",_=>"CAD保存" };
+                    int bitmap=101+10*((int)action-1);string label=HostCommands.Caption(action);
                     Array names=new[]{typeof(MechCue.AddIn.TimeChartAddIn).GUID.ToString("B")+"_"+(int)action+"\n"+label+"\n"+label+"\n"+label};Array ids=new[]{(int)action};
-                    addin.SetAddInInfoEx(resource,"{26618395-09D6-11D1-BA07-080036230602}","MechCue\n検証",bitmap,bitmap+1,bitmap+2,bitmap+3,1,ref names,ref ids);
+                    addin.SetAddInInfoEx(resource,"{26618395-09D6-11D1-BA07-080036230602}","MechCue\n検証：" + HostCommands.Group(action),bitmap,bitmap+1,bitmap+2,bitmap+3,1,ref names,ref ids);
                     // Opt-in live integration check; use a separate group until the add-in is updated.
                     {
-                        var button=addin.AddCommandBarButton("{26618395-09D6-11D1-BA07-080036230602}","MechCue\n検証",(int)action);
-                        var style=(ICommandButtonStyle)button;style.Style=5;
-                        if(style.Style!=5)throw new Exception("Large button style rejected");
+                        var button=addin.AddCommandBarButton("{26618395-09D6-11D1-BA07-080036230602}","MechCue\n検証：" + HostCommands.Group(action),(int)action);
+                        var style=(ICommandButtonStyle)button;int wantedStyle=HostCommands.IsToggle(action)?7:action==HostAction.Play?3:5;style.Style=wantedStyle;
+                        if(style.Style!=wantedStyle)throw new Exception("Large button style rejected");
                         Marshal.ReleaseComObject(button);
                     }
                     Console.WriteLine($"PASS native ribbon: {action}, local {(int)action}, runtime {ids.GetValue(0)}");

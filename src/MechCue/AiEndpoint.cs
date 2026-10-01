@@ -55,6 +55,7 @@ public partial class MainForm
             if(aiAccess.Checked)aiEndpoint=new AiEndpoint(Text,DispatchAi);
         };
         Disposed+=(_,_)=>{aiEndpoint?.Dispose();aiEndpoint=null;};
+        aiAccess.Checked = true;
     }
     bool aiExecuting;
     Exception? aiError;
@@ -86,15 +87,15 @@ public partial class MainForm
             int index=args.GetProperty("trackNumber").GetInt32();if(index<1 || index>tracks.Count)throw new ArgumentOutOfRangeException("trackNumber");return tracks[index-1];
         }
         if(method=="get_state")return AiState();
-        if(method=="stop"){timer.Stop();return AiState();}
+        if(method=="stop"){PausePlayback();return AiState();}
         if(method=="play"){StartPlayback();return AiState();}
         if(method=="seek"){
             double position=Number("time");if(!double.IsFinite(position)||position<0||position>tracks.Max(t=>t.Points[^1].Time))throw new ArgumentOutOfRangeException("time");
-            timer.Stop();time.Value=(decimal)position;return AiState();
+            PausePlayback();time.Value=(decimal)position;return AiState();
         }
-        if(method=="undo"){timer.Stop();live.Checked=false;Undo();return AiState();}
+        if(method=="undo"){PausePlayback();live.Checked=false;Undo();return AiState();}
         if(method is not ("set_keyframe" or "reset_values" or "resample"))throw new InvalidOperationException("Unknown MechCue command: "+method);
-        timer.Stop();live.Checked=false;Commit();
+        PausePlayback();live.Checked=false;Commit();
         if(bridge.Connected)_=bridge.Document;
         var changes=new Dictionary<Track,List<KeyPoint>>();
         switch(method)

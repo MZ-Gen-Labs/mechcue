@@ -5,11 +5,12 @@ public partial class MainForm
     void SetCompact(bool enabled)
     {
         if (compact == enabled) return;
-        timer.Stop(); Commit(); compact = enabled;
+        PausePlayback(); Commit(); compact = enabled;
         var playback = new Control[] { time, speed, loop, live, collision };
         if (enabled)
         {
             editBounds = Bounds; editWindowState = WindowState;
+            panelSizes = (split.SplitterDistance, workspace.Panel2.Width, vertical.Panel2.Height);
             playbackPositions.Clear();
             foreach (var control in playback) playbackPositions[control] = top.Controls.GetChildIndex(control);
             compactBar.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true, Name = "compactTime" });
@@ -29,8 +30,13 @@ public partial class MainForm
             time.Width = 100; speed.Width = 65;
             MinimumSize = new(1180, 740); Bounds = editBounds; WindowState = editWindowState;
         }
-        split.Panel1Collapsed = enabled; workspace.Panel2Collapsed = enabled; vertical.Panel2Collapsed = enabled;
+        split.Panel1Collapsed = enabled || tracksHidden; workspace.Panel2Collapsed = enabled || settingsHidden; vertical.Panel2Collapsed = enabled || pointsHidden;
         top.Visible = !enabled; compactBar.Visible = enabled; status.Visible = connection.Visible = !enabled;
+        if (!enabled) {
+            split.SplitterDistance = Math.Clamp(panelSizes.Tracks, split.Panel1MinSize, Math.Max(split.Panel1MinSize, split.Width - split.SplitterWidth - split.Panel2MinSize));
+            workspace.SplitterDistance = Math.Clamp(workspace.Width - workspace.SplitterWidth - panelSizes.Settings, workspace.Panel1MinSize, Math.Max(workspace.Panel1MinSize, workspace.Width - workspace.SplitterWidth - workspace.Panel2MinSize));
+            vertical.SplitterDistance = Math.Clamp(vertical.Height - vertical.SplitterWidth - panelSizes.Points, vertical.Panel1MinSize, Math.Max(vertical.Panel1MinSize, vertical.Height - vertical.SplitterWidth - vertical.Panel2MinSize));
+        }
         plot.EditMode = !enabled && !reviewMode.Checked;
         RefreshLanguage();
         if (enabled) FitCompactBar();
@@ -96,7 +102,7 @@ public partial class MainForm
         modes.Controls.Add(editMode); modes.Controls.Add(reviewMode); toolbar.Controls.Add(modes);
         reviewMode.CheckedChanged += (_, _) =>
         {
-            timer.Stop(); plot.EditMode = !reviewMode.Checked;
+            PausePlayback(); plot.EditMode = !reviewMode.Checked;
             status.Text = reviewMode.Checked ? "動作確認：グラフをクリック・ドラッグして時刻を変更します。" : "編集：点・線分を上下移動。Ctrlで時間も移動。Shiftで時刻変更、Escで取消。";
         };
         Add(toolbar, "元に戻す", Undo);
@@ -116,7 +122,7 @@ public partial class MainForm
     }
     void Undo()
     {
-        timer.Stop();
+        PausePlayback();
         if (history.Count == 0) { status.Text = "戻せる編集はありません。"; return; }
         var changes = history.Pop(); foreach(var change in changes)change.Track.Points = change.Points;
         int index = tracks.IndexOf(changes[0].Track); RefreshTracks(Math.Max(0, index)); ApplyPreview(); MarkDocumentSettingsChanged();
@@ -152,7 +158,7 @@ public partial class MainForm
     void ReadCurrentValues()
     {
         if (target.SelectedItem is not Target chosen) throw new InvalidOperationException("駆動先を選んでください。");
-        timer.Stop(); live.Checked = false; Commit();
+        PausePlayback(); live.Checked = false; Commit();
         double value = bridge.CurrentValue(Current, chosen);
         Remember(Current);
         Current.Points = Current.Points.Select(p => p with { Value = value }).ToList();
@@ -161,7 +167,7 @@ public partial class MainForm
     }
     void FromCadSelection()
     {
-        timer.Stop(); live.Checked = false; Commit();
+        PausePlayback(); live.Checked = false; Commit();
         var candidates = bridge.TargetsFromSelection(Current.Kind);
         target.Items.Clear(); target.Items.AddRange(candidates.ToArray());
         if (candidates.Count > 0) target.SelectedIndex = 0;
@@ -197,6 +203,27 @@ public partial class MainForm
         trackList.ClickAt(new Point(45, checkbox.Top + checkbox.Height / 2));
         if (trackList.SelectedIndex != 2 || trackList.GetItemChecked(2)) throw new Exception("Name click must select without toggling visibility");
         trackList.SetItemChecked(2, true); trackList.SelectedIndex = 0;
+        if (top.Controls.OfType<Button>().Concat(compactBar.Controls.OfType<Button>()).Any(b => Equals(b.Tag,"停止")) || HostCommands.RibbonActions.Contains(HostAction.Stop)) throw new Exception("Redundant stop button remains");
+        if (!aiAccess.Checked || aiEndpoint == null) throw new Exception("AI access must default on");
+        time.Value = 1; TogglePlayback();
+        if (!timer.Enabled) throw new Exception("Playback toggle did not start");
+        var playButton = top.Controls.OfType<Button>().Single(b => Equals(b.Tag, "▶ 再生"));
+        if (playButton.Text != "" || playButton.Image == null || !(playButton.AccessibleName == "Pause" || playButton.AccessibleName == "一時停止")) throw new Exception("Pause button UI did not update");
+        TogglePlayback();
+        if (!(playButton.AccessibleName == "Play" || playButton.AccessibleName == "再生")) throw new Exception("Play button UI did not update");
+        if (timer.Enabled || time.Value != 1) throw new Exception("Pause lost time");
+        TogglePlayback();
+        if (!timer.Enabled || playStart != 1) throw new Exception("Resume lost current time");
+        PausePlayback();
+        foreach (var action in new[] { HostAction.TracksPanel, HostAction.SettingsPanel, HostAction.PointsPanel })
+        {
+            ExecuteHostAction(action); if (IsHostActionChecked(action)) throw new Exception("Panel hide failed");
+            SetCompact(true); SetCompact(false); if (IsHostActionChecked(action)) throw new Exception("Compact reset hidden panel choice");
+            ExecuteHostAction(action); if (!IsHostActionChecked(action)) throw new Exception("Panel restore failed");
+        }
+        split.SplitterDistance = 180; workspace.SplitterDistance = Math.Max(300, workspace.Width - 260); vertical.SplitterDistance = Math.Max(150, vertical.Height - 180);
+        if (split.IsSplitterFixed || workspace.IsSplitterFixed || vertical.IsSplitterFixed || vertical.Panel2.Height < 60) throw new Exception("Resizable panel splitters failed");
+        if (dataMenu.Items.Count != 5 || top.Controls.OfType<Button>().Any(b => Equals(b.Tag,"保存") || Equals(b.Tag,"表を書き出し"))) throw new Exception("Data menu consolidation failed");
         SetCompact(true);
         if (!split.Panel1Collapsed || !workspace.Panel2Collapsed || !vertical.Panel2Collapsed || plot.EditMode || time.Parent != compactBar) throw new Exception("Compact graph/playback layout failed");
         Application.DoEvents();
@@ -235,9 +262,9 @@ public partial class MainForm
         overlay.Checked = true;
         if (!kind.Items.Contains("部品座標") || collision.Checked) throw new Exception("New mode/options defaults mismatch");
         time.Value = (decimal)tracks.Max(t => t.Points[^1].Time);
-        StartPlayback(); timer.Stop();
+        StartPlayback(); PausePlayback();
         if (time.Value != 0 || playStart != 0) throw new Exception("Play at end must restart at beginning");
-        time.Value = 1; StartPlayback(); timer.Stop();
+        time.Value = 1; StartPlayback(); PausePlayback();
         if (playStart != 1) throw new Exception("Play before end must retain current time");
         var savedLanguage = UiText.Mode;
         try

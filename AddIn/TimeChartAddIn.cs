@@ -23,7 +23,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
     {
         application = Application;
         addIn = (SE.ISEAddInEx)AddInInstance;
-        addIn.GuiVersion = 7;
+        addIn.GuiVersion = 8;
         addIn.Description = "\nMechCue";
         var container = (IConnectionPointContainer)addIn.AddInEvents;
         var eventsId = typeof(SE.ISEAddInEvents).GUID;
@@ -37,20 +37,20 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
         if (!string.Equals(EnvCatID, AssemblyEnvironment, StringComparison.OrdinalIgnoreCase) || addIn == null || !configured.Add(EnvCatID)) return;
         try
         {
-            foreach (var action in Enum.GetValues<HostAction>())
+            foreach (var action in HostCommands.RibbonActions)
             {
                 int resource=101+10*((int)action-1);
                 string commandName=typeof(TimeChartAddIn).GUID.ToString("B") + "_" + (int)action + "\n" + Caption(action) + "\n" + Hint(action) + "\n" + Caption(action);
                 Array names = new[] { commandName };
                 Array ids = new[] { (int)action };
-                addIn.SetAddInInfoEx(typeof(TimeChartAddIn).Assembly.Location, EnvCatID, "MechCue", resource, resource+1, resource+2, resource+3, 1, ref names, ref ids);
+                addIn.SetAddInInfoEx(typeof(TimeChartAddIn).Assembly.Location, EnvCatID, "MechCue\n" + HostCommands.Group(action), resource, resource+1, resource+2, resource+3, 1, ref names, ref ids);
                 int runtimeId = (int)ids.GetValue(0)!;
                 runtimeCommands[runtimeId] = action;
                 Log($"Command {action}: runtime ID {runtimeId}, firstTime={bFirstTime}");
                 if (bFirstTime)
                 {
-                    var button = addIn.AddCommandBarButton(EnvCatID, "MechCue", (int)action);
-                    ((SE.ICommandButtonStyle)button).Style = 5;
+                    var button = addIn.AddCommandBarButton(EnvCatID, "MechCue\n" + HostCommands.Group(action), (int)action);
+                    ((SE.ICommandButtonStyle)button).Style = HostCommands.IsToggle(action) ? 7 : action == HostAction.Play ? 3 : 5;
                     if (Marshal.IsComObject(button)) Marshal.ReleaseComObject(button);
                 }
             }
@@ -81,13 +81,25 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
         if(runtimeCommands.TryGetValue(id,out action))return true;
         action=(HostAction)id;return Enum.IsDefined(action);
     }
-    static string Caption(HostAction action) => UiText.Text(action switch { HostAction.Open => "タイムチャート", HostAction.Play => "再生", HostAction.Stop => "停止", HostAction.Maximize => "最大化", HostAction.Minimize => "最小化", HostAction.Compact => "最小表示", _ => "CAD保存" });
-    static string Hint(HostAction action) => UiText.Text(action switch { HostAction.Open => "タイムチャートを開きます。", HostAction.Play => "現在のCAD反映設定で再生します。", HostAction.Stop => "再生を停止します。", HostAction.Maximize => "MechCueの画面を最大化します。", HostAction.Minimize => "MechCueの画面を最小化します。", HostAction.Compact => "編集画面と最小表示を切り替えます。", _ => "設定をアセンブリへ保存します。" });
+    static string Caption(HostAction action) => HostCommands.Caption(action);
+    static string Hint(HostAction action) => HostCommands.Hint(action);
     public void OnCommandHelp(int hFrameWnd, int HelpCommandID, int CommandID) { }
     public void OnCommandUpdateUI(int CommandID, ref int CommandFlags, out string MenuItemText, ref int BitmapID)
     {
-        MenuItemText = TryAction(CommandID,out var action) ? Caption(action) : "MechCue";
-        // Solid Edge's default command state is retained.
+        if (!TryAction(CommandID, out var action)) { MenuItemText = "MechCue"; return; }
+        MenuItemText = Caption(action);
+        // Native flag values verified against Solid Edge 2026 SECommandActivation.
+        CommandFlags = 1 | 4 | 16;
+        BitmapID = 101 + 10 * ((int)action - 1);
+        if (chart is { IsDisposed: false })
+        {
+            if (chart.IsHostActionChecked(action)) CommandFlags |= 2;
+            if (action == HostAction.Play)
+            {
+                MenuItemText = UiText.IsJapanese ? (chart.IsPlaying ? "一時停止" : "再生") : (chart.IsPlaying ? "Pause" : "Play");
+                if (chart.IsPlaying) BitmapID = 451;
+            }
+        }
     }
     public void OnDisconnection(SE.SeDisconnectMode DisconnectMode)
     {

@@ -59,7 +59,7 @@ static class BitmapResources
         if (module == IntPtr.Zero) throw new Exception("Cannot load add-in bitmap resources");
         try
         {
-            foreach (int command in Enumerable.Range(0,7))
+            foreach (int command in Enumerable.Range(0,Enum.GetValues<MechCue.HostAction>().Length+1))
             foreach (var (id, size) in new[] { (101+command*10,16), (102+command*10,32), (103+command*10,16), (104+command*10,32) })
             {
                 var resource = FindResource(module, new IntPtr(id), new IntPtr(2));
@@ -70,6 +70,6 @@ static class BitmapResources
             }
         }
         finally { FreeLibrary(module); }
-        Console.WriteLine("PASS: command bitmap resources 101-104, seven individual command icon sets, medium/large color and monochrome");
+        Console.WriteLine("PASS: command bitmap resources 101-104, all individual command icon sets, medium/large color and monochrome");
     }
 }

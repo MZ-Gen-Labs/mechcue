@@ -113,5 +113,20 @@
     "表読込",
     "CSV・Excelを読み込みます。接続中は同じIDの駆動先を保持します。",
     "Import CSV or Excel; retain matching target assignments when connected."
+  ],
+  "パネル非表示": [
+    "−",
+    "このパネルを隠します。「表示」メニューから復元できます。",
+    "Hide this panel; restore it from the View menu."
+  ],
+  "データ ▾": [
+    "データ ▾",
+    "CAD保存、JSON、CSV・Excelの操作を開きます。",
+    "Open CAD save, JSON and CSV/Excel actions."
+  ],
+  "表示 ▾": [
+    "表示 ▾",
+    "機構一覧・設定・数値編集パネルの表示を切り替えます。",
+    "Show or hide Tracks, Settings and Keyframes panels."
   ]
 }

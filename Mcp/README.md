@@ -10,7 +10,7 @@ MechCueをAIから操作するローカルMCPサーバーです。独立版・�
 4. 使用するAIアプリのローカルMCP（stdio）設定に `MechCue.Mcp.exe` のフルパスを登録します。設定例は `mcp-config.example.json` です。設定の形式はAIアプリにより異なります。設定例はインストーラーの標準配置先を使っています。配置先を変えた場合やZIPを使う場合は `command` を実際のパスに変更してください。
 5. Solid Edgeの直接読み取り・部品選択も使う場合は起動引数 `--allow-solidedge` を追加します。MechCueのグラフ操作だけなら引数は不要です。
 
-Windows x64、.NET 8 Desktop Runtime x64が必要です。Solid Edge用の操作には起動中のSolid Edgeが必要です。同じユーザーで実行してください。MechCue側の「AI接続」は毎回オフから始まります。最小表示にする前に有効にしてください。
+Windows x64、.NET 8 Desktop Runtime x64が必要です。Solid Edge用の操作には起動中のSolid Edgeが必要です。同じユーザーで実行してください。alpha.20以降、MechCue側の「AI接続」は標準でオンです。不要な場合はオフにできます。
 
 MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリックして起動する必要はありません。通信は標準入出力、ログは標準エラーに出します。実行中にインターネット接続を必要とするのは利用するAIアプリ側で、MCPサーバー自体はローカル通信のみです。
 

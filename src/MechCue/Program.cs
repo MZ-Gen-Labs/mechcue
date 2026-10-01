@@ -108,24 +108,23 @@ public partial class MainForm : Form
         Width = 1440; Height = 900; MinimumSize = new(1180, 740);
         BackColor = Color.FromArgb(239, 243, 248);
         Font = new Font("Yu Gothic UI", 10);
-        top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 125, Padding = new Padding(10), BackColor = Color.White };
+        top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10), BackColor = Color.White };
         Add(top, "Solid Edgeに接続", ConnectDocument);
-        Add(top, "基準状態に戻す", () => { live.Checked = false; timer.Stop(); bridge.Restore(); status.Text = "接続時の基準状態に戻しました。"; });
-        Add(top, "切断", () => { live.Checked = false; timer.Stop(); StageOnClose(); status.Text = bridge.Disconnect() ?? "切断しました。グラフは保持しています。"; target.Items.Clear(); });
-        Add(top, "開く", LoadFile); Add(top, "保存", SaveFile); Add(top, "CADに保存", SaveToDocument); Add(top, "表を書き出し", ExportTable); Add(top, "表を読み込み", ImportTable);
+        Add(top, "基準状態に戻す", () => { live.Checked = false; PausePlayback(); bridge.Restore(); status.Text = "接続時の基準状態に戻しました。"; });
+        Add(top, "切断", () => { live.Checked = false; PausePlayback(); StageOnClose(); status.Text = bridge.Disconnect() ?? "切断しました。グラフは保持しています。"; target.Items.Clear(); });
+        ConfigureDataMenu();
         top.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true }); top.Controls.Add(time);
-        Add(top, "▶ 再生", StartPlayback);
-        Add(top, "停止", () => timer.Stop());
+        Add(top, "▶ 再生", TogglePlayback);
         top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live); top.Controls.Add(collision); top.Controls.Add(overlay);
         ConfigureModes(top);
         Add(top, "使い方", ShowQuickStart);
         Add(top, "最小表示", () => SetCompact(true));
-        split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 230 };
+        split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 230, SplitterWidth = 8 };
         split.Panel1.Controls.Add(trackList);
         var trackButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 42 };
         Add(trackButtons, "＋ 機構を追加", () => { Commit(); tracks.Add(new() { Name = $"機構 {tracks.Count + 1}" }); RefreshTracks(tracks.Count - 1); MarkDocumentSettingsChanged(); });
         split.Panel1.Controls.Add(trackButtons);
-        split.Panel1.Controls.Add(Heading("機構一覧"));
+        split.Panel1.Controls.Add(PanelHeading("機構一覧", HostAction.TracksPanel));
         trackList.BorderStyle = BorderStyle.None; trackList.ItemHeight = 32; trackList.IntegralHeight = false;
         var editor = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = Color.White };
         AddField(editor, "機構名", name); AddField(editor, "駆動方法", kind); AddField(editor, "移動方向・回転軸", axis);
@@ -141,33 +140,35 @@ public partial class MainForm : Form
         Add(editor, "駆動先を登録・変更", () =>
         {
             if (target.SelectedItem is not Target t) throw new InvalidOperationException("駆動先を選んでください。");
-            timer.Stop(); live.Checked = false; Commit(); bridge.Bind(Current, t); lastCheckedTime = null; MarkDocumentSettingsChanged(); bridge.ClearSelection();
+            PausePlayback(); live.Checked = false; Commit(); bridge.Bind(Current, t); lastCheckedTime = null; MarkDocumentSettingsChanged(); bridge.ClearSelection();
             PopulateTargets(); status.Text = $"登録：{Current.Name} → {t.Label}。固定拘束は直接駆動の登録中だけ抑制し、解除・切断時に復元します。";
         });
         Add(editor, "この機構の割り当てを解除", () =>
         {
-            timer.Stop(); live.Checked = false; bridge.Unbind(Current); MarkDocumentSettingsChanged();
+            PausePlayback(); live.Checked = false; bridge.Unbind(Current); MarkDocumentSettingsChanged();
             PopulateTargets(); status.Text = "この機構を基準状態に戻して解除しました。接続・他の登録・グラフは保持しています。";
         });
         editor.Controls.Add(axisHelp);
         ConfigurePreset(editor);
-        vertical = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 360 };
+        vertical = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 360, SplitterWidth = 8 };
         vertical.Panel1.Controls.Add(plot); vertical.Panel1.Controls.Add(legend); vertical.Panel2.Controls.Add(grid);
         vertical.Panel1.Controls.Add(Heading("タイムチャート"));
-        vertical.Panel2.Controls.Add(Heading("選択機構の点を数値で編集"));
-        workspace = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel2 };
-        workspace.Panel1.Controls.Add(vertical); workspace.Panel2.Controls.Add(editor); workspace.Panel2.Controls.Add(Heading("選択中の設定"));
+        vertical.Panel2.Controls.Add(PanelHeading("選択機構の点を数値で編集", HostAction.PointsPanel));
+        workspace = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel2, SplitterWidth = 8 };
+        ConfigureEditorWidth(editor);
+        workspace.Panel1.Controls.Add(vertical); workspace.Panel2.Controls.Add(editor); workspace.Panel2.Controls.Add(PanelHeading("選択中の設定", HostAction.SettingsPanel));
         split.Panel2.Controls.Add(workspace);
         Add(compactBar, "編集画面へ戻る", () => SetCompact(false));
-        Add(compactBar, "▶ 再生", StartPlayback);
-        Add(compactBar, "停止", () => timer.Stop());
+        Add(compactBar, "▶ 再生", TogglePlayback);
         Controls.Add(split); Controls.Add(top); Controls.Add(compactBar); Controls.Add(connection); Controls.Add(status);
+        ConfigureViewMenu();
+        split.Panel1MinSize = 100; workspace.Panel2MinSize = 150; vertical.Panel2MinSize = 60;
         kind.Items.AddRange(["距離拘束", "角度拘束", "部品移動", "部品回転", "部品座標"]); axis.Items.AddRange(["X", "Y", "Z"]);
         grid.Columns.Add("Time", "時間 [s]"); grid.Columns.Add("Value", "変位 [mm] / 角度 [°]");
         grid.Columns[0].DefaultCellStyle.Format = "0.####";
         grid.Columns[1].DefaultCellStyle.Format = "0.####";
         plot.Overlay = overlay.Checked;
-        overlay.CheckedChanged += (_, _) => { timer.Stop(); plot.Overlay = overlay.Checked; plot.Invalidate(); };
+        overlay.CheckedChanged += (_, _) => { PausePlayback(); plot.Overlay = overlay.Checked; plot.Invalidate(); };
         trackList.ItemCheck += (_, e) =>
         {
             if (loading || e.Index >= tracks.Count) return;
@@ -177,11 +178,11 @@ public partial class MainForm : Form
         trackList.SelectedIndexChanged += (_, _) => LoadTrack();
         kind.SelectedIndexChanged += (_, _) => { UpdateAxisHelp(); if (!loading) Guard(PopulateTargets); };
         time.ValueChanged += (_, _) => Guard(() => { plot.Time = (double)time.Value; plot.Invalidate(); if (live.Checked) Drive(plot.Time); });
-        plot.Seek = t => { timer.Stop(); time.Value = (decimal)Math.Clamp(t, 0, (double)time.Maximum); };
+        plot.Seek = t => { PausePlayback(); time.Value = (decimal)Math.Clamp(t, 0, (double)time.Maximum); };
         plot.EditStarting = index =>
         {
             bool ready = false;
-            Guard(() => { timer.Stop(); Commit(); trackList.SelectedIndex = index; Remember(Current); ready = true; });
+            Guard(() => { PausePlayback(); Commit(); trackList.SelectedIndex = index; Remember(Current); ready = true; });
             return ready;
         };
         plot.Edited = index => Guard(() =>
@@ -191,11 +192,11 @@ public partial class MainForm : Form
             status.Text = "点を変更しました。下の表にも反映済みです。";
         });
         live.CheckedChanged += (_, _) => { if (live.Checked) Guard(() => { Commit(); Drive((double)time.Value); }); UpdateConnection(); };
-        collision.CheckedChanged += (_, _) => { timer.Stop(); lastCheckedTime = null; };
-        timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; if (t >= end) { if (loop.Checked && end > 0) t %= end; else { t = end; timer.Stop(); } } time.Value = (decimal)t; });
+        collision.CheckedChanged += (_, _) => { PausePlayback(); lastCheckedTime = null; };
+        timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; if (t >= end) { if (loop.Checked && end > 0) t %= end; else { t = end; PausePlayback(); } } time.Value = (decimal)t; });
         FormClosing += (_, e) =>
         {
-            timer.Stop(); live.Checked = false;
+            PausePlayback(); live.Checked = false;
             try { StageOnClose(); } catch (Exception ex) { if (MessageBox.Show(this, UiText.Text("設定を保存できませんでした：") + (ex.InnerException ?? ex).Message + "\n" + UiText.Text("保存せずに閉じますか？"), "MechCue", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) { e.Cancel = true; return; } }
             string? warning = bridge.Disconnect();
             if (warning != null) MessageBox.Show(this, UiText.Text(warning), UiText.Text("切断"), MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -227,7 +228,7 @@ public partial class MainForm : Form
     public void ShutdownFromHost()
     {
         if (IsDisposed) return;
-        timer.Stop(); live.Checked = false;
+        PausePlayback(); live.Checked = false;
         try { StageOnClose(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine(ex); }
         bridge.Disconnect(); Dispose();
     }
@@ -235,7 +236,7 @@ public partial class MainForm : Form
     {
         var b = new Button { Text = UiText.CommandLabel(label), Tag = label, Image = CommandIcons.Create(label), TextImageRelation = TextImageRelation.ImageBeforeText, AutoSize = true }; commandHints.SetToolTip(b, UiText.CommandHint(label)); b.Click += (_, _) => Guard(action); b.Disposed += (_, _) => b.Image?.Dispose(); parent.Controls.Add(b);
     }
-    void Guard(Action action) { try { action(); } catch (Exception ex) { timer.Stop(); live.Checked = false; Error(ex); } finally { if (!bridge.Connected) target.Items.Clear(); UpdateConnection(); } }
+    void Guard(Action action) { try { action(); } catch (Exception ex) { PausePlayback(); live.Checked = false; Error(ex); } finally { if (!bridge.Connected) target.Items.Clear(); UpdateConnection(); } }
     void UpdateConnection()
     {
         string? bound = bridge.BoundLabel(Current);
@@ -290,7 +291,7 @@ public partial class MainForm : Form
         if (loaded.Count == 0) throw new InvalidOperationException("グラフがありません。");
         if (loaded.Any(t => t == null || t.Id == Guid.Empty) || loaded.Select(t => t.Id).Distinct().Count() != loaded.Count) throw new InvalidDataException("Invalid track IDs");
         foreach (var t in loaded) { t.Validate(); if (!kind.Items.Contains(t.Kind) || !axis.Items.Contains(t.Axis)) throw new InvalidOperationException("駆動方法または軸が不正です。"); }
-        timer.Stop(); history.Clear(); tracks.Clear(); tracks.AddRange(loaded); RefreshTracks(0);
+        PausePlayback(); history.Clear(); tracks.Clear(); tracks.AddRange(loaded); RefreshTracks(0);
     }
 }
 class Plot : Control

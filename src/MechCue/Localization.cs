@@ -84,14 +84,14 @@ public partial class MainForm
         if (!sourceText.TryGetValue(control, out var original)) return;
         bool previous = translating; translating = true;
         control.Text = control is Button && control.Tag is string key ? UiText.CommandLabel(key) : UiText.Text(original);
-        if (control.Parent == compactBar && control is Button button)
+        if ((control.Parent == compactBar || control.Parent == top) && control is Button button)
         {
             if (Equals(button.Tag, "▶ 再生") || Equals(button.Tag, "停止")) button.Text = "";
             else if (Equals(button.Tag, "編集画面へ戻る")) button.Text = UiText.IsJapanese ? "戻る" : "Back";
         }
-        if (compact && control == live) control.Text = UiText.IsJapanese ? "反映" : "Apply";
-        if (compact && control == collision) control.Text = UiText.IsJapanese ? "干渉" : "Collision";
-        if (compact && control == loop) control.Text = UiText.IsJapanese ? "反復" : "Loop";
+        if (control == live) control.Text = UiText.IsJapanese ? "反映" : "Apply";
+        if (control == collision) control.Text = UiText.IsJapanese ? "干渉" : "Collision";
+        if (control == loop) control.Text = UiText.IsJapanese ? "反復" : "Loop";
         if (control is Button) commandHints.SetToolTip(control, UiText.CommandHint(control.Tag as string ?? original));
         translating = previous;
     }
@@ -112,6 +112,8 @@ public partial class MainForm
             }
         }
         finally { loading = previousLoading; }
+        RefreshMenus();
+        RefreshPlayback();
         plot.RefreshLanguage();
         if (compact) FitCompactBar(); plot.Invalidate();
     }
@@ -120,6 +122,6 @@ public partial class MainForm
         Commit();
         double end = tracks.Max(t => t.Points[^1].Time);
         if ((double)time.Value >= end - 0.0005) time.Value = (decimal)tracks.Min(t => t.Points[0].Time);
-        playStart = (double)time.Value; watch.Restart(); timer.Start();
+        playStart = (double)time.Value; watch.Restart(); timer.Start(); RefreshPlayback();
     }
 }

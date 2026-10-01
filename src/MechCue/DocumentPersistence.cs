@@ -183,7 +183,7 @@ public partial class MainForm
     }
     void ConnectDocument()
     {
-        timer.Stop(); live.Checked = false;
+        PausePlayback(); live.Checked = false;
         documentReady = false;
         string title = bridge.Connect();
         status.Text = "接続：" + title;
@@ -191,7 +191,7 @@ public partial class MainForm
         if (json != null) RestoreDocumentSettings(DocumentSettings.Parse(json));
         bridge.AttachDocumentEvents(BeforeDocumentSave, () =>
         {
-            timer.Stop(); live.Checked = false;
+            PausePlayback(); live.Checked = false;
             if (hostedDocumentWindow) ShutdownFromHost();
         }, () => { if (hostedDocumentWindow && !IsDisposed) ShutdownFromHost(); });
         documentReady = true; documentSettingsDirty = false;
@@ -200,7 +200,7 @@ public partial class MainForm
     }
     void RestoreDocumentSettings(DocumentSettings settings)
     {
-        timer.Stop(); live.Checked = false; history.Clear(); restorationWarnings.Clear();
+        PausePlayback(); live.Checked = false; history.Clear(); restorationWarnings.Clear();
         tracks.Clear(); tracks.AddRange(settings.Tracks.Select(entry => entry.Track));
         plot.Hidden.Clear(); foreach (var entry in settings.Tracks.Where(entry => entry.Hidden)) plot.Hidden.Add(entry.Track);
         speed.Value = settings.Speed; dragStep.Value = settings.DragStep; loop.Checked = settings.Loop; collision.Checked = settings.Collision; overlay.Checked = settings.Overlay;
@@ -229,13 +229,13 @@ public partial class MainForm
     void BeforeDocumentSave()
     {
         if (writingDocument || !documentReady || !bridge.Connected) return;
-        try { timer.Stop(); live.Checked = false; WriteDocumentSettings(); status.Text = "MechCueの設定をアセンブリへ反映しました。"; }
+        try { PausePlayback(); live.Checked = false; WriteDocumentSettings(); status.Text = "MechCueの設定をアセンブリへ反映しました。"; }
         catch (Exception ex) { status.Text = "MechCue設定の保存に失敗しました：" + (ex.InnerException ?? ex).Message; MessageBox.Show(this, UiText.Text(status.Text), "MechCue", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
     void SaveToDocument()
     {
         if (!documentReady) throw new InvalidOperationException("先にSolid Edgeに接続してください。");
-        timer.Stop(); live.Checked = false; WriteDocumentSettings(); bridge.SaveDocument();
+        PausePlayback(); live.Checked = false; WriteDocumentSettings(); bridge.SaveDocument();
         status.Text = "グラフと駆動先をアセンブリに保存しました。";
     }
     void StageOnClose()

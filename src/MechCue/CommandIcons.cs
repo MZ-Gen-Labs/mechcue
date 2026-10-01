@@ -3,7 +3,7 @@ static class CommandIcons
 {
     public static Image? Create(string command)
     {
-        if (command is not ("Solid Edgeに接続" or "切断" or "開く" or "保存" or "▶ 再生" or "停止" or "元に戻す" or "最小表示" or "編集画面へ戻る" or "基準状態に戻す")) return null;
+        if (command is not ("Solid Edgeに接続" or "切断" or "開く" or "保存" or "▶ 再生" or "一時停止" or "停止" or "元に戻す" or "最小表示" or "編集画面へ戻る" or "基準状態に戻す")) return null;
         var bitmap = new Bitmap(18, 18);
         using var g = Graphics.FromImage(bitmap);
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
@@ -12,6 +12,7 @@ static class CommandIcons
         switch (command)
         {
             case "▶ 再生": g.FillPolygon(brush, new Point[] {new(5,3),new(15,9),new(5,15)}); break;
+            case "一時停止": g.FillRectangle(brush, 4,3,4,12); g.FillRectangle(brush, 11,3,4,12); break;
             case "停止": g.FillRectangle(brush, 4,4,10,10); break;
             case "保存": g.DrawRectangle(pen,3,2,12,14); g.DrawRectangle(pen,5,2,7,5); g.DrawRectangle(pen,5,10,8,6); break;
             case "開く": g.DrawLines(pen,new Point[] {new(2,14),new(2,4),new(7,4),new(9,6),new(15,6)}); g.DrawPolygon(pen,new Point[] {new(2,14),new(5,7),new(16,7),new(13,14)}); break;
