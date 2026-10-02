@@ -24,8 +24,10 @@ public static partial class SelfTest
         TestReassignment();
         TestCoordinateAndCollision();
         TestNativeInterferenceArray();
+        TestInspectionResults();
         TestDocumentPersistence();
         TestChartTables();
+        TestVideoExport();
         var preset = MotionPreset.OutAndBack(10, 50, 2, 1);
         var presetTrack = new Track { Points = preset };
         Assert(presetTrack.At(0) == 10 && presetTrack.At(2.5) == 60 && presetTrack.At(5) == 10, "Preset origin, hold, and return");
@@ -52,6 +54,7 @@ public static partial class SelfTest
     public class FakeDocument
     {
         public string Name => "Test.asm";
+        public string FullName => "C:/Test.asm";
         public bool ReadOnly { get; set; }
         public bool Dirty { get; set; }
         public string StoragePath { get; } = Path.Combine(AppContext.BaseDirectory, "fake-document-" + Guid.NewGuid() + ".storage");
@@ -117,7 +120,14 @@ public static partial class SelfTest
         public FakeWindow ActiveWindow { get; } = new();
     }
     public class FakeWindow { public FakeView View { get; } = new(); }
-    public class FakeView { public void Update() { } }
+    public class FakeView {
+        public Action? Capture;
+        public void Update() { }
+        public void SaveAsImage(string path,object width,object height,[System.Runtime.InteropServices.Optional] object? style,object resolution,object depth,object quality,object invert) {
+            Capture?.Invoke();using var image=new Bitmap(Convert.ToInt32(width),Convert.ToInt32(height));
+            using(var g=Graphics.FromImage(image))g.Clear(Color.CornflowerBlue);image.Save(path,System.Drawing.Imaging.ImageFormat.Jpeg);
+        }
+    }
     static void TestCoordinateAndCollision()
     {
         void Assert(bool ok, string message) { if (!ok) throw new Exception(message); }

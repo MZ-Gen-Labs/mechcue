@@ -52,8 +52,48 @@ MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリ
 | solidedge_list_parts | アセンブリのトップレベル部品とXYZ座標（mm） |
 | solidedge_list_variables | 変数テーブルの名前、値、式、単位種別 |
 | solidedge_select_part | トップレベル部品を選択・強調 |
+| solidedge_get_assembly_tree | 再帰構成、親子パス、参照キー、ローカル／世界行列 |
+| solidedge_get_view | 現在の3Dカメラを取得 |
+| solidedge_set_view | フィット、表示方向、ズーム、更新 |
+| solidedge_export_view_image | 現在の3Dビューを新規JPEGへ出力 |
+| solidedge_check_interference | 現在姿勢の全体／指定２群間の静的干渉判定 |
+| solidedge_export_interference_report | 部品名、重心、干渉位置・体積のネイティブレポート |
+| solidedge_get_assembly_tree | 再帰構成、親子パス、参照キー、ローカル／世界行列 |
+| solidedge_get_view | 現在の3Dカメラを取得 |
+| solidedge_set_view | フィット、表示方向、ズーム、更新 |
+| solidedge_export_view_image | 現在の3Dビューを新規JPEGへ出力 |
+| solidedge_check_interference | 現在姿勢の全体／指定２群間の静的干渉判定 |
+| solidedge_export_interference_report | 部品名、重心、干渉位置・体積のネイティブレポート |
 
 部品選択では文書取得結果の `fullName` を `expectedDocument` に必ず指定します。アクティブ文書が変わったら拒否します。部品・変数の読み取りでも文書指定を推奨します。選択は既存の選択を置き換え、形状・位置は変更しません。
+
+### 構成・表示・干渉の検討
+
+追加６ツールはすべて `expectedDocument` を必須とし、文書切り替わりを拒否します。構成取得、カメラ取得、静的干渉は読み取りモードで利用可能。表示変更とファイル出力には「作成・編集も許可」が必要です。独立版MechCueの起動やアドインのAI接続は必要ありません。
+
+構成取得の `Path` は `/1/3` のような現在の1始まりの番号パス。並び替えで変わるため永続IDには使いません。`KeyPath` は各親のネイティブ参照キーを連結した識別子です。取得できないときはnullと警告を返します。親子関係はパスの接頭辞、行列は列優先4×4、平行移動はmです。上限到達・読取失敗・循環は `truncated` と警告で明示。剛体サブアセンブリの配置を合成し、可動サブアセンブリの上位文書による位置上書きは未対応です。拘束・抑制情報は今後の追加対象です。
+
+`solidedge_set_view` の既定値は現在方向をフィットして更新。`orientation` はcurrent/front/back/top/bottom/right/left/isometric、名前付き方向は平行投影に設定します。frontは-Y側、topは+Z側、rightは+X側から見ます。`zoomFactor` は0.1～10。画像は現在の表示を64～4096pxのJPEGへ出力し、自動フィットや上書きは行いません。これらは3D文書専用です。
+
+干渉は `set1Json` が空なら全体を自己比較。たとえば `set1Json="[1]", set2Json="[5]"` は指定した２群の間だけを比較し、各群内部の干渉を含みません。重複・共通番号・範囲外番号は拒否します。Solid Edgeの[CheckInterference API](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgeAssembly~AssemblyDocument~CheckInterference.html)でサブアセンブリを内部部品へ展開し、比較方法を明示して実行します。完了状態と件数を返し、不明・未完了をclearにはしません。現在の静止姿勢のみで、経路・掃引や無視ペア定義は未対応です。
+
+入れ子のReferenceについてCOMが部品ペア配列を返さない場合も、件数は取得できることがあります。その場合 `pairDetailsComplete=false` を返し、部品名は推測しません。レポート出力で部品名・重心・干渉位置・体積を確認できます。レポートは新規の絶対 `.txt` パスを指定し、ネイティブ形式の本文も最大65536文字まで返します。単位は本文を参照。干渉形状部品は生成しません。
+
+`scripts/Test-McpInspection.py <検討モデルのフォルダー> <ビルドしたMCP.exe>` は専用４軸モデルで構成・参照キー・表示・画像・全10組の直接比較・レポート・文書ガードを検証します。表示変更と新規出力だけを行い、部品姿勢・形状・CAD保存状態が不変であることも確認します。
+
+### 構成・表示・干渉の検討
+
+追加６ツールはすべて `expectedDocument` を必須とし、文書切り替わりを拒否します。構成取得、カメラ取得、静的干渉は読み取りモードで利用可能。表示変更とファイル出力には「作成・編集も許可」が必要です。独立版MechCueの起動やアドインのAI接続は必要ありません。
+
+構成取得の `Path` は `/1/3` のような現在の1始まりの番号パス。並び替えで変わるため永続IDには使いません。`KeyPath` は各親のネイティブ参照キーを連結した識別子です。取得できないときはnullと警告を返します。親子関係はパスの接頭辞、行列は列優先4×4、平行移動はmです。上限到達・読取失敗・循環は `truncated` と警告で明示。剛体サブアセンブリの配置を合成し、可動サブアセンブリの上位文書による位置上書きは未対応です。拘束・抑制情報は今後の追加対象です。
+
+`solidedge_set_view` の既定値は現在方向をフィットして更新。`orientation` はcurrent/front/back/top/bottom/right/left/isometric、名前付き方向は平行投影に設定します。frontは-Y側、topは+Z側、rightは+X側から見ます。`zoomFactor` は0.1～10。画像は現在の表示を64～4096pxのJPEGへ出力し、自動フィットや上書きは行いません。これらは3D文書専用です。
+
+干渉は `set1Json` が空なら全体を自己比較。たとえば `set1Json="[1]", set2Json="[5]"` は指定した２群の間だけを比較し、各群内部の干渉を含みません。重複・共通番号・範囲外番号は拒否します。Solid Edgeの[CheckInterference API](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgeAssembly~AssemblyDocument~CheckInterference.html)でサブアセンブリを内部部品へ展開し、比較方法を明示して実行します。完了状態と件数を返し、不明・未完了をclearにはしません。現在の静止姿勢のみで、経路・掃引や無視ペア定義は未対応です。
+
+入れ子のReferenceについてCOMが部品ペア配列を返さない場合も、件数は取得できることがあります。その場合 `pairDetailsComplete=false` を返し、部品名は推測しません。レポート出力で部品名・重心・干渉位置・体積を確認できます。レポートは新規の絶対 `.txt` パスを指定し、ネイティブ形式の本文も最大65536文字まで返します。単位は本文を参照。干渉形状部品は生成しません。
+
+`scripts/Test-McpInspection.py <検討モデルのフォルダー> <ビルドしたMCP.exe>` は専用４軸モデルで構成・参照キー・表示・画像・全10組の直接比較・レポート・文書ガードを検証します。表示変更と新規出力だけを行い、部品姿勢・形状・CAD保存状態が不変であることも確認します。
 
 変数テーブルの値はSolid Edge内部単位です。距離はメートル、角度はラジアンで、MechCueのmm・度とは異なります。取得できないプロパティがある行は `error` を返します。0.1.0の正式版は読み取り・選択までです。0.2.0系では以下の専用ツールを追加しています。任意のコード実行は公開しません。
 

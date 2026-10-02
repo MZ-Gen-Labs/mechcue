@@ -31,6 +31,16 @@ public static class MechCueTools
     public static Task<string> mechcue_rename_pattern(string name,string patternId="",string patternName="",string? description=null,string sessionId="",CancellationToken cancellationToken=default)=>Send("rename_pattern",new{name,patternId,patternName,description},sessionId,cancellationToken);
     [McpServerTool(Destructive=true),Description("Delete a named motion pattern by ID or exact name; defaults to active pattern. Cannot delete the last pattern. If deleting the active pattern, stops playback, disables reflection and selects another pattern. Shared CAD bindings remain.")]
     public static Task<string> mechcue_delete_pattern(string patternId="",string patternName="",string sessionId="",CancellationToken cancellationToken=default)=>Send("delete_pattern",new{patternId,patternName},sessionId,cancellationToken);
+    [McpServerTool,Description("Start an asynchronous video export of the active motion pattern through the connected Solid Edge view (MJPEG AVI, no audio). Requires Creation/edit mode, writable active assembly and assigned chart targets. Explicitly moves CAD even if reflection is off; pauses playback and restores original CAD pose/cursor/reflection on finish, failure or cancel. Absolute new .avi path in an existing folder. endTime=-1 uses chart end. 1–30 fps; at most 300 seconds / 1 GiB; 320–1920 by 240–1080 pixels. checkInterference stops on collision/unknown check. Returns jobId immediately; poll mechcue_get_video_export. Does not save CAD. MechCue editing is locked until finished. Other Solid Edge/MCP editing must wait.")]
+    public static Task<string> mechcue_export_video(string outputPath,double startTime=0,double endTime=-1,int fps=15,int width=1280,int height=720,bool checkInterference=false,string sessionId="",CancellationToken cancellationToken=default)
+    {
+        McpAccessSettings.EnsureAllowed(true);
+        return Send("export_video",new{outputPath,startTime,endTime,fps,width,height,checkInterference},sessionId,cancellationToken);
+    }
+    [McpServerTool(ReadOnly=true),Description("Read an asynchronous video export's progress, state (running/completed/failed/cancelled), frame counts, output path and errors. Supply jobId and the same MechCue sessionId. Only the latest job is retained; completed means final AVI and pose restoration succeeded.")]
+    public static Task<string> mechcue_get_video_export(string jobId,string sessionId="",CancellationToken cancellationToken=default)=>Send("get_video_export",new{jobId},sessionId,cancellationToken);
+    [McpServerTool,Description("Cancel a video export and restore original CAD pose/cursor/reflection. Deletes incomplete video; existing files are never overwritten. Supply jobId and the same sessionId.")]
+    public static Task<string> mechcue_cancel_video_export(string jobId,string sessionId="",CancellationToken cancellationToken=default)=>Send("cancel_video_export",new{jobId},sessionId,cancellationToken);
     static async Task<string> Send(string method,object args,string sessionId,CancellationToken cancellationToken)
     {
         var sessions=mechcue_list_sessions() is List<AiSession> found ? found : new List<AiSession>();

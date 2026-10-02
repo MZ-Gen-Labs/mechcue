@@ -211,12 +211,12 @@ public partial class MainForm : Form
             ApplyPreview(); MarkDocumentSettingsChanged();
             status.Text = "点を変更しました。下の表にも反映済みです。";
         });
-        live.CheckedChanged += (_, _) => { if (live.Checked) Guard(() => { Commit(); Drive((double)time.Value); }); UpdateConnection(); };
+        live.CheckedChanged += (_, _) => { if (live.Checked && !loading) Guard(() => { Commit(); Drive((double)time.Value); }); UpdateConnection(); };
         collision.CheckedChanged += (_, _) => { PausePlayback(); lastCheckedTime = null; };
         timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; if (t >= end) { if (loop.Checked && end > 0) t %= end; else { t = end; PausePlayback(); } } time.Value = (decimal)t; });
         FormClosing += (_, e) =>
         {
-            PausePlayback(); live.Checked = false;
+            CancelVideoExport(); PausePlayback(); live.Checked = false;
             try { StageOnClose(); } catch (Exception ex) { if (MessageBox.Show(this, UiText.Text("設定を保存できませんでした：") + (ex.InnerException ?? ex).Message + "\n" + UiText.Text("保存せずに閉じますか？"), "MechCue", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) { e.Cancel = true; return; } }
             string? warning = bridge.Disconnect();
             if (warning != null) MessageBox.Show(this, UiText.Text(warning), UiText.Text("切断"), MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -251,7 +251,7 @@ public partial class MainForm : Form
     public void ShutdownFromHost()
     {
         if (IsDisposed) return;
-        PausePlayback(); live.Checked = false;
+        CancelVideoExport(); PausePlayback(); live.Checked = false;
         try { StageOnClose(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine(ex); }
         bridge.Disconnect(); Dispose();
     }

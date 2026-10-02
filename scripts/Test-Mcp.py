@@ -44,11 +44,13 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==57,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==66,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
-    for name in ['solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
+    for name in ['mechcue_get_video_export','solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('57 tools and read-only annotations')
+    for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference']:
+        assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
+    checks.append('66 tools and read-only annotations')
     catalog=tool('solidedge_list_concept_templates')
     assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
@@ -67,6 +69,9 @@ try:
         ('solidedge_apply_simulation_material',{'expectedDocument':'unused','materialName':'Steel'}),
         ('solidedge_show_simulation_results',{'expectedDocument':'unused','studyNumber':1})]:tool(name,arguments,True)
     tool('solidedge_set_display_alerts',{'displayAlerts':False},True)
+    tool('solidedge_set_view',{'expectedDocument':'unused'},True)
+    tool('solidedge_export_view_image',{'expectedDocument':'unused','outputPath':'unused.jpg'},True)
+    tool('solidedge_export_interference_report',{'expectedDocument':'unused','reportPath':'unused.txt'},True)
     checks.append('CAD mutations and application alert changes disabled without explicit write flag')
     def mode(value):
         temp=settings_path.with_suffix('.tmp');temp.write_text(json.dumps({'schema':1,'mode':value}),encoding='utf-8');temp.replace(settings_path)
@@ -125,6 +130,10 @@ try:
     sid=own_session(host.pid);context={'sessionId':sid}
     tool('mechcue_import_concept_axes',context|{'manifestPath':'C:/__missing_concept__/mechcue-concept.json'},True)
     checks.append('Concept import into disconnected session rejected without touching CAD')
+    tool('mechcue_export_video',context|{'outputPath':str(pathlib.Path(settings_temp.name)/'video.avi')},True)
+    tool('mechcue_get_video_export',context|{'jobId':'unknown'},True)
+    tool('mechcue_cancel_video_export',context|{'jobId':'unknown'},True)
+    checks.append('Video export disconnected/unknown jobs rejected through MCP')
     original=tool('mechcue_get_state',context);assert len(original['tracks'])==3 and not original['connected']
     state=tool('mechcue_set_keyframe',context|{'trackNumber':1,'time':2,'value':100});assert state['tracks'][0]['points'][1]['value']==100
     state=tool('mechcue_set_keyframe',context|{'trackId':state['tracks'][0]['id'],'time':1,'value':75});assert any(p['time']==1 and p['value']==75 for p in state['tracks'][0]['points'])

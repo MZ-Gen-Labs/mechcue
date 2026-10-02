@@ -232,6 +232,7 @@ public partial class MainForm
     }
     void BeforeDocumentSave()
     {
+        CancelVideoExport();
         if (writingDocument || !documentReady || !bridge.Connected) return;
         try { PausePlayback(); live.Checked = false; WriteDocumentSettings(); status.Text = "MechCueの設定をアセンブリへ反映しました。"; }
         catch (Exception ex) { status.Text = "MechCue設定の保存に失敗しました：" + (ex.InnerException ?? ex).Message; MessageBox.Show(this, UiText.Text(status.Text), "MechCue", MessageBoxButtons.OK, MessageBoxIcon.Warning); }

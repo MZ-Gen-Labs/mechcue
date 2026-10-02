@@ -10,6 +10,7 @@ public partial class MainForm
 {
     public void ExecuteHostAction(HostAction action) => Guard(() =>
     {
+        if(videoExport?.Running==true){status.Text="Video export is running; wait or cancel through MCP.";return;}
         DiagnosticLog.Write("host-command", new { action = action.ToString(), layout = DiagnosticState() });
         switch(action)
         {

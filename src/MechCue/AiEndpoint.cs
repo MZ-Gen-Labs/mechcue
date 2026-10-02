@@ -54,7 +54,7 @@ public partial class MainForm
             aiEndpoint?.Dispose();aiEndpoint=null;
             if(aiAccess.Checked)aiEndpoint=new AiEndpoint(Text,DispatchAi);
         };
-        Disposed+=(_,_)=>{aiEndpoint?.Dispose();aiEndpoint=null;};
+        Disposed+=(_,_)=>{CancelVideoExport();aiEndpoint?.Dispose();aiEndpoint=null;};
         aiAccess.Checked = true;
     }
     bool aiExecuting;
@@ -88,6 +88,10 @@ public partial class MainForm
             int index=args.GetProperty("trackNumber").GetInt32();if(index<1 || index>tracks.Count)throw new ArgumentOutOfRangeException("trackNumber");return tracks[index-1];
         }
         if(method=="get_state")return AiState();
+        if(method=="get_video_export")return VideoStatus(args,false);
+        if(method=="cancel_video_export")return VideoStatus(args,true);
+        if(videoExport?.Running==true)throw new InvalidOperationException("Video export is running. Wait for completion or cancel it before editing or playing.");
+        if(method=="export_video")return StartVideoExport(args);
         if(method=="list_patterns") { StoreActivePattern(); return new { activePatternId=activePattern, patterns=patterns.Select(p=>new { id=p.Id,name=p.Name,description=p.Description,duration=p.Points.Values.Max(ps=>ps[^1].Time),speed=p.Speed,loop=p.Loop,collision=p.Collision }) }; }
         if(method is "switch_pattern" or "create_pattern" or "rename_pattern" or "delete_pattern") {
             EnsurePatterns();

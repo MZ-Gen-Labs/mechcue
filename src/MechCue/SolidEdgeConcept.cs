@@ -67,16 +67,16 @@ public sealed partial class Bridge
         if(new FileInfo(manifestPath).Length>1024*1024) throw new ArgumentException("Concept manifest exceeds 1 MB.");
         var model=JsonSerializer.Deserialize<ConceptMachine>(File.ReadAllText(manifestPath),ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid concept manifest."); model.Validate();
         string directory=Path.GetDirectoryName(manifestPath)!;
-        string Local(string file,string ext) {
+        string Local(string file,params string[] extensions) {
             if(Path.GetFileName(file)!=file || string.IsNullOrEmpty(file)) throw new ArgumentException("Manifest references must be local file names.");
-            return CadPath(Path.Combine(directory,file),ext);
+            return CadPath(Path.Combine(directory,file),extensions);
         }
         string assembly=Local(model.AssemblyFile,".asm");
         if(!string.Equals(assembly,expectedDocument,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Concept belongs to a different assembly.");
         var document=CadDocument(CadApplication(),expectedDocument,".asm",write);
         var occurrences=Get(document,"Occurrences"); var parts=new Dictionary<string,object>();
         foreach(var body in model.Bodies) {
-            string file=Local(body.File,".par");
+            string file=Local(body.File,".par",".asm");
             var matches=Enumerable.Range(1,Convert.ToInt32(Get(occurrences,"Count"))).Select(i=>GetItem(occurrences,i)).Where(o=>Convert.ToString(Get(o,"Name"))==body.Occurrence && string.Equals(CadName(Get(o,"OccurrenceDocument")),file,StringComparison.OrdinalIgnoreCase)).ToList();
             if(matches.Count!=1) throw new InvalidOperationException("Concept part missing, renamed or ambiguous: "+body.Id);
             if(parts.Values.Any(p=>ReferenceEquals(p,matches[0]))) throw new ArgumentException("Duplicate concept part mapping.");
