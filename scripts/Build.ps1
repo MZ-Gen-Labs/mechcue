@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.3.0-alpha.03',
+    [string]$Version = '0.3.0-alpha.04',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -44,12 +44,14 @@ if ($WithMcp) {
         $taskProcess = Start-Process -FilePath (Join-Path $taskControl 'MechCue.Mcp.Control.exe') -ArgumentList '--self-test' -PassThru -Wait -WindowStyle Hidden
         if ($taskProcess.ExitCode -ne 0) { throw 'MCP tray controller test failed' }
     } finally { $env:MECHCUE_MCP_SETTINGS_PATH = $taskOldSettings }
-    Get-ChildItem -LiteralPath $taskControl -File | Where-Object { $_.Name -eq 'MechCue.exe' -or $_.Extension -eq '.pdb' -or $_.Name -eq 'tray-test-result.txt' } | Remove-Item
+    Get-ChildItem -LiteralPath $taskControl -File | Where-Object { $_.Name -eq 'MechCue.exe' -or $_.Extension -eq '.pdb' -or $_.Name -eq 'tray-test-result.txt' -or $_.Name -eq 'monitor-test-preview.png' } | Remove-Item
 
     & (Join-Path $PSScriptRoot 'Copy-McpNotices.ps1') -OutputDirectory $taskMcp
     Copy-Item -LiteralPath (Join-Path $taskRoot 'Mcp/README.md'),(Join-Path $taskRoot 'Mcp/mcp-config.example.json'),(Join-Path $taskRoot 'LICENSE'),(Join-Path $taskRoot 'THIRD_PARTY_NOTICES.md') -Destination $taskMcp
     & $PythonPath (Join-Path $PSScriptRoot 'Test-Mcp.py') --mechcue (Join-Path $taskStandalone 'MechCue.exe') --mcp (Join-Path $taskMcp 'MechCue.Mcp.exe') --report (Join-Path $taskOutput 'mcp-test-result.txt')
     if ($LASTEXITCODE -ne 0) { throw 'MCP protocol and UI integration test failed' }
+    & $PythonPath (Join-Path $PSScriptRoot 'Test-McpTraffic.py') --mcp (Join-Path $taskMcp 'MechCue.Mcp.exe') --report (Join-Path $taskOutput 'mcp-traffic-test-result.txt')
+    if ($LASTEXITCODE -ne 0) { throw 'MCP traffic monitor transport test failed' }
     & $PythonPath (Join-Path $PSScriptRoot 'Test-McpUpdate.py') --mcp (Join-Path $taskMcp 'MechCue.Mcp.exe') --report (Join-Path $taskOutput 'mcp-update-test-result.txt')
     if ($LASTEXITCODE -ne 0) { throw 'MCP update shutdown test failed' }
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/CONCEPT_TARGETS.md') -Destination (Join-Path $taskMcp 'CONCEPT_TARGETS.md')

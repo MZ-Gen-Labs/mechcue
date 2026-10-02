@@ -26,6 +26,7 @@ sealed class TrayContext : ApplicationContext
     readonly Control dispatcher = new();
     readonly McpShutdownSignal shutdown;
     readonly NotifyIcon tray;
+    TrafficMonitorForm? monitor;
     readonly ContextMenuStrip menu = new();
     readonly Dictionary<string, ToolStripMenuItem> choices = new();
     readonly System.Windows.Forms.Timer refresh = new() { Interval = 1000 };
@@ -42,6 +43,8 @@ sealed class TrayContext : ApplicationContext
             item.Click += (_, _) => SetMode(mode); choices.Add(mode, item); menu.Items.Add(item);
         }
         menu.Items.Add(new ToolStripSeparator());
+        var traffic = new ToolStripMenuItem(UiText.IsJapanese ? "MCP通信モニター" : "MCP traffic monitor");
+        traffic.Click += (_, _) => ShowMonitor(); menu.Items.Add(traffic);
         var guide = new ToolStripMenuItem(UiText.IsJapanese ? "接続ガイド" : "Connection guide");
         guide.Click += (_, _) => Open(Path.Combine(AppContext.BaseDirectory, "..", "MCP-Guide.html")); menu.Items.Add(guide);
         var logs = new ToolStripMenuItem(UiText.IsJapanese ? "ログフォルダー" : "Log folder");
@@ -54,6 +57,11 @@ sealed class TrayContext : ApplicationContext
         tray = new NotifyIcon { Icon = SystemIcons.Application, ContextMenuStrip = menu, Visible = !testing };
         tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) menu.Show(Cursor.Position); };
         menu.Opening += (_, _) => RefreshState(); refresh.Tick += (_, _) => RefreshState(); refresh.Start(); RefreshState();
+    }
+    void ShowMonitor()
+    {
+        if (monitor == null || monitor.IsDisposed) monitor = new TrafficMonitorForm();
+        monitor.Show(); if (monitor.WindowState == FormWindowState.Minimized) monitor.WindowState = FormWindowState.Normal; monitor.Activate();
     }
     static void Open(string path)
     {
@@ -74,12 +82,13 @@ sealed class TrayContext : ApplicationContext
     }
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { shutdown.Dispose(); dispatcher.Dispose(); refresh.Stop(); refresh.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
+        if (disposing) { monitor?.Dispose(); shutdown.Dispose(); dispatcher.Dispose(); refresh.Stop(); refresh.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
         base.Dispose(disposing);
     }
     internal static void Verify()
     {
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MECHCUE_MCP_SETTINGS_PATH"))) throw new InvalidOperationException("Tests require an isolated settings path.");
+        TrafficMonitorForm.Verify();
         using var context = new TrayContext(true);
         foreach (string mode in new[] { "chart", "read", "write", "chart" }) {
             context.choices[mode].PerformClick();
