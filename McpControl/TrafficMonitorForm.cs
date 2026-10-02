@@ -63,6 +63,7 @@ sealed class TrafficMonitorForm : Form
         var save = new Button { Text = T("ログ保存", "Save log"), AutoSize = true }; save.Click += (_, _) => Export(); bar.Controls.Add(save);
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, Panel1MinSize = 100, Panel2MinSize = 80, Size = new(1000, 550), SplitterDistance = 280 };
         foreach (string label in new[] { T("時刻", "Time"), "PID", T("方向", "Direction"), T("機能 / メソッド", "Tool / method"), T("状態", "Status"), "ms" }) list.Columns.Add(label, label);
+        foreach (DataGridViewColumn column in list.Columns) column.SortMode = DataGridViewColumnSortMode.NotSortable;
         list.Columns[0].FillWeight = 100; list.Columns[1].FillWeight = 45; list.Columns[2].FillWeight = 110; list.Columns[3].FillWeight = 240; list.Columns[4].FillWeight = 65; list.Columns[5].FillWeight = 55;
         split.Panel1.Controls.Add(list); split.Panel2.Controls.Add(detail); Controls.Add(split); Controls.Add(status); Controls.Add(bar);
         list.SelectionChanged += (_, _) => ShowDetail(); search.TextChanged += (_, _) => RefreshList();
@@ -71,26 +72,26 @@ sealed class TrafficMonitorForm : Form
         timer.Tick += (_, _) => Poll(); timer.Start(); Poll();
     }
     void SaveOptions() { try { McpTraffic.SaveOptions(new(capture.Checked, top.Checked)); UpdateStatus(); } catch (Exception e) { status.Text = e.Message; } }
-    IEnumerable<McpTrafficEntry> Filtered() => entries.Where(e => string.IsNullOrWhiteSpace(search.Text) || (e.Method + " " + e.Id + " " + e.Json).Contains(search.Text, StringComparison.OrdinalIgnoreCase));
+    IEnumerable<McpTrafficEntry> Filtered() => entries.AsEnumerable().Reverse().OrderByDescending(e => e.Time).Where(e => string.IsNullOrWhiteSpace(search.Text) || (e.Method + " " + e.Id + " " + e.Json).Contains(search.Text, StringComparison.OrdinalIgnoreCase));
     void Poll()
     {
         if (paused.Checked) return;
         try {
             var added = reader.Poll(); if (added.Count == 0) { UpdateStatus(); return; }
-            entries.AddRange(added); if (entries.Count > 500) entries.RemoveRange(0, entries.Count - 500); RefreshList();
+            entries.AddRange(added); if (entries.Count > 500) entries.RemoveRange(0, entries.Count - 500); RefreshList(followNewest: true);
         } catch (Exception e) { status.Text = e.Message; }
     }
-    void RefreshList()
+    void RefreshList(bool followNewest = false)
     {
-        var selected = list.SelectedRows.Count > 0 ? list.SelectedRows[0].Tag as McpTrafficEntry : null;
+        var selected = !followNewest && list.SelectedRows.Count > 0 ? list.SelectedRows[0].Tag as McpTrafficEntry : null;
         list.SuspendLayout();
         try {
             list.Rows.Clear();
             foreach (var e in Filtered()) {
                 int index = list.Rows.Add(e.Time.ToLocalTime().ToString("HH:mm:ss.fff"), e.ProcessId, e.Direction == "in" ? T("AI → MCP", "Client → MCP") : T("MCP → AI", "MCP → Client"), e.Method, State(e.Status), e.DurationMs?.ToString("0.0")); list.Rows[index].Tag = e;
             }
-            list.ClearSelection(); var row = list.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => ReferenceEquals(r.Tag, selected)) ?? list.Rows.Cast<DataGridViewRow>().LastOrDefault();
-            if (row != null) { row.Selected = true; list.CurrentCell = row.Cells[0]; }
+            list.ClearSelection(); var row = list.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => ReferenceEquals(r.Tag, selected)) ?? list.Rows.Cast<DataGridViewRow>().FirstOrDefault();
+            if (row != null) { row.Selected = true; list.CurrentCell = row.Cells[0]; if (followNewest) list.FirstDisplayedScrollingRowIndex = 0; }
         } finally { list.ResumeLayout(); }
         ShowDetail(); UpdateStatus();
     }
@@ -121,10 +122,13 @@ sealed class TrafficMonitorForm : Form
         if (!bytes.ToArray().SequenceEqual(request) || !outBytes.ToArray().SequenceEqual(reply)) throw new Exception("Monitor modified wire bytes");
         using var form = new TrafficMonitorForm(); form.Show(); Application.DoEvents();
         if (form.entries.Count != 2 || form.entries[1].Status != "error" || form.entries[1].DurationMs == null || !form.entries[1].Method.Contains("日本語")) throw new Exception("Traffic correlation failed");
+        if (!ReferenceEquals(form.list.Rows[0].Tag, form.entries[1]) || form.list.SelectedRows[0].Index != 0 || !form.detail.Text.Contains("isError")) throw new Exception("Newest event was not first and selected");
         form.search.Text = "meshLevel"; if (form.list.Rows.Count != 1 || !form.detail.Text.Contains("8")) throw new Exception("Filter/detail failed");
         form.top.Checked = true; if (!form.TopMost || !McpTraffic.Options().TopMost) throw new Exception("Topmost persistence failed");
-        form.paused.Checked = true; journal.Record("in", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/test\"}"); form.Poll(); if (form.entries.Count != 2) throw new Exception("Display pause failed");
-        form.paused.Checked = false; form.Poll(); if (form.entries.Count != 3) throw new Exception("Resume lost messages");
+        form.search.Clear(); form.list.CurrentCell = form.list.Rows[1].Cells[0];
+        var selectedBeforePause = form.list.SelectedRows[0].Tag;
+        form.paused.Checked = true; journal.Record("in", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/test\"}"); form.Poll(); if (form.entries.Count != 2 || form.list.SelectedRows[0].Tag != selectedBeforePause) throw new Exception("Display pause changed selected event");
+        form.paused.Checked = false; form.Poll(); if (form.entries.Count != 3 || form.list.SelectedRows[0].Index != 0 || form.list.FirstDisplayedScrollingRowIndex != 0 || !form.detail.Text.Contains("notifications/test") || !ReferenceEquals(form.list.Rows[1].Tag, form.entries[1])) throw new Exception("New event did not move to top, select, update detail and push history down");
         form.capture.Checked = false; journal.Record("in", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/hidden\"}"); form.Poll(); if (form.entries.Count != 3) throw new Exception("Capture off failed");
         form.search.Clear(); using var image = new Bitmap(form.Width, form.Height); form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size)); image.Save(Path.Combine(AppContext.BaseDirectory, "monitor-test-preview.png"));
         form.Close(); using var reopened = new TrafficMonitorForm(); if (!reopened.TopMost || reopened.capture.Checked) throw new Exception("Monitor options not restored");
