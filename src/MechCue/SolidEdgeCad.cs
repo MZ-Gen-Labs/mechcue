@@ -75,7 +75,11 @@ public sealed partial class Bridge
     {
         path = CadPath(path, ".par", ".asm", ".dft", ".psm");
         if (!File.Exists(path)) throw new FileNotFoundException("Document not found", path);
-        var document = Call(Get(CadApplication(), "Documents"), "Open", path, Type.Missing);
+        var documents=Get(CadApplication(),"Documents");
+        // OccurrenceDocument can already be loaded without its own visible window.
+        // Re-opening that shared child through Documents.Open can block native automation.
+        var document=Enumerable.Range(1,Convert.ToInt32(Get(documents,"Count"))).Select(i=>GetItem(documents,i)).FirstOrDefault(d=>string.Equals(CadName(d),path,StringComparison.OrdinalIgnoreCase))
+            ?? Call(documents, "Open", path, Type.Missing);
         CadActivateDocument(document);
         return CadInfo(document);
     }

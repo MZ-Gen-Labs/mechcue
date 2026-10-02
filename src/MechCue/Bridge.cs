@@ -161,10 +161,10 @@ public sealed partial class Bridge
         o.GetType().InvokeMember("GetMatrix", BindingFlags.InvokeMethod, null, o, args, [modifier], null, null);
         return ((Array)args[0]).Cast<double>().ToArray();
     }
-    public void Bind(Track track, Target target, bool activate = true)
+    public void Bind(Track track, Target target, bool activate = true, bool conceptNested = false)
     {
         Check();
-        if(concept!=null) throw new InvalidOperationException("概略軸の登録中は通常の駆動先を追加できません。");
+        if(concept!=null && !conceptNested) throw new InvalidOperationException("概略軸の登録中は通常の駆動先を追加できません。");
         track.Validate();
         string expected = track.Kind.StartsWith("部品") ? "Matrix" : track.Kind == "角度拘束" ? "Angle" : "Offset";
         if (target.Property != expected) throw new InvalidOperationException("駆動方法と選択した対象が一致しません。");
@@ -225,9 +225,10 @@ public sealed partial class Bridge
         if (!bindings.TryGetValue(track, out var binding)) return;
         RestoreBinding(binding);
         bindings.Remove(track);
+        nestedKeyPaths.Remove(track);
         Call(Get(Get(app!, "ActiveWindow"), "View"), "Update");
     }
-    void ForgetConnection() { DetachDocumentEvents(); ClearConcept(); bindings.Clear(); unresolved.Clear(); doc = null; app = null; }
+    void ForgetConnection() { DetachDocumentEvents(); ClearConcept(); bindings.Clear(); nestedKeyPaths.Clear(); unresolved.Clear(); doc = null; app = null; }
     void Check(bool requireActive = true)
     {
         if (doc == null || app == null) throw new InvalidOperationException("先にSolid Edgeに接続してください。");
@@ -341,6 +342,11 @@ public sealed partial class Bridge
     {
         Check();
         if (BindingCount == 0) throw new InvalidOperationException("駆動先が未登録です。グラフを選び、対象を選択して『駆動先を登録』を押してください。");
+        foreach(var (track,keyPath) in nestedKeyPaths)
+        {
+            var (occurrence,parent)=ResolveOccurrenceKeyPath(doc!,keyPath);
+            if(!Equals(occurrence,bindings[track].Target.Com)||Convert.ToBoolean(Get(parent,"ReadOnly")))throw new InvalidOperationException("Nested identity changed or parent is read-only; stop and reassign");
+        }
         ApplyConcept(time);
         foreach (var (track, b) in bindings)
         {
@@ -349,6 +355,7 @@ public sealed partial class Bridge
             foreach (var ground in b.Grounds) Set(ground.Relation, "Suppress", true);
             if (b.Target.Property == "Matrix") Call(b.Target.Com, "PutMatrix", Transform.Apply((double[])b.Original, track.Kind, track.Axis, value), true);
             else Set(b.Target.Com, b.Target.Property, value * (b.Target.Property == "Angle" ? Math.PI / 180 : 0.001));
+            if(nestedKeyPaths.ContainsKey(track)&&!ConceptSame(Matrix(b.Target.Com),Transform.Apply((double[])b.Original,track.Kind,track.Axis,value)))throw new InvalidOperationException("Nested solver rejected motion; stop and inspect constraints");
         }
         Call(Get(Get(app!, "ActiveWindow"), "View"), "Update");
     }

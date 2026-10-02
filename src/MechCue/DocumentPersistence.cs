@@ -103,6 +103,7 @@ public sealed partial class Bridge
             saved.AttributeId = EnsureAttributeId(target.Com);
             if (Targets(track.Kind).Count(t => AttributeId(t.Com) == saved.AttributeId) != 1) throw new InvalidOperationException("駆動先の識別IDが重複しています。対象のコピーを確認してください。");
         }
+        saved.KeyPath=nestedKeyPaths.GetValueOrDefault(track);
         foreach (var ground in binding.Grounds)
         {
             string id = EnsureAttributeId(ground.Relation);
@@ -116,9 +117,15 @@ public sealed partial class Bridge
         unresolved[track] = saved;
         try
         {
-            var candidates = Targets(track.Kind);
+            var candidates = saved.KeyPath==null ? Targets(track.Kind) : new List<Target>();
             Target? target;
-            if (saved.ReferenceKey != null)
+            if(saved.KeyPath!=null)
+            {
+                var (resolved,parent)=ResolveOccurrenceKeyPath(doc!,saved.KeyPath);
+                target=new Target(saved.Label,resolved,"Matrix",saved.Label);
+                if(Convert.ToBoolean(Get(parent,"ReadOnly")))throw new InvalidOperationException("Nested parent is read-only");
+            }
+            else if (saved.ReferenceKey != null)
             {
                 object[] args = [Convert.FromBase64String(saved.ReferenceKey), null!]; var modifier = new ParameterModifier(2); modifier[0] = true; modifier[1] = true;
                 if (Marshal.IsComObject(doc!))
@@ -152,7 +159,8 @@ public sealed partial class Bridge
                 }
                 if (grounds.Count != saved.Grounds.Count) throw new InvalidOperationException("固定拘束が変更されています。再割り当てしてください。");
             }
-            Bind(track, target, false);
+            Bind(track, target, false, saved.KeyPath!=null);
+            if(saved.KeyPath!=null)nestedKeyPaths[track]=saved.KeyPath;
             bindings[track] = new Binding(target, target.Property == "Matrix" ? (object)saved.Baseline.Clone() : saved.Baseline[0], grounds) { Active = false };
             unresolved.Remove(track);
             return null;
@@ -221,7 +229,8 @@ public partial class MainForm
         if (bridge.BoundLabel(Current) != null && (Current.Kind != CurrentKind || Current.Axis != axis.Text)) throw new InvalidOperationException("駆動方法・軸を変更する前に割り当てを解除してください。");
         Current.Name = name.Text; Current.Kind = CurrentKind; Current.Axis = axis.Text; Current.Points = points;
         StoreActivePattern();
-        return new DocumentSettings { Version = 2, Patterns = patterns, ActivePatternId = activePattern, Concept = bridge.CaptureConcept(), Speed = speed.Value, DragStep = dragStep.Value, Loop = loop.Checked, Collision = collision.Checked, Overlay = ChartDisplayMode != "selected", DisplayMode = ChartDisplayMode, Tracks = tracks.Select(track => new SavedTrack { Track = track, Hidden = plot.Hidden.Contains(track), Target = bridge.CaptureTarget(track) }).ToList() };
+        var savedTracks=tracks.Select(track => new SavedTrack { Track = track, Hidden = plot.Hidden.Contains(track), Target = bridge.CaptureTarget(track) }).ToList();
+        return new DocumentSettings { Version = savedTracks.Any(t=>t.Target?.KeyPath!=null)?3:2, Patterns = patterns, ActivePatternId = activePattern, Concept = bridge.CaptureConcept(), Speed = speed.Value, DragStep = dragStep.Value, Loop = loop.Checked, Collision = collision.Checked, Overlay = ChartDisplayMode != "selected", DisplayMode = ChartDisplayMode, Tracks = savedTracks };
     }
     void WriteDocumentSettings()
     {
@@ -235,7 +244,7 @@ public partial class MainForm
         CancelVideoExport();
         if (writingDocument || !documentReady || !bridge.Connected) return;
         try { PausePlayback(); live.Checked = false; WriteDocumentSettings(); status.Text = "MechCueの設定をアセンブリへ反映しました。"; }
-        catch (Exception ex) { status.Text = "MechCue設定の保存に失敗しました：" + (ex.InnerException ?? ex).Message; MessageBox.Show(this, UiText.Text(status.Text), "MechCue", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        catch (Exception ex) { status.Text = "MechCue設定の保存に失敗しました：" + (ex.InnerException ?? ex).Message; if(aiExecuting)aiError=ex;else MessageBox.Show(this, UiText.Text(status.Text), "MechCue", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
     void SaveToDocument()
     {

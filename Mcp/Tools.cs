@@ -10,6 +10,7 @@ using MechCue;
 public static class MechCueTools
 {
     static string Json(object value)=>JsonSerializer.Serialize(value);
+    static void EnsureWrite(){try{McpAccessSettings.EnsureAllowed(true);}catch(InvalidOperationException error){throw new ModelContextProtocol.McpException(error.Message);}}
     [McpServerTool(ReadOnly=true),Description("List running MechCue windows that have AI access enabled. If several sessions exist, select an explicit sessionId before editing.")]
     public static object mechcue_list_sessions()
     {
@@ -55,9 +56,10 @@ public static class MechCueTools
     public static Task<string> mechcue_cancel_video_export(string jobId,string sessionId="",CancellationToken cancellationToken=default)=>Send("cancel_video_export",new{jobId},sessionId,cancellationToken);
     static async Task<string> Send(string method,object args,string sessionId,CancellationToken cancellationToken)
     {
+        try {
         var sessions=mechcue_list_sessions() is List<AiSession> found ? found : new List<AiSession>();
         var session=string.IsNullOrEmpty(sessionId)?sessions.Count==1?sessions[0]:throw new InvalidOperationException("Enable AI access in MechCue. If multiple windows are enabled, supply sessionId."):sessions.Single(s=>s.Id==sessionId);
-        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);deadline.CancelAfter(TimeSpan.FromSeconds(20));
+        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);deadline.CancelAfter(TimeSpan.FromSeconds(method=="save_document"?120:20));
         using var pipe=new NamedPipeClientStream(".",session.Pipe,PipeDirection.InOut,PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);
         await pipe.ConnectAsync(3000,deadline.Token);
         using var writer=new StreamWriter(pipe,new UTF8Encoding(false),4096,true){AutoFlush=true};using var reader=new StreamReader(pipe,new UTF8Encoding(false),false,4096,true);
@@ -66,6 +68,9 @@ public static class MechCueTools
         using var parsed=JsonDocument.Parse(result);
         if(!parsed.RootElement.GetProperty("ok").GetBoolean())throw new InvalidOperationException(parsed.RootElement.GetProperty("error").GetString());
         return parsed.RootElement.GetProperty("result").GetRawText();
+        } catch(Exception error) when(error is not ModelContextProtocol.McpException) {
+            throw new ModelContextProtocol.McpException(error is OperationCanceledException?"MechCue request timed out or was cancelled. CAD may still be completing; use start_operation/get_operation for reliable save completion.":(error.InnerException??error).Message);
+        }
     }
     [McpServerTool(ReadOnly=true),Description("Read tracks, stable IDs, 1-based track numbers, units, keyframes, target assignments and playback state.")]
     public static Task<string> mechcue_get_state(string sessionId="",CancellationToken cancellationToken=default)=>Send("get_state",new{},sessionId,cancellationToken);
@@ -83,6 +88,24 @@ public static class MechCueTools
     public static Task<string> mechcue_play(string sessionId="",CancellationToken cancellationToken=default)=>Send("play",new{},sessionId,cancellationToken);
     [McpServerTool,Description("Stop playback at the current time.")]
     public static Task<string> mechcue_stop(string sessionId="",CancellationToken cancellationToken=default)=>Send("stop",new{},sessionId,cancellationToken);
+    [McpServerTool(ReadOnly=true),Description("Probe the selected session's live pipe independently of the CAD UI thread. Returns protocol/session identity; process existence alone is not considered a healthy session. Explicit sessionId recommended.")]
+    public static Task<string> mechcue_get_session_health(string sessionId="",CancellationToken cancellationToken=default)=>Send("ping",new{},sessionId,cancellationToken);
+    [McpServerTool,Description("Start save_document, migrate_concept or check_motion, returning operationId immediately. argumentsJson is the corresponding arguments object, excluding sessionId. check_motion arguments: startTime,endTime,step (seconds), <=501 poses within chart. It explicitly moves CAD, checks static interference at each sample, restores original poses, and pauses/disables reflection. No swept-path guarantee. requestId is a client UUID; repeat SAME ID and arguments on retry. Poll get_operation; results retained until session closes (128 jobs max). Disconnection does not cancel accepted CAD mutation. Requires Creation/edit mode. Avoid simultaneous CAD editing while running.")]
+    public static Task<string> mechcue_start_operation(string operation,string argumentsJson,string requestId,string sessionId="",CancellationToken cancellationToken=default)
+    {
+        EnsureWrite();using var json=JsonDocument.Parse(argumentsJson);
+        return Send("start_operation",new{operation,arguments=json.RootElement.Clone(),requestId},sessionId,cancellationToken);
+    }
+    [McpServerTool(ReadOnly=true),Description("Read save/migration job state and actual completion result or actionable failure, independently of a busy CAD UI thread. Requires original sessionId and operationId.")]
+    public static Task<string> mechcue_get_operation(string operationId,string sessionId="",CancellationToken cancellationToken=default)=>Send("get_operation",new{operationId},sessionId,cancellationToken);
+    [McpServerTool,Description("Replace keyframes of multiple tracks atomically with one undo. tracksJson=[{trackId,points:[{time,value},...]}], or trackNumber instead of ID. All times/limits are validated before changing any track. 1–128 distinct tracks, >=2 strictly increasing points per track, <=100000 total. Stops playback/disables reflection; doesn't move or save CAD.")]
+    public static Task<string> mechcue_set_keyframes(string tracksJson,string sessionId="",CancellationToken cancellationToken=default)
+    {using var json=JsonDocument.Parse(tracksJson);return Send("set_keyframes",new{tracks=json.RootElement.Clone()},sessionId,cancellationToken);}
+    [McpServerTool,Description("Delete an exact keyframe time from a track, retaining at least two points. One undo restores it. Stops playback/disables reflection; doesn't save CAD.")]
+    public static Task<string> mechcue_delete_keyframe(double time,int trackNumber=1,string trackId="",string sessionId="",CancellationToken cancellationToken=default)=>Send("delete_keyframe",new{time,trackNumber,trackId},sessionId,cancellationToken);
+    [McpServerTool,Description("Bind an unassigned existing track to a rigid nested part by stable keyPath, including alongside concept axes. kind=部品移動/部品回転/部品座標, axis=X/Y/Z in parent frame. Local mm/deg. Requires modifySharedSubassembly=true because playback edits the shared child document, affecting ALL references. Free/grounded parts only; flexible overrides unsupported. Stops playback/reflection; save_document persists reference keys and baseline. Set suitable keyframes before enabling reflection. Requires Creation/edit mode.")]
+    public static Task<string> mechcue_bind_nested_part(string expectedDocument,string keyPath,string kind="部品移動",string axis="X",bool modifySharedSubassembly=false,int trackNumber=1,string trackId="",string sessionId="",CancellationToken cancellationToken=default)
+    {EnsureWrite();return Send("bind_nested",new{expectedDocument,keyPath,kind,axis,modifySharedSubassembly,trackNumber,trackId},sessionId,cancellationToken);}
 }
 
 [McpServerToolType]

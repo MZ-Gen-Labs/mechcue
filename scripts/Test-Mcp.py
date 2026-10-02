@@ -44,13 +44,17 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==70,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==85,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['mechcue_get_video_export','solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference','solidedge_get_mechcue_settings']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('70 tools and read-only annotations')
+    checks.append('85 tools and read-only annotations')
+    for name in ['solidedge_start_application','solidedge_exit_application','solidedge_open_mechcue','solidedge_set_variables','solidedge_set_custom_property','solidedge_position_nested_part']:
+        arguments={'solidedge_exit_application':{'expectedProcessId':1},'solidedge_open_mechcue':{'expectedDocument':'unused'},'solidedge_set_variables':{'expectedDocument':'unused','variablesJson':'[]'},'solidedge_set_custom_property':{'expectedDocument':'unused','name':'test','value':'test'},'solidedge_position_nested_part':{'expectedDocument':'unused','keyPath':'/AA/BB','xMm':0,'yMm':0,'zMm':0}}.get(name,{})
+        tool(name,arguments,True)
+    checks.append('Lifecycle, nested placement and metadata/variable write permission gates')
     catalog=tool('solidedge_list_concept_templates')
     assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
@@ -127,10 +131,32 @@ try:
         while time.monotonic()<end:
             sessions=tool('mechcue_list_sessions')
             found=[s for s in sessions if s.get('processId',s.get('ProcessId'))==pid]
-            if found:return found[0].get('id',found[0].get('Id'))
+            if found:
+                sid=found[0].get('id',found[0].get('Id'))
+                if tool('mechcue_get_session_health',{'sessionId':sid})['uiReady']:return sid
             time.sleep(.1)
         raise AssertionError('Test session missing')
     sid=own_session(host.pid);context={'sessionId':sid}
+    assert tool('mechcue_get_session_health',context)['protocolVersion']==2
+    before_batch=tool('mechcue_get_state',context)
+    edits=[{'trackId':t['id'],'points':[{'time':0,'value':10+i},{'time':1,'value':20+i},{'time':4,'value':10+i}]} for i,t in enumerate(before_batch['tracks'][:2])]
+    tool('mechcue_set_keyframes',context|{'tracksJson':json.dumps(edits)})
+    tool('mechcue_delete_keyframe',context|{'trackId':edits[0]['trackId'],'time':1})
+    tool('mechcue_undo',context);tool('mechcue_undo',context)
+    assert tool('mechcue_get_state',context)['tracks']==before_batch['tracks']
+    checks.append('Live session health; multi-track replacement, delete and independent undo')
+    settings_path.write_text('{"schema":1,"mode":"write"}',encoding='utf-8')
+    import uuid
+    jobargs=context|{'operation':'save_document','argumentsJson':json.dumps({'expectedDocument':'not-connected.asm'}),'requestId':str(uuid.uuid4())}
+    job=tool('mechcue_start_operation',jobargs)
+    assert tool('mechcue_start_operation',jobargs)['operationId']==job['operationId']
+    for _ in range(20):
+        result=tool('mechcue_get_operation',context|{'operationId':job['operationId']})
+        if result['state']!='running':break
+        time.sleep(.05)
+    assert result['state']=='failed' and 'expectedDocument' in result['error'],result
+    checks.append('Asynchronous save ID retry retained and actual failure reason returned')
+    settings_path.write_text('{"schema":1,"mode":"chart"}',encoding='utf-8')
     tool('mechcue_import_concept_axes',context|{'manifestPath':'C:/__missing_concept__/mechcue-concept.json'},True)
     checks.append('Concept import into disconnected session rejected without touching CAD')
     tool('mechcue_export_video',context|{'outputPath':str(pathlib.Path(settings_temp.name)/'video.avi')},True)

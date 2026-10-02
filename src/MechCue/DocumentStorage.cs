@@ -95,6 +95,7 @@ public sealed class SavedTarget
     public string Property { get; set; } = "";
     public string Label { get; set; } = "";
     public string? ReferenceKey { get; set; }
+    public string? KeyPath { get; set; }
     public string? AttributeId { get; set; }
     public int ObjectType { get; set; }
     public double[] Baseline { get; set; } = [];
@@ -122,8 +123,9 @@ public sealed class DocumentSettings
     public static DocumentSettings Parse(string json)
     {
         var settings = JsonSerializer.Deserialize<DocumentSettings>(json) ?? throw new InvalidDataException("Empty MechCue settings");
+        if(settings.Tracks==null||settings.Tracks.Any(t=>t?.Track==null))throw new InvalidDataException("Invalid MechCue tracks");
         if(settings.Concept is {} c) { c.Model.Validate(); c.Model.ValidateValues(c.Baseline); if(c.Tracks.Count!=c.Model.Axes.Count || c.Tracks.Values.Distinct().Count()!=c.Tracks.Count || c.Tracks.Values.Any(id=>!settings.Tracks.Any(t=>t.Track.Id==id)) || c.Model.Axes.Any(a=>!c.Tracks.ContainsKey(a.Id))) throw new InvalidDataException("Invalid concept chart mapping"); }
-        if (settings.Version is not (1 or 2)) throw new InvalidDataException("Unsupported MechCue settings version: " + settings.Version);
+        if (settings.Version is not (1 or 2 or 3)) throw new InvalidDataException("Unsupported MechCue settings version: " + settings.Version);
         if (settings.Tracks == null || settings.Tracks.Count is < 1 or > 10000) throw new InvalidDataException("Invalid MechCue track count");
         if (settings.DisplayMode is not (null or "selected" or "checked" or "all")) throw new InvalidDataException("Invalid graph display mode");
         if (settings.Speed is < 0.1m or > 10 || settings.DragStep is < 0 or > 10000) throw new InvalidDataException("Invalid playback settings");
@@ -139,6 +141,7 @@ public sealed class DocumentSettings
                 string expected = entry.Track.Kind.StartsWith("部品") ? "Matrix" : entry.Track.Kind == "角度拘束" ? "Angle" : "Offset";
                 if (target.Property != expected || target.Baseline == null || target.Baseline.Length != (expected == "Matrix" ? 16 : 1) || target.Baseline.Any(v => !double.IsFinite(v)) || target.Grounds == null || (target.ReferenceKey == null && !Guid.TryParse(target.AttributeId, out _))) throw new InvalidDataException("Invalid MechCue target data");
                 if (target.ReferenceKey != null && Convert.FromBase64String(target.ReferenceKey).Length == 0) throw new InvalidDataException("Empty reference key");
+                if(target.KeyPath!=null){var keys=target.KeyPath.Split('/',StringSplitOptions.RemoveEmptyEntries);if(settings.Version<3||expected!="Matrix"||!target.KeyPath.StartsWith('/')||keys.Length is <2 or >32||keys.Any(k=>Convert.FromHexString(k).Length==0))throw new InvalidDataException("Invalid nested key path (requires settings version 3)");}
             }
         }
         if(settings.Patterns == null || settings.Patterns.Count > 500) throw new InvalidDataException("Invalid patterns");

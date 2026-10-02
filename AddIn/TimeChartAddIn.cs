@@ -8,7 +8,8 @@ namespace MechCue.AddIn;
 [Guid("79B86022-7C7D-4768-A3A7-CF8EBD1F7826")]
 [ProgId("MechCue.TimeChartAddIn")]
 [ClassInterface(ClassInterfaceType.None)]
-public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
+[ComDefaultInterface(typeof(IMechCueAutomation))]
+public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents, IMechCueAutomation
 {
     const string AssemblyEnvironment = "{26618395-09D6-11D1-BA07-080036230602}";
     object? application;
@@ -25,6 +26,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
         addIn = (SE.ISEAddInEx)AddInInstance;
         addIn.GuiVersion = 12;
         addIn.Description = "\nMechCue";
+        addIn.Object = this;
         var container = (IConnectionPointContainer)addIn.AddInEvents;
         var eventsId = typeof(SE.ISEAddInEvents).GUID;
         container.FindConnectionPoint(ref eventsId, out commands);
@@ -75,6 +77,14 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents
             Log("Chart opened in Solid Edge process");
         }
         catch (Exception ex) { Report(ex); }
+    }
+    public string OpenChart(string expectedDocument)
+    {
+        if(application==null)throw new InvalidOperationException("Add-in disconnected");
+        dynamic app=application;
+        if(!string.Equals(Convert.ToString(app.ActiveDocument.FullName),expectedDocument,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Active document differs from expectedDocument");
+        if(chart==null||chart.IsDisposed){chart=new MainForm(hostedApplication:application);chart.Show(new HostWindow(new IntPtr((int)app.hWnd)));}
+        return chart.OpenForAutomation(expectedDocument);
     }
     bool TryAction(int id, out HostAction action)
     {

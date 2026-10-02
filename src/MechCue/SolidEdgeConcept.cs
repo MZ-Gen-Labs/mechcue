@@ -7,7 +7,7 @@ public sealed partial class Bridge
             new { type="mill3", description="Vertical mill: table X on saddle Y; spindle Z", axes="XYZ", purpose="Layout, travel and motion concept" },
             new { type="mill4", description="Vertical mill with table rotation C about local Z", axes="XYZC", purpose="Indexing and workpiece orientation" },
             new { type="mill5", description="Vertical mill with trunnion A about local X and child table C about local Z", axes="XYZAC", purpose="Table-table five-axis motion concept; no TCP or inverse kinematics" },
-            new { type="gantry", description="Cartesian handling: X, child Y, child Z and simplified gripper", axes="XYZ", purpose="Handling layout and travel; gripper has no open/close joint" }
+            new { type="gantry", description="Cartesian handling: Y bridge, child X carriage, child Z and simplified gripper", axes="XYZ", purpose="Handling layout and travel; gripper has no open/close joint" }
         }, units = new { length="mm", angle="degree" }, scope="Concept geometry and forward kinematics; not vendor replicas, machining simulation or production-ready machine design."
     };
     static double[] ConceptPlaneVector(object plane, string method) {

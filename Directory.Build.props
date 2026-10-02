@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <MechCueReleaseVersion Condition="'$(MechCueReleaseVersion)' == '' and '$(Version)' != ''">$(Version)</MechCueReleaseVersion>
-    <MechCueReleaseVersion Condition="'$(MechCueReleaseVersion)' == ''">0.3.0-alpha.07</MechCueReleaseVersion>
+    <MechCueReleaseVersion Condition="'$(MechCueReleaseVersion)' == ''">0.3.0-alpha.08</MechCueReleaseVersion>
     <!-- NuGet numeric prerelease identifiers cannot contain leading zeroes. -->
     <Version Condition="'$(Version)' == ''">$([System.Text.RegularExpressions.Regex]::Replace('$(MechCueReleaseVersion)', '-alpha\.0([0-9])$', '-alpha.$1'))</Version>
     <InformationalVersion Condition="'$(InformationalVersion)' == ''">$(MechCueReleaseVersion)</InformationalVersion>

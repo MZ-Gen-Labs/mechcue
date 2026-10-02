@@ -10,13 +10,14 @@ public sealed class AiEndpoint : IDisposable
     readonly CancellationTokenSource stop=new();
     readonly Func<JsonElement,CancellationToken,Task<object>> handle;
     readonly string file;
+    readonly Func<bool>? ready;
     public AiSession Session { get; }
-    public AiEndpoint(string title,Func<JsonElement,CancellationToken,Task<object>> handle)
+    public AiEndpoint(string title,Func<JsonElement,CancellationToken,Task<object>> handle,Func<bool>? ready=null)
     {
-        this.handle=handle;string id=Guid.NewGuid().ToString("N");
+        this.handle=handle;this.ready=ready;string id=Guid.NewGuid().ToString("N");
         Session=new(id,"MechCue-"+id,title,Environment.ProcessId);
         Directory.CreateDirectory(SessionDirectory);file=Path.Combine(SessionDirectory,id+".json");
-        File.WriteAllText(file,JsonSerializer.Serialize(Session));_ = Serve();
+        File.WriteAllText(file,JsonSerializer.Serialize(Session));_ = Task.Run(Serve);
     }
     async Task Serve()
     {
@@ -24,42 +25,83 @@ public sealed class AiEndpoint : IDisposable
         {
             try
             {
-                using var pipe=new NamedPipeServerStream(Session.Pipe,PipeDirection.InOut,1,PipeTransmissionMode.Byte,PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);
-                await pipe.WaitForConnectionAsync(stop.Token);
-                using var reader=new StreamReader(pipe,new UTF8Encoding(false),false,4096,true);
-                using var writer=new StreamWriter(pipe,new UTF8Encoding(false),4096,true){AutoFlush=true};
-                using var timeout=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);timeout.CancelAfter(TimeSpan.FromSeconds(10));
-                object result;
-                try {
-                    string line=await reader.ReadLineAsync(timeout.Token) ?? throw new InvalidDataException("Empty request");
-                    if(line.Length>65536)throw new InvalidDataException("Request too large");
-                    using var request=JsonDocument.Parse(line);result=new {ok=true,result=await handle(request.RootElement.Clone(),timeout.Token)};
-                } catch(Exception ex) {result=new {ok=false,error=(ex.InnerException ?? ex).Message};}
-                await writer.WriteLineAsync(JsonSerializer.Serialize(result).AsMemory(),timeout.Token);
+                var pipe=new NamedPipeServerStream(Session.Pipe,PipeDirection.InOut,16,PipeTransmissionMode.Byte,PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);
+                try{await pipe.WaitForConnectionAsync(stop.Token);}
+                catch{pipe.Dispose();throw;}
+                _ = Respond(pipe);
             }
             catch(OperationCanceledException) when(stop.IsCancellationRequested){break;}
             catch(Exception ex){System.Diagnostics.Trace.WriteLine(ex);if(!stop.IsCancellationRequested)await Task.Delay(100,stop.Token).ConfigureAwait(false);}
         }
     }
-    public void Dispose(){stop.Cancel();try{File.Delete(file);}catch(IOException){}catch(UnauthorizedAccessException){} }
+    readonly AiOperations operations = new();
+    async Task Respond(NamedPipeServerStream pipe)
+    {
+        using (pipe)
+        try
+        {
+            using var reader=new StreamReader(pipe,new UTF8Encoding(false),false,4096,true);
+            using var writer=new StreamWriter(pipe,new UTF8Encoding(false),4096,true){AutoFlush=true};
+            using var readTimeout=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);readTimeout.CancelAfter(TimeSpan.FromSeconds(10));
+            object response;
+            try
+            {
+                string line=await reader.ReadLineAsync(readTimeout.Token) ?? throw new InvalidDataException("Empty request");
+                if(line.Length>1048576)throw new InvalidDataException("Request too large (1 MiB maximum)");
+                using var parsed=JsonDocument.Parse(line);var request=parsed.RootElement.Clone();
+                string method=request.GetProperty("method").GetString()!;
+                object result;
+                if(method=="ping")result=new {session=Session,reachable=true,uiReady=ready?.Invoke()??true,protocolVersion=2};
+                else if(method=="get_operation")result=operations.Get(request.GetProperty("args").GetProperty("operationId").GetString()!);
+                else if(method=="start_operation")
+                {
+                    var args=request.GetProperty("args");string action=args.GetProperty("operation").GetString()!;
+                    if(action is not ("save_document" or "migrate_concept" or "check_motion"))throw new ArgumentException("operation must be save_document, migrate_concept or check_motion");
+                    var command=JsonSerializer.SerializeToElement(new {method=action,args=args.GetProperty("arguments")});
+                    result=operations.Start(args.GetProperty("requestId").GetString()!,command,()=>handle(command,stop.Token));
+                }
+                else result=await handle(request,stop.Token);
+                response=new {ok=true,result};
+            }
+            catch(Exception error){response=new {ok=false,error=(error.InnerException??error).Message};}
+            // A read deadline must never cancel a CAD mutation or its completion reply.
+            await writer.WriteLineAsync(JsonSerializer.Serialize(response).AsMemory(),stop.Token);
+        }
+        catch(Exception error){System.Diagnostics.Trace.WriteLine(error);}
+    }
+    public void Dispose(){_ = stop.CancelAsync();try{File.Delete(file);}catch(IOException){}catch(UnauthorizedAccessException){} }
 }
 
 public partial class MainForm
 {
     readonly CheckBox aiAccess=new(){Text="AI接続",AutoSize=true};
     AiEndpoint? aiEndpoint;
+    public string OpenForAutomation(string expectedDocument)
+    {
+        if(!bridge.Connected)ConnectDocument();
+        if(!string.Equals(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)),expectedDocument,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("MechCue is connected to another document");
+        aiAccess.Checked=true;Show();Activate();
+        return JsonSerializer.Serialize(new {sessionId=aiEndpoint!.Session.Id,document=expectedDocument,connected=true});
+    }
     void ConfigureAi()
     {
         top.Controls.Add(aiAccess);aiAccess.CheckedChanged+=(_,_)=>{
             aiEndpoint?.Dispose();aiEndpoint=null;
-            if(aiAccess.Checked)aiEndpoint=new AiEndpoint(Text,DispatchAi);
+            if(aiAccess.Checked)aiEndpoint=new AiEndpoint(Text,DispatchAi,()=>IsHandleCreated&&!IsDisposed);
         };
         Disposed+=(_,_)=>{CancelVideoExport();aiEndpoint?.Dispose();aiEndpoint=null;};
         aiAccess.Checked = true;
     }
     bool aiExecuting;
     Exception? aiError;
-    Task<object> DispatchAi(JsonElement request,CancellationToken cancellationToken)
+    readonly SemaphoreSlim aiDispatchGate=new(1,1);
+    async Task<object> DispatchAi(JsonElement request,CancellationToken cancellationToken)
+    {
+        await aiDispatchGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try{return await DispatchAiCore(request,cancellationToken).ConfigureAwait(false);}
+        finally{aiDispatchGate.Release();}
+    }
+    Task<object> DispatchAiCore(JsonElement request,CancellationToken cancellationToken)
     {
         var completion=new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
         if(IsDisposed || !IsHandleCreated)return Task.FromException<object>(new InvalidOperationException("MechCue window is closed"));
@@ -92,6 +134,14 @@ public partial class MainForm
         if(method=="cancel_video_export")return VideoStatus(args,true);
         if(videoExport?.Running==true)throw new InvalidOperationException("Video export is running. Wait for completion or cancel it before editing or playing.");
         if(method=="export_video")return StartVideoExport(args);
+        if(method=="check_motion")
+        {
+            double start=Number("startTime"),end=Number("endTime"),step=Number("step");
+            if(!double.IsFinite(start)||!double.IsFinite(end)||!double.IsFinite(step)||start<0||end<=start||end>tracks.Max(t=>t.Points[^1].Time)||step<=0||Math.Ceiling((end-start)/step)>500)throw new ArgumentException("Use a chart interval and at most 501 sampled poses");
+            PausePlayback();live.Checked=false;Commit();
+            var samples=Enumerable.Range(0,(int)Math.Ceiling((end-start)/step)).Select(i=>start+i*step).Append(end).ToArray();
+            return bridge.CheckMotionSamples(samples);
+        }
         if(method=="list_patterns") { StoreActivePattern(); return new { activePatternId=activePattern, patterns=patterns.Select(p=>new { id=p.Id,name=p.Name,description=p.Description,duration=p.Points.Values.Max(ps=>ps[^1].Time),speed=p.Speed,loop=p.Loop,collision=p.Collision }) }; }
         if(method is "switch_pattern" or "create_pattern" or "rename_pattern" or "delete_pattern") {
             EnsurePatterns();
@@ -111,6 +161,19 @@ public partial class MainForm
             SaveToDocument();return AiState();
         }
         if(method=="migrate_concept"){MigrateConceptSettings(args.GetProperty("expectedDocument").GetString()!,args.GetProperty("manifestPath").GetString()!,args.GetProperty("settingsJson").GetString()!,args.TryGetProperty("hideUnboundTracks",out var hide) && hide.GetBoolean());return AiState();}
+        if(method=="bind_nested")
+        {
+            PausePlayback();live.Checked=false;Commit();var track=Target();
+            var expected=args.GetProperty("expectedDocument").GetString();
+            if(!bridge.Connected||!string.Equals(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)),expected,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Connected document differs from expectedDocument");
+            string kind=args.GetProperty("kind").GetString()!,direction=args.GetProperty("axis").GetString()!;
+            if(kind is not ("部品移動" or "部品回転" or "部品座標")||direction is not ("X" or "Y" or "Z"))throw new ArgumentException("Invalid nested drive kind/axis");
+            if(bridge.BoundLabel(track)!=null||bridge.PendingLabel(track)!=null)throw new InvalidOperationException("Choose an unassigned track");
+            string oldKind=track.Kind,oldAxis=track.Axis;track.Kind=kind;track.Axis=direction;
+            try{bridge.BindNested(track,args.GetProperty("keyPath").GetString()!,args.GetProperty("modifySharedSubassembly").GetBoolean());}
+            catch{track.Kind=oldKind;track.Axis=oldAxis;throw;}
+            plot.Hidden.Remove(track);history.Clear();RefreshTracks(tracks.IndexOf(track));MarkDocumentSettingsChanged();return AiState();
+        }
         if(method=="stop"){PausePlayback();return AiState();}
         if(method=="play"){StartPlayback();return AiState();}
         if(method=="seek"){
@@ -118,12 +181,27 @@ public partial class MainForm
             PausePlayback();time.Value=(decimal)position;return AiState();
         }
         if(method=="undo"){PausePlayback();live.Checked=false;Undo();return AiState();}
-        if(method is not ("set_keyframe" or "reset_values" or "resample"))throw new InvalidOperationException("Unknown MechCue command: "+method);
+        if(method is not ("set_keyframe" or "reset_values" or "resample" or "set_keyframes" or "delete_keyframe"))throw new InvalidOperationException("Unknown MechCue command: "+method);
         PausePlayback();live.Checked=false;Commit();
         if(bridge.Connected)_=bridge.Document;
         var changes=new Dictionary<Track,List<KeyPoint>>();
         switch(method)
         {
+            case "set_keyframes":
+                var edits=args.GetProperty("tracks").EnumerateArray().ToArray();
+                if(edits.Length is <1 or >128)throw new ArgumentException("Supply 1–128 distinct tracks");
+                foreach(var edit in edits)
+                {
+                    Track edited=edit.TryGetProperty("trackId",out var tid)?tracks.Single(t=>t.Id==Guid.Parse(tid.GetString()!)):tracks[edit.GetProperty("trackNumber").GetInt32()-1];
+                    if(changes.ContainsKey(edited))throw new ArgumentException("Duplicate track in batch");
+                    changes[edited]=edit.GetProperty("points").EnumerateArray().Select(p=>new KeyPoint(p.GetProperty("time").GetDouble(),p.GetProperty("value").GetDouble())).ToList();
+                }
+                if(changes.Values.Sum(ps=>ps.Count)>100000)throw new ArgumentException("At most 100000 points per batch");
+                break;
+            case "delete_keyframe":
+                var deleted=Target();double deletedTime=Number("time");
+                if(!deleted.Points.Any(p=>p.Time==deletedTime))throw new ArgumentException("Keyframe time not found");
+                changes[deleted]=deleted.Points.Where(p=>p.Time!=deletedTime).ToList();break;
             case "set_keyframe":
                 var track=Target();double moment=Number("time"),value=Number("value");
                 var points=track.Points.Where(p=>p.Time!=moment).Append(new KeyPoint(moment,value)).OrderBy(p=>p.Time).ToList();changes[track]=points;break;

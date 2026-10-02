@@ -120,6 +120,7 @@ public sealed partial class Bridge
         Check();EnsureWritableDocument();
         var originalDocument=doc;
         var concepts=ConceptSnapshot();
+        bool originalConceptActive=conceptActive;
         var values=bindings.Values.Select(b=>(Binding:b,Value:b.Target.Property=="Matrix"?(object)Matrix(b.Target.Com):Get(b.Target.Com,b.Target.Property),Active:b.Active)).ToList();
         var grounds=bindings.Values.SelectMany(b=>b.Grounds).Select(g=>(g.Relation,Suppress:Convert.ToBoolean(Get(g.Relation,"Suppress")))).ToList();
         var occurrences=Get(doc!,"Occurrences");
@@ -129,9 +130,11 @@ public sealed partial class Bridge
             // The original document may no longer be active, but must still exist.
             Check(false);
             RestoreConceptSnapshot(concepts);
+            conceptActive=originalConceptActive;
             foreach(var value in values) { if(value.Binding.Target.Property=="Matrix")CadCallRef(value.Binding.Target.Com,"PutMatrix",[0],value.Value,true);else Set(value.Binding.Target.Com,value.Binding.Target.Property,value.Value);value.Binding.Active=value.Active; }
             foreach(var pose in poses)CadCallRef(pose.Part,"PutMatrix",[0],pose.Pose,true);
             foreach(var ground in grounds)Set(ground.Relation,"Suppress",ground.Suppress);
+            foreach(var value in values)if(value.Binding.Target.Property=="Matrix"&&Matrix(value.Binding.Target.Com).Zip((double[])value.Value).Any(p=>Math.Abs(p.First-p.Second)>1e-7))throw new InvalidOperationException("A driven nested/regular part did not return to its original pose.");
             if(ApplicationEventSink.SameDocument(Get(app!,"ActiveDocument"),doc!))Call(Get(Get(app!,"ActiveWindow"),"View"),"Update");
             foreach(var pose in poses)if(Matrix(pose.Part).Zip(pose.Pose).Any(p=>Math.Abs(p.First-p.Second)>1e-7))throw new InvalidOperationException("A part pose did not return to its original value.");
         };
