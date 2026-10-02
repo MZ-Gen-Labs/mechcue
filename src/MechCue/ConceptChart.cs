@@ -38,7 +38,7 @@ public sealed partial class Bridge
     }
     internal List<Track> ImportConcept(string manifest,IEnumerable<Track> existing) {
         Check();if(bindings.Count>0)throw new InvalidOperationException("既存の駆動先を解除してから概略軸を取り込んでください。");
-        var (model,document,parts)=ConceptLoad(CadName(doc!),manifest,false);
+        var (model,document,parts)=ConceptLoad(CadName(doc!),manifest,false,app!);
         var current=MeasureConcept(model,parts.ToDictionary(p=>p.Key,p=>Matrix(p.Value)));
         if(concept!=null){if(JsonSerializer.Serialize(concept.Model,ConceptMachine.JsonOptions)!=JsonSerializer.Serialize(model,ConceptMachine.JsonOptions))throw new InvalidOperationException("別の概略定義が登録済みです。");if(conceptTracks.Count==0)RestoreConcept(concept,existing);return conceptTracks.Values.ToList();}
         double end=Math.Max(4,existing.Max(t=>t.Points[^1].Time));
@@ -67,10 +67,13 @@ public sealed partial class Bridge
 }
 public partial class MainForm
 {
-    void ImportConceptAxes(string path="") {
+    void ImportConceptAxes(string path="", string unboundTracks="preserve") {
+        if (unboundTracks is not ("preserve" or "hide")) throw new ArgumentException("unboundTracks must be preserve or hide.");
         if(!bridge.Connected)ConnectDocument();PausePlayback();live.Checked=false;Commit();
         if(path==""){string dir=Path.GetDirectoryName(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)))!;path=Path.Combine(dir,"mechcue-concept.json");if(!File.Exists(path)){using var dialog=new OpenFileDialog{Filter="Concept JSON|*.json"};if(dialog.ShowDialog(this)!=DialogResult.OK)return;path=dialog.FileName;}}
         var added=bridge.ImportConcept(path,tracks);foreach(var t in added)if(!tracks.Contains(t))tracks.Add(t);
+        if (unboundTracks == "hide") foreach (var t in tracks)
+            if (!bridge.IsConcept(t) && bridge.BoundLabel(t) == null && bridge.PendingLabel(t) == null) plot.Hidden.Add(t);
         history.Clear();RefreshTracks(tracks.IndexOf(added[0]));MarkDocumentSettingsChanged();status.Text="概略軸を取り込みました。現在値で初期化し、反映はオフです。";
     }
 }

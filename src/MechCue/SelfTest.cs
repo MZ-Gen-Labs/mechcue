@@ -54,7 +54,9 @@ public static partial class SelfTest
     public class FakeDocument
     {
         public string Name => "Test.asm";
-        public string FullName => "C:/Test.asm";
+        public string FullName { get; set; } = "C:/Test.asm";
+        public int Type => 3;
+        public void Save() { Dirty = false; }
         public bool ReadOnly { get; set; }
         public bool Dirty { get; set; }
         public string StoragePath { get; } = Path.Combine(AppContext.BaseDirectory, "fake-document-" + Guid.NewGuid() + ".storage");

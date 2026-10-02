@@ -62,7 +62,7 @@ public sealed partial class Bridge
         }
     }
     static bool ConceptSame(double[] a, double[] b) => a.Length==16 && b.Length==16 && a.Zip(b).All(p=>Math.Abs(p.First-p.Second)<1e-8);
-    static (ConceptMachine Model, object Document, Dictionary<string,object> Parts) ConceptLoad(string expectedDocument,string manifestPath,bool write) {
+    static (ConceptMachine Model, object Document, Dictionary<string,object> Parts) ConceptLoad(string expectedDocument,string manifestPath,bool write,object? application=null) {
         manifestPath=CadPath(manifestPath,".json");
         if(new FileInfo(manifestPath).Length>1024*1024) throw new ArgumentException("Concept manifest exceeds 1 MB.");
         var model=JsonSerializer.Deserialize<ConceptMachine>(File.ReadAllText(manifestPath),ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid concept manifest."); model.Validate();
@@ -73,7 +73,7 @@ public sealed partial class Bridge
         }
         string assembly=Local(model.AssemblyFile,".asm");
         if(!string.Equals(assembly,expectedDocument,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Concept belongs to a different assembly.");
-        var document=CadDocument(CadApplication(),expectedDocument,".asm",write);
+        var document=CadDocument(application ?? CadApplication(),expectedDocument,".asm",write);
         var occurrences=Get(document,"Occurrences"); var parts=new Dictionary<string,object>();
         foreach(var body in model.Bodies) {
             string file=Local(body.File,".par",".asm");

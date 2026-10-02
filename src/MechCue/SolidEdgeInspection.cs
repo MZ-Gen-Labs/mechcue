@@ -71,7 +71,10 @@ public sealed partial class Bridge
         orientation = orientation.ToLowerInvariant();
         if (!new[] { "current", "front", "back", "top", "bottom", "right", "left", "isometric" }.Contains(orientation)) throw new ArgumentException("Invalid orientation.");
         if (!double.IsFinite(zoomFactor) || zoomFactor < .1 || zoomFactor > 10) throw new ArgumentOutOfRangeException(nameof(zoomFactor), "Use 0.1 to 10.");
-        var view = CadView(CadApplication(), expectedDocument);
+        var application = CadApplication();
+        var document = CadDocument(application, expectedDocument, write: false);
+        bool dirtyBefore = Convert.ToBoolean(Get(document, "Dirty"));
+        var view = CadView(application, expectedDocument);
         if (orientation != "current")
         {
             var camera = CadCamera(view); double tx = Convert.ToDouble(camera[3]), ty = Convert.ToDouble(camera[4]), tz = Convert.ToDouble(camera[5]);
@@ -84,7 +87,12 @@ public sealed partial class Bridge
         }
         if (fit) Call(view, "Fit");
         if (zoomFactor != 1) Call(view, "ZoomCamera", zoomFactor);
-        Call(view, "Update"); return CadGetView(expectedDocument);
+        Call(view, "Update");
+        var result = System.Text.Json.JsonSerializer.SerializeToElement(CadGetView(expectedDocument));
+        var response = result.EnumerateObject().ToDictionary(p => p.Name, p => (object)p.Value.Clone());
+        response["dirtyBefore"] = dirtyBefore;
+        response["dirtyAfter"] = Convert.ToBoolean(Get(document, "Dirty"));
+        return response;
     }
     public static object CadExportView(string expectedDocument, string outputPath, int width = 1280, int height = 960)
     {
@@ -92,11 +100,14 @@ public sealed partial class Bridge
         outputPath = CadPath(outputPath, ".jpg", ".jpeg");
         if (File.Exists(outputPath)) throw new IOException("Output already exists.");
         if (!Directory.Exists(Path.GetDirectoryName(outputPath))) throw new DirectoryNotFoundException("Output folder must exist.");
-        var view = CadView(CadApplication(), expectedDocument);
+        var application = CadApplication();
+        var document = CadDocument(application, expectedDocument, write: false);
+        bool dirtyBefore = Convert.ToBoolean(Get(document, "Dirty"));
+        var view = CadView(application, expectedDocument);
         Call(view, "SaveAsImage", outputPath, width, height, Type.Missing, 1, 24, 0, false);
         using var image = System.Drawing.Image.FromFile(outputPath);
         if (image.Width != width || image.Height != height) throw new IOException("Unexpected native image dimensions.");
-        return new { outputPath, width, height, document = expectedDocument };
+        return new { outputPath, width, height, document = expectedDocument, dirtyBefore, dirtyAfter = Convert.ToBoolean(Get(document, "Dirty")) };
     }
     public static object CadCheckInterference(string expectedDocument, string set1Json = "[]", string set2Json = "[]", bool ignoreThreadInterferences = false, string reportPath = "")
     {
@@ -120,10 +131,26 @@ public sealed partial class Bridge
         CadCallRef(document, "CheckInterference", [1, 2, 9, 10, 11, 12, 13], args);
         var result = CadInterferenceResult(expectedDocument, first, second, args);
         if (reportPath == "") return result;
-        if (!File.Exists(reportPath)) throw new IOException("Solid Edge did not produce the requested report; analysis details remain unverified.");
+        return CadInterferenceReport(result, reportPath);
+    }
+    internal static object CadInterferenceReport(object result, string reportPath)
+    {
+        bool generated = false;
+        if (!File.Exists(reportPath))
+        {
+            var analysis = System.Text.Json.JsonSerializer.SerializeToElement(result);
+            if (!analysis.GetProperty("clear").GetBoolean())
+                return new { analysis = result, reportPath, reportCreated = false, reportSource = "none", bytes = 0, reportText = "", reportTextTruncated = false,
+                    warning = "Solid Edge did not produce a report. Use analysis status/count; missing pair details remain unknown. Do not treat this as clear." };
+            using var stream = new FileStream(reportPath, FileMode.CreateNew, FileAccess.Write);
+            using var writer = new StreamWriter(stream);
+            writer.WriteLine("MechCue static interference report: no interference at the checked pose.");
+            writer.WriteLine(System.Text.Json.JsonSerializer.Serialize(result));
+            generated = true;
+        }
         var text = File.ReadAllText(reportPath);
-        return new { analysis = result, reportPath, bytes = new FileInfo(reportPath).Length, reportText = text[..Math.Min(text.Length, 65536)], reportTextTruncated = text.Length > 65536,
-            format = "Native Solid Edge text report; includes occurrence names, centres and volumes when available. Units and formatting are native to the document." };
+        return new { analysis = result, reportPath, reportCreated = true, reportSource = generated ? "mechcue-clear-summary" : "solid-edge-native", bytes = new FileInfo(reportPath).Length, reportText = text[..Math.Min(text.Length, 65536)], reportTextTruncated = text.Length > 65536,
+            format = generated ? "MechCue summary of confirmed clear native analysis; static pose only." : "Native Solid Edge text report; units and formatting are native to the document." };
     }
     internal static object CadInterferenceResult(string document, int[] first, int[] second, object[] args)
     {

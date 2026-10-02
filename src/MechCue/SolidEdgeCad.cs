@@ -145,6 +145,7 @@ public sealed partial class Bridge
         } else throw new ArgumentException("shape must be rectangle, circle or polygon");
         var application = CadApplication(); var document = CadDocument(application, expectedDocument, ".par");
         var plane = CadPlane(document, planeNumber); var models = Get(document, "Models"); int modelCount = Convert.ToInt32(Get(models, "Count"));
+        CadValidateFeatureName(models, featureName);
         if (modelCount > 1) throw new InvalidOperationException("Multiple-body parts are not supported by this tool.");
         if (operation == "cut" && modelCount == 0) throw new InvalidOperationException("A cut requires an existing solid model.");
         if (Convert.ToInt32(Get(document, "ModelingMode")) != 2) throw new InvalidOperationException("Use an Ordered part document. This tool does not switch an existing document's modeling mode.");
@@ -174,7 +175,21 @@ public sealed partial class Bridge
             return new { fullName = CadName(document), operation, shape, featureName = Convert.ToString(Get(feature, "Name")), depthMm, planeNumber, saved = false };
         } catch (Exception error) {
             if (!created && profileSet != null) { try { Call(profileSet, "Delete"); } catch { /* Keep the original COM diagnostic. */ } }
-            DiagnosticLog.Error("cad-extrude", error, new { expectedDocument, operation, shape, featureCreated = created }); throw;
+            DiagnosticLog.Error("cad-extrude", error, new { expectedDocument, operation, shape, featureCreated = created });
+            throw new InvalidOperationException((created ? "PARTIAL SUCCESS: feature created; do not retry extrusion. Inspect solidedge_list_features before further edits. " : "Feature creation failed; inspect document before retrying. ") + (error.InnerException ?? error).Message);
+        }
+    }
+    internal static void CadValidateFeatureName(object models, string featureName)
+    {
+        if (featureName == "") return;
+        if (string.IsNullOrWhiteSpace(featureName) || featureName.Length > 255 || featureName.Any(char.IsControl))
+            throw new ArgumentException("Use a nonblank feature name of at most 255 characters without control characters.");
+        for (int m = 1; m <= Convert.ToInt32(Get(models, "Count")); m++)
+        {
+            var features = Get(GetItem(models, m), "Features");
+            for (int i = 1; i <= Convert.ToInt32(Get(features, "Count")); i++)
+                if (string.Equals(Convert.ToString(Get(GetItem(features, i), "Name"))?.Trim(), featureName.Trim(), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Duplicate feature name; no profile or geometry was created: " + featureName);
         }
     }
     public static object CadPlacePart(string expectedDocument, string filePath, double xMm = 0, double yMm = 0, double zMm = 0, double rxDeg = 0, double ryDeg = 0, double rzDeg = 0, bool ground = true)

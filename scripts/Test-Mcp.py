@@ -44,13 +44,13 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];checks.append('MCP initialization')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==66,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==70,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['mechcue_get_video_export','solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference']:
+    for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference','solidedge_get_mechcue_settings']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('66 tools and read-only annotations')
+    checks.append('70 tools and read-only annotations')
     catalog=tool('solidedge_list_concept_templates')
     assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
@@ -72,6 +72,9 @@ try:
     tool('solidedge_set_view',{'expectedDocument':'unused'},True)
     tool('solidedge_export_view_image',{'expectedDocument':'unused','outputPath':'unused.jpg'},True)
     tool('solidedge_export_interference_report',{'expectedDocument':'unused','reportPath':'unused.txt'},True)
+    tool('solidedge_reopen_document',{'expectedDocument':'unused'},True)
+    tool('mechcue_save_document',{'expectedDocument':'unused'},True)
+    tool('mechcue_migrate_concept_settings',{'expectedDocument':'unused','manifestPath':'unused','settingsJson':'{}'},True)
     checks.append('CAD mutations and application alert changes disabled without explicit write flag')
     def mode(value):
         temp=settings_path.with_suffix('.tmp');temp.write_text(json.dumps({'schema':1,'mode':value}),encoding='utf-8');temp.replace(settings_path)

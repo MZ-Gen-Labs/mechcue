@@ -21,6 +21,28 @@ public static partial class SelfTest
         Assert(pair.GetProperty("pairDetailsComplete").GetBoolean(), "Available pair arrays retained.");
         Assert(!pair.GetProperty("pairs")[0].GetProperty("confirmed").GetBoolean(), "Probable contact remains unconfirmed.");
         Assert(pair.GetProperty("pairs")[0].GetProperty("first").GetProperty("name").GetString() == "a", "Pair name preserved.");
+        var reportFolder = Path.Combine(Path.GetTempPath(), "mechcue-report-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(reportFolder);
+        try
+        {
+            string clearPath = Path.Combine(reportFolder, "clear.txt");
+            var report = JsonSerializer.SerializeToElement(Bridge.CadInterferenceReport(Result(1, 0), clearPath));
+            Assert(File.Exists(clearPath) && report.GetProperty("reportSource").GetString() == "mechcue-clear-summary", "Clear without a native report produces a labelled summary.");
+            foreach (int status in new[] { 2, 5, 99 })
+            {
+                string missing = Path.Combine(reportFolder, status + ".txt");
+                var incomplete = JsonSerializer.SerializeToElement(Bridge.CadInterferenceReport(Result(status, 0), missing));
+                Assert(!File.Exists(missing) && !incomplete.GetProperty("reportCreated").GetBoolean() && !incomplete.GetProperty("analysis").GetProperty("clear").GetBoolean(), "Missing native report never fabricates clear.");
+            }
+        }
+        finally { Directory.Delete(reportFolder, true); }
+        var features = new FakeCollection(); features.Items.Add(new InspectionPart("Rail-clearance"));
+        var models = new FakeCollection(); models.Items.Add(new InspectionModel(features));
+        bool duplicateRejected = false;
+        try { Bridge.CadValidateFeatureName(models, "rail-clearance"); } catch (InvalidOperationException) { duplicateRejected = true; }
+        Assert(duplicateRejected && features.Count == 1, "Duplicate names rejected without mutations.");
+        Bridge.CadValidateFeatureName(models, "Rail-clearance-2");
+        TestConceptMigration();
         var child = new InspectionOccurrence { Name = "leaf", OccurrenceFileName = "leaf.par", Pose = Bridge.CadTransform(100, 0, 0, 0, 0, 0) };
         var shared = new InspectionDocument("shared.asm"); shared.Occurrences.Items.Add(child);
         var root = new InspectionDocument("root.asm");
@@ -40,6 +62,33 @@ public static partial class SelfTest
     {
         public string Name => name;
         public int Type => 1;
+    }
+    public sealed class InspectionModel(FakeCollection features) { public FakeCollection Features => features; }
+    static void TestConceptMigration()
+    {
+        void Assert(bool value, string message) { if (!value) throw new Exception(message); }
+        var model = ConceptMachine.Create("mill4", 500, 300, 300);
+        var tracks = model.Axes.Select(a => new Track { Name = a.Id, Kind = a.Kind == "rotary" ? "部品回転" : "部品移動", Axis = a.Direction, Points = [new(0, 0), new(4, 50)] }).ToList();
+        var sample = new Track(); tracks.Add(sample);
+        var pattern = new MotionPattern { Name = "Original", Points = tracks.ToDictionary(t => t.Id, t => t.Points.ToList()) };
+        var settings = new DocumentSettings { Version = 2, Tracks = tracks.Select(t => new SavedTrack { Track = t }).ToList(),
+            Patterns = [pattern], ActivePatternId = pattern.Id,
+            Concept = new SavedConcept { Model = model, Baseline = new(model.Values), Tracks = model.Axes.ToDictionary(a => a.Id, a => tracks.Single(t => t.Name == a.Id).Id) } };
+        string source = settings.Json();
+        var detail = JsonSerializer.Deserialize<ConceptMachine>(JsonSerializer.Serialize(model, ConceptMachine.JsonOptions), ConceptMachine.JsonOptions)!;
+        detail.AssemblyFile = "detail.asm";
+        var migrated = Bridge.BuildConceptMigration(source, detail, true);
+        Assert(migrated.ActivePatternId == settings.ActivePatternId && migrated.Tracks.Select(t => t.Track.Id).SequenceEqual(tracks.Select(t => t.Id)), "Migration preserves pattern and track identity.");
+        Assert(JsonSerializer.Serialize(migrated.Patterns) == JsonSerializer.Serialize(settings.Patterns), "Migration preserves all keyframes and patterns.");
+        Assert(migrated.Tracks.Single(t => t.Track.Id == sample.Id).Hidden && !migrated.Tracks[0].Hidden, "Only unassigned samples hidden.");
+        Assert(!Bridge.BuildConceptMigration(source, detail, false).Tracks.Last().Hidden, "Preserve option retains sample visibility.");
+        detail.Axes[0].OriginMm[0] = 1;
+        bool rejected = false; try { Bridge.BuildConceptMigration(source, detail, true); } catch (InvalidOperationException) { rejected = true; }
+        Assert(rejected && settings.Json() == source, "Changed axes rejected without source mutation.");
+        detail.Axes[0].OriginMm[0] = 0;
+        settings.Patterns[0].Points[tracks[0].Id][1] = new(4, 999);
+        rejected = false; try { Bridge.BuildConceptMigration(settings.Json(), detail, true); } catch (InvalidOperationException) { rejected = true; }
+        Assert(rejected, "Inactive/active pattern points must respect axis limits.");
     }
     public sealed class InspectionDocument(string fileName)
     {

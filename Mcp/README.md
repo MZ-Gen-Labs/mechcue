@@ -198,6 +198,22 @@ MCP本体はAIアプリが自動起動するstdioサーバーです。常駐す�
 
 `mechcue_import_concept_axes`は接続済みのMechCue画面に全軸を登録します。現在の部品姿勢を測定して一定のグラフを作り、再取り込みでは編集を保持します。CAD保存で軸定義と割り当てもアセンブリ内に保存できます。
 
+### 概念から詳細への設定移行
+
+1. 元の概念アセンブリをアクティブにし、接続済みセッションへ `mechcue_save_document(expectedDocument, sessionId)` を実行します。グラフ・全動作パターン・割当てを埋め込み、CADを保存します。再生と反映を停止し、保存時の参照姿勢へ戻します。
+2. `solidedge_get_mechcue_settings(expectedDocument)` の `settingsJson` を取得します。この読取は保存済み設定のみを返し、未保存の画面編集を含みません。
+3. 詳細アセンブリと、その直下の部品／剛体サブアセンブリを参照する概念マニフェストを用意します。軸ID・親子関係・方向・原点・範囲は元と同じにし、元の参照姿勢に配置します。
+4. 詳細アセンブリに接続したセッションへ `mechcue_migrate_concept_settings(expectedDocument, manifestPath, settingsJson, hideUnboundTracks=true, sessionId)` を実行します。全グラフID・動作ID・キーフレームと参照軸値を保持して、マニフェストの構成へ一括再割当てします。移行先に埋込設定や既存割当てがある場合は上書きしません。概略軸以外の駆動先を含む元設定も拒否します。形状編集やCAD保存は行いません。要求全体はAI接続の64 Ki文字以内に収めてください。
+5. `mechcue_save_document` で詳細側を保存し、`solidedge_reopen_document(expectedDocument)` で保存済み文書のみ閉じ直します。Dirty文書は拒否し、埋込設定の保持を確認します。アドインのセッションIDが変わる場合があるので、以後はセッション一覧を取得し直します。
+
+初期サンプルを整理する場合は、取り込み時に `unboundTracks="hide"` を指定できます。未割当てのグラフだけを非表示にし、グラフ・動作内のデータは削除しません。既存割当てや未解決の割当ては保持します。既定値 `preserve` は従来動作です。
+
+### 操作結果の補足
+
+- 押出しの `featureName` は、形状作成前に既存フィーチャーとの重複を検査します。作成後のエラーは `PARTIAL SUCCESS` として、再実行前にフィーチャー一覧を確認するよう返します。自動巻戻しではありません。
+- 干渉レポートは `reportCreated` と `reportSource` を返します。ネイティブ結果が確実にclearで、Solid Edgeがファイルを生成しない場合は `mechcue-clear-summary` の要約を生成します。その他の結果でファイルがない場合は解析結果と警告を返し、干渉なしとは扱いません。ネイティブの部品ペア情報の欠落を補完したことにはなりません。
+- 表示設定・画像出力は `dirtyBefore` と `dirtyAfter` を返します。形状を動かさない表示操作でも、文書の保存状態が変わる場合があります。自動保存はしません。
+
 Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechcue_switch_pattern`, `mechcue_rename_pattern`, `mechcue_delete_pattern`. Chart edits affect the active pattern; targets remain shared. Switching pauses, rewinds and disables CAD reflection without moving CAD. Save to CAD persists all patterns.
 
 更新時はインストーラーが、インストール先のMCP本体とトレイ設定を終了します。更新中の自動再起動は一時停止します。AIとのMCP接続は更新後に再接続してください。トレイ設定アイコンの終了だけではMCP本体は終了しません。旧版は専用の終了通知を持たないため、インストール先を確認してMCPプロセスのみ終了します。Solid Edgeや他フォルダのMCPは対象にしません。

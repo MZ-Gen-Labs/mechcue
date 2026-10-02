@@ -104,7 +104,13 @@ public partial class MainForm
             }
             return AiState();
         }
-        if(method=="import_concept"){if(!bridge.Connected)throw new InvalidOperationException("Connect MechCue to the concept assembly before importing axes.");ImportConceptAxes(args.GetProperty("manifestPath").GetString()!);return AiState();}
+        if(method=="import_concept"){if(!bridge.Connected)throw new InvalidOperationException("Connect MechCue to the concept assembly before importing axes.");ImportConceptAxes(args.GetProperty("manifestPath").GetString()!,args.TryGetProperty("unboundTracks",out var unbound)?unbound.GetString()!:"preserve");return AiState();}
+        if(method=="save_document"){
+            var expected=args.GetProperty("expectedDocument").GetString();
+            if(!bridge.Connected || !string.Equals(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)),expected,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Connected document differs from expectedDocument.");
+            SaveToDocument();return AiState();
+        }
+        if(method=="migrate_concept"){MigrateConceptSettings(args.GetProperty("expectedDocument").GetString()!,args.GetProperty("manifestPath").GetString()!,args.GetProperty("settingsJson").GetString()!,args.TryGetProperty("hideUnboundTracks",out var hide) && hide.GetBoolean());return AiState();}
         if(method=="stop"){PausePlayback();return AiState();}
         if(method=="play"){StartPlayback();return AiState();}
         if(method=="seek"){
@@ -151,6 +157,6 @@ public partial class MainForm
     }
     object AiState()=>new {
         activePatternId=activePattern,patternName=patterns.FirstOrDefault(p=>p.Id==activePattern)?.Name,sessionId=aiEndpoint?.Session.Id,connected=bridge.Connected,playing=timer.Enabled,applyToCad=live.Checked,time=(double)time.Value,status=status.Text,
-        tracks=tracks.Select((t,i)=>new {number=i+1,id=t.Id,name=t.Name,kind=t.Kind,axis=t.Axis,unit=Plot.IsAngle(t)?"deg":"mm",target=bridge.BoundLabel(t) ?? bridge.PendingLabel(t),points=t.Points.Select(p=>new{time=p.Time,value=p.Value}).ToArray()}).ToArray()
+        tracks=tracks.Select((t,i)=>new {number=i+1,id=t.Id,name=t.Name,kind=t.Kind,axis=t.Axis,hidden=plot.Hidden.Contains(t),unit=Plot.IsAngle(t)?"deg":"mm",target=bridge.BoundLabel(t) ?? bridge.PendingLabel(t),points=t.Points.Select(p=>new{time=p.Time,value=p.Value}).ToArray()}).ToArray()
     };
 }

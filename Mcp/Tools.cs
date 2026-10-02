@@ -19,8 +19,20 @@ public static class MechCueTools
             try{var session=JsonSerializer.Deserialize<AiSession>(File.ReadAllText(file));if(session!=null && session.Pipe=="MechCue-"+session.Id && Guid.TryParseExact(session.Id,"N",out _) && !System.Diagnostics.Process.GetProcessById(session.ProcessId).HasExited)sessions.Add(session);}catch(IOException){}catch(JsonException){}catch(ArgumentException){}catch(System.ComponentModel.Win32Exception){}
         return sessions;
     }
-    [McpServerTool,Description("Import concept-machine axes into an enabled MechCue window connected to that assembly. Creates constant tracks from measured current pose without moving CAD; repeated import preserves existing tracks. Stops playback and disables CAD reflection. manifestPath absolute; optional sessionId. Save to CAD persists mappings.")]
-    public static Task<string> mechcue_import_concept_axes(string manifestPath,string sessionId="",CancellationToken cancellationToken=default)=>Send("import_concept",new{manifestPath},sessionId,cancellationToken);
+    [McpServerTool,Description("Import concept-machine axes into an enabled MechCue window connected to that assembly. Creates constant tracks from measured current pose without moving CAD; repeated import preserves existing tracks. unboundTracks=preserve (default) or hide hides unassigned tracks without deleting them; assigned and unresolved tracks are retained. Stops playback and disables CAD reflection. manifestPath absolute; optional sessionId. Save to CAD persists mappings.")]
+    public static Task<string> mechcue_import_concept_axes(string manifestPath,string sessionId="",string unboundTracks="preserve",CancellationToken cancellationToken=default)=>Send("import_concept",new{manifestPath,unboundTracks},sessionId,cancellationToken);
+    [McpServerTool,Description("Save the connected MechCue session's current charts, patterns and bindings into its assembly and save CAD. expectedDocument must match the connected active assembly. Stops playback and disables reflection, restoring reference poses. Requires Creation/edit mode.")]
+    public static Task<string> mechcue_save_document(string expectedDocument,string sessionId="",CancellationToken cancellationToken=default)
+    {
+        McpAccessSettings.EnsureAllowed(true);
+        return Send("save_document",new{expectedDocument},sessionId,cancellationToken);
+    }
+    [McpServerTool,Description("Migrate persisted concept chart settings into a connected new detail assembly using its manifest. Supply settingsJson from solidedge_get_mechcue_settings on the saved source. Preserves all track/pattern IDs and keyframes; requires identical axes and source baseline pose in destination. Rejects destinations with existing embedded settings/bindings and sources with non-concept bindings. Stops playback/reflection; no CAD movement or automatic save. hideUnboundTracks hides unassigned source tracks without deleting them. Requires Creation/edit mode. Save using mechcue_save_document afterward.")]
+    public static Task<string> mechcue_migrate_concept_settings(string expectedDocument,string manifestPath,string settingsJson,bool hideUnboundTracks=true,string sessionId="",CancellationToken cancellationToken=default)
+    {
+        McpAccessSettings.EnsureAllowed(true);
+        return Send("migrate_concept",new{expectedDocument,manifestPath,settingsJson,hideUnboundTracks},sessionId,cancellationToken);
+    }
     [McpServerTool(ReadOnly=true),Description("List named motion patterns, their IDs, descriptions, durations and playback options; target bindings are shared across patterns.")]
     public static Task<string> mechcue_list_patterns(string sessionId="",CancellationToken cancellationToken=default)=>Send("list_patterns",new{},sessionId,cancellationToken);
     [McpServerTool,Description("Switch named motion pattern by stable patternId or exact patternName. Retains current edits and CAD bindings, stops playback, disables CAD reflection and rewinds. Does not move CAD.")]

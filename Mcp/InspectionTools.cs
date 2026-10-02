@@ -5,6 +5,12 @@ using ModelContextProtocol.Server;
 [McpServerToolType]
 public static class SolidEdgeInspectionTools
 {
+    [McpServerTool(ReadOnly = true), Description("Read persisted embedded MechCue settings JSON from the active expected assembly. Does not include pending chart edits; use mechcue_save_document on the source first. Requires Read/select or Creation/edit mode.")]
+    public static Task<string> solidedge_get_mechcue_settings(string expectedDocument)
+        => SolidEdgeTools.ExecuteCad("get-mechcue-settings", () => Bridge.CadReadMechCueSettings(expectedDocument), false);
+    [McpServerTool, Description("Close and reopen only the active expected saved document. Rejects dirty documents without discarding changes; verifies embedded assembly settings survive. Save first. Add-in session may change; list sessions again afterward. Requires Creation/edit mode.")]
+    public static Task<string> solidedge_reopen_document(string expectedDocument)
+        => SolidEdgeTools.ExecuteCad("reopen-document", () => Bridge.CadReopen(expectedDocument));
     [McpServerTool(ReadOnly = true), Description("Recursively read an assembly's occurrences, parent-relative and composed world matrices (metres), numeric paths and native reference-key paths. Bounded traversal reports truncation and unreadable nodes. Rigid subassemblies only; flexible overrides are not evaluated. Does not activate, save or move parts. Requires Read/select or Creation/edit mode.")]
     public static Task<string> solidedge_get_assembly_tree(string expectedDocument, int maxDepth = 16, int maxOccurrences = 10000)
         => SolidEdgeTools.ExecuteCad("assembly-tree", () => Bridge.CadAssemblyTree(expectedDocument, maxDepth, maxOccurrences), false);

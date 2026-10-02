@@ -31,7 +31,7 @@ stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 try:
     request('initialize', {'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'inspection verification','version':'1'}})
     server.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n'); server.stdin.flush()
-    catalog = request('tools/list', {})['tools']; assert len(catalog) == 66
+    catalog = request('tools/list', {})['tools']; assert len(catalog) == 70
     for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference']:
         assert next(t for t in catalog if t['name']==name)['annotations']['readOnlyHint']
     document = tool('solidedge_get_document', {}); assert document['fullName'].lower() == expected.lower()
