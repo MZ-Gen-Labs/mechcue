@@ -163,6 +163,19 @@ begin
   ClearMcpUpdateMarker;
 end;
 
+procedure CurPageChanged(CurPageID: Integer);
+begin
+#if HasMcp == "1"
+  if (CurPageID = wpFinished) and WizardIsComponentSelected('mcp') then
+    if ActiveLanguage = 'japanese' then
+      WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+        'MCPを更新した場合は、AIアプリのMCP接続を再起動してください。再接続できない場合はAIアプリを再起動します。Solid Edgeの文書を閉じる必要はありません。'
+    else
+      WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+        'After an MCP update, restart the MCP connection in your AI app. Restart the AI app if reconnection is unavailable. You do not need to close Solid Edge documents.';
+#endif
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then ClearMcpUpdateMarker;

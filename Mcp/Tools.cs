@@ -67,7 +67,13 @@ public static class MechCueTools
     {
         try {
         var sessions=mechcue_list_sessions() is List<AiSession> found ? found : new List<AiSession>();
-        var session=string.IsNullOrEmpty(sessionId)?sessions.Count==1?sessions[0]:throw new InvalidOperationException("Enable AI access in MechCue. If multiple windows are enabled, supply sessionId."):sessions.Single(s=>s.Id==sessionId);
+        var session=string.IsNullOrEmpty(sessionId)?sessions.Count==1?sessions[0]:null:sessions.SingleOrDefault(s=>s.Id==sessionId);
+        if(session==null) {
+            var error=new {code=string.IsNullOrEmpty(sessionId)?sessions.Count==0?"session_unavailable":"session_selection_required":"session_not_found",
+                requestedSessionId=sessionId,availableSessions=sessions.Select(s=>new {sessionId=s.Id,processId=s.ProcessId}),mutationStarted=false,
+                recovery="Call mechcue_list_sessions and explicitly select the intended session. For a closed CAD chart, read solidedge_get_document and call solidedge_open_mechcue(expectedDocument) to restore saved settings. Do not automatically select another window or replay an edit; unsaved changes in a closed window are not guaranteed recoverable."};
+            throw new ModelContextProtocol.McpException(Json(error));
+        }
         using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);deadline.CancelAfter(TimeSpan.FromSeconds(method=="save_document"?120:20));
         using var pipe=new NamedPipeClientStream(".",session.Pipe,PipeDirection.InOut,PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);
         await pipe.ConnectAsync(3000,deadline.Token);

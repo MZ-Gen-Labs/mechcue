@@ -272,3 +272,11 @@ Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechc
 
 Solid Edge起動・状態・安全な終了、アドイン経由のMechCue接続、非同期保存、複数軸一括編集、入れ子部品駆動、既存寸法変更、Custom属性・数量BOMを追加しています。
 使用手順、共有子文書への影響、実機検証済み範囲と未対応項目は [対応記録](../docs/MCP_WORKFLOW_FIXES_20261002.md) を参照してください。
+
+## 更新・文書切替・セッションの復帰（0.3.1）
+
+更新は旧MCPプロセスを終了します。更新完了後はAIアプリ側でMCP接続を再起動し、対応する操作がなければAIアプリを再起動します。タスクトレイの起動だけではstdio接続は復帰しません。Solid Edgeや未保存チャートを閉じる必要はありません。`mechcue_get_capabilities` と `mechcue_list_sessions` で接続先を確認してください。更新中の起動は抑止され、完了後の新規接続は受け付けます。
+
+`solidedge_open_document` は、切替元や非表示の切替先とその参照子孫が未保存なら、ネイティブ警告を出す前に `document_switch_requires_save` で拒否します。`mutationStarted=false` の場合は開閉・保存を行っていません。チャートは `mechcue_save_document`、必要な参照文書は `solidedge_save_referenced_document(expectedDocument, documentPath)` で明示保存し、親アセンブリも保存してから切り替えます。参照保存は対象のファイルだけを保存し、サブアセンブリの未保存子孫は先に明示保存する必要があります。
+
+期限切れ・閉鎖した画面のIDには `session_not_found` と候補・復帰手順を返します。別画面への自動切替や編集の自動再送は行いません。`mechcue_list_sessions` で対象を選ぶか、現在文書を確認して `solidedge_open_mechcue` を使い保存済み設定を再読込してください。閉じた画面の未保存チャートは復元を保証しません。

@@ -75,13 +75,53 @@ public sealed partial class Bridge
     {
         path = CadPath(path, ".par", ".asm", ".dft", ".psm");
         if (!File.Exists(path)) throw new FileNotFoundException("Document not found", path);
-        var documents=Get(CadApplication(),"Documents");
+        var application=CadApplication();
+        var documents=Get(application,"Documents");
+        if(Convert.ToInt32(Get(documents,"Count"))>0) EnsureDocumentSwitchClean(Get(application,"ActiveDocument"),path);
         // OccurrenceDocument can already be loaded without its own visible window.
         // Re-opening that shared child through Documents.Open can block native automation.
-        var document=Enumerable.Range(1,Convert.ToInt32(Get(documents,"Count"))).Select(i=>GetItem(documents,i)).FirstOrDefault(d=>string.Equals(CadName(d),path,StringComparison.OrdinalIgnoreCase))
-            ?? Call(documents, "Open", path, Type.Missing);
+        var document=Enumerable.Range(1,Convert.ToInt32(Get(documents,"Count"))).Select(i=>GetItem(documents,i)).FirstOrDefault(d=>string.Equals(CadName(d),path,StringComparison.OrdinalIgnoreCase));
+        if(document!=null && Convert.ToInt32(Get(Get(document,"Windows"),"Count"))==0) EnsureDocumentSwitchClean(document, "<new window>");
+        document ??= Call(documents, "Open", path, Type.Missing);
         CadActivateDocument(document);
         return CadInfo(document);
+    }
+    internal static void EnsureDocumentSwitchClean(object document, string target)
+    {
+        if(string.Equals(CadName(document),target,StringComparison.OrdinalIgnoreCase)) return;
+        try { EnsureCloseClean(document,new HashSet<string>(StringComparer.OrdinalIgnoreCase),0); }
+        catch(Exception error) { throw new InvalidOperationException(JsonSerializer.Serialize(new {
+            code="document_switch_requires_save", document=CadName(document), targetDocument=target,
+            detail=(error.InnerException??error).Message, mutationStarted=false,
+            recovery="Save pending charts with mechcue_save_document. Save explicitly identified referenced documents with solidedge_save_referenced_document, then save the active assembly with solidedge_save_document before switching. No document was opened or activated."}),error); }
+    }
+    public static object CadSaveReferenced(string expectedDocument,string documentPath)
+    {
+        documentPath=CadPath(documentPath,".par",".asm",".psm");
+        var root=CadDocument(CadApplication(),expectedDocument,".asm");
+        if(string.Equals(documentPath,CadName(root),StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Use solidedge_save_document for the active assembly");
+        var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        object? Find(object doc,int depth) {
+            if(depth>32) throw new InvalidOperationException("Referenced-document traversal exceeds depth 32");
+            if(!seen.Add(CadName(doc))) return null;
+            if(string.Equals(CadName(doc),documentPath,StringComparison.OrdinalIgnoreCase)) return doc;
+            if(CadExtension(doc)!=".asm") return null;
+            var occurrences=Get(doc,"Occurrences");
+            for(int i=1;i<=Convert.ToInt32(Get(occurrences,"Count"));i++) {
+                var found=Find(Get(GetItem(occurrences,i),"OccurrenceDocument"),depth+1);if(found!=null)return found;
+            } return null;
+        }
+        var child=Find(root,0)??throw new InvalidOperationException("documentPath is not a referenced document of the guarded active assembly");
+        if(!File.Exists(documentPath)||Convert.ToBoolean(Get(child,"ReadOnly"))) throw new InvalidOperationException("Referenced document must be an existing writable file");
+        // Do not cascade a native save over unsaved descendants without naming them explicitly.
+        if(CadExtension(child)==".asm") {
+            var occurrences=Get(child,"Occurrences");var checkedDocs=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for(int i=1;i<=Convert.ToInt32(Get(occurrences,"Count"));i++) EnsureCloseClean(Get(GetItem(occurrences,i),"OccurrenceDocument"),checkedDocs,0);
+        }
+        Call(child,"Save");
+        if(Convert.ToBoolean(Get(child,"Dirty"))) throw new InvalidOperationException("Referenced save did not clear Dirty; inspect before retrying");
+        if(!string.Equals(CadName(Get(CadApplication(),"ActiveDocument")),expectedDocument,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Active document changed during referenced save; inspect application state");
+        return new {document=documentPath,saved=true,activeDocument=expectedDocument,dirty=false};
     }
     static void CadActivateDocument(object document)
     {

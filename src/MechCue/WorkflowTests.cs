@@ -9,6 +9,17 @@ public static partial class SelfTest
         void Stage(string name)=>File.AppendAllText(Path.Combine(AppContext.BaseDirectory,"workflow-test-progress.txt"),name+Environment.NewLine);
         Stage("operations");
         void Assert(bool condition,string message){if(!condition)throw new Exception(message);}
+        var switchRoot=new FakeDocument{FullName="C:/switch-root.asm",Dirty=true};
+        bool switchRejected=false;
+        try{Bridge.EnsureDocumentSwitchClean(switchRoot,"C:/another.asm");}catch(InvalidOperationException e){switchRejected=e.Message.Contains("document_switch_requires_save")&&e.Message.Contains("mutationStarted");}
+        Assert(switchRejected&&switchRoot.Dirty,"Dirty document must be rejected before activation and remain unsaved");
+        Bridge.EnsureDocumentSwitchClean(switchRoot,switchRoot.FullName);
+        switchRoot.Dirty=false;
+        var switchChild=new FakeDocument{FullName="C:/switch-child.asm",Dirty=true};
+        switchRoot.Occurrences.Items.Add(new FakeNestedAssembly(switchChild));
+        switchRejected=false;try{Bridge.EnsureDocumentSwitchClean(switchRoot,"C:/another.asm");}catch(InvalidOperationException e){switchRejected=e.Message.Contains("switch-child.asm");}
+        Assert(switchRejected&&switchChild.Dirty,"Dirty referenced child blocks switch without saving it");
+        switchChild.Dirty=false;Bridge.EnsureDocumentSwitchClean(switchRoot,"C:/another.asm");
         TestHostUiDispatch();
         TestAutomationStartup();
         var operations=new AiOperations();int calls=0;

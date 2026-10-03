@@ -14,7 +14,7 @@ public static class SolidEdgeCadTools
 
     [McpServerTool, Description("Create and activate a new part, assembly or draft. Parts use Ordered mode. Optional absolute templatePath must match the document type. Does not save or close existing documents. Requires Creation/edit mode in MechCue MCP tray settings.")]
     public static Task<string> solidedge_new_document(string kind, string templatePath = "") => Execute("new-document", () => Bridge.CadNew(kind, templatePath));
-    [McpServerTool, Description("Open and activate an existing .par/.asm/.dft/.psm using an absolute path. Does not close or save existing documents. Requires Creation/edit mode in MechCue MCP tray settings.")]
+    [McpServerTool, Description("Open and activate an existing .par/.asm/.dft/.psm using an absolute path. Refuses document_switch_requires_save before switching away from an unsaved document or dirty referenced descendants, or opening a hidden dirty target. Save charts/references/assembly explicitly first. Does not close or save existing documents. Requires Creation/edit mode in MechCue MCP tray settings.")]
     public static Task<string> solidedge_open_document(string filePath) => Execute("open-document", () => Bridge.CadOpen(filePath));
     [McpServerTool, Description("Explicitly save the active document matched by expectedDocument. For new files supply an absolute outputPath in an existing folder; never overwrites another file. Empty outputPath saves the current existing file. Requires Creation/edit mode in MechCue MCP tray settings.")]
     public static Task<string> solidedge_save_document(string expectedDocument, string outputPath = "") => Execute("save-document", () => Bridge.CadSave(expectedDocument, outputPath));

@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='mechcue-update-test-') as work:
         blocked_tray=launch(scope/'control'/'MechCue.Mcp.Control.exe');assert blocked_tray.wait(5)==0
         checks.append('AI auto-restart is blocked while update marker is active')
         marker=scope/'.update-in-progress';marker.unlink();resumed=launch(scope/'MechCue.Mcp.exe');ready(resumed);shutdown();assert resumed.wait(5)==0
-        checks.append('MCP reconnects after update marker is cleared')
+        checks.append('Fresh MCP connection initializes after update marker is cleared')
         if a.legacy:
             marker.unlink();shutil.copytree(pathlib.Path(a.legacy).resolve().parent,scope,dirs_exist_ok=True)
             old=launch(scope/'MechCue.Mcp.exe');ready(old)

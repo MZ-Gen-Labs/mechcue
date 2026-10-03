@@ -2,7 +2,7 @@ param(
     [string]$PayloadDirectory,
     [string]$McpDirectory,
     [string]$OutputDirectory,
-    [string]$Version = '0.3.1-alpha.05',
+    [string]$Version = '0.3.1',
     [switch]$AddInOnly,
     [string]$CompilerPath = $env:INNO_SETUP_COMPILER
 )

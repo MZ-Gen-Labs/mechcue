@@ -8,7 +8,9 @@ public static class DetailTools
 {
     [McpServerTool(ReadOnly=true), Description("Read this MCP process's version, executable/base path, access mode and settings path without CAD access. Does not grant or change permissions. Use when separate connections behave differently.")]
     public static string mechcue_get_capabilities() => JsonSerializer.Serialize(new {
-        version = typeof(DetailTools).Assembly.GetName().Version?.ToString(), processId = Environment.ProcessId,
+        version = typeof(DetailTools).Assembly.GetName().Version?.ToString(),
+        releaseVersion = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(DetailTools).Assembly)?.InformationalVersion,
+        reconnectAfterUpdate = new { automatic=false, recovery="Restart the MCP connection in the AI app after setup; restart the AI app if no reconnect action is available. Read capabilities and session list before resuming. No interrupted edit is automatically retried." }, processId = Environment.ProcessId,
         executablePath = Environment.ProcessPath, baseDirectory = AppContext.BaseDirectory,
         accessMode = McpAccessSettings.Read(McpAccessSettings.LegacyMode(Environment.GetCommandLineArgs())), settingsPath = McpAccessSettings.SettingsPath,
         workflowInstructions = McpWorkflowRules.Instructions
