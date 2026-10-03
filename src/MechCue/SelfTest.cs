@@ -18,6 +18,7 @@ public static partial class SelfTest
         Assert(editable.Points.SequenceEqual(new[] { new KeyPoint(0, 25), new KeyPoint(2, 125), new KeyPoint(4, 0) }), "Segment keeps times, slope, and other endpoint");
         TestConceptMachines();
         TestDetailPlanning();
+        TestMotionSampling();
         TestDrawingPlanning();
         TestDrag();
         TestTimelineEditing();

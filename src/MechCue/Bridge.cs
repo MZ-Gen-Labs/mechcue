@@ -327,7 +327,7 @@ public sealed partial class Bridge
             throw new InvalidOperationException("干渉チェックを実行できませんでした（Solid Edge APIの引数型不一致）。干渉の有無は未確認です。", ex);
         }
         int status = Convert.ToInt32(args[2]);
-        if (status == 1) return;
+        if (status == 1 && Convert.ToInt32(args[9]) == 0) return;
         if (status is 2 or 3 or 4)
         {
             var names = new List<string>();

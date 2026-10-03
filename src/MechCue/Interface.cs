@@ -204,7 +204,15 @@ public partial class MainForm
     {
         if (cadReflectionPauseDepth > 0) return;
         if (!collision.Checked) { lastCheckedTime = null; bridge.Apply(requestedTime); return; }
-        try { bridge.ApplyChecked(requestedTime); lastCheckedTime = requestedTime; }
+        try {
+            int samples=1;
+            bridge.PlaybackClearanceMm=requiredMotionClearanceMm;
+            bridge.InspectionObserver=result=>RecordMotionInspection(result,merge:lastCheckedTime.HasValue);
+            if(lastCheckedTime is double previous)samples=bridge.ApplyCheckedPath(previous,requestedTime);
+            else samples=bridge.ApplyCheckedPath(requestedTime,requestedTime);
+            lastCheckedTime = requestedTime;
+            status.Text=UiText.IsJapanese?$"干渉検出: {requestedTime:0.###} 秒まで、今回 {samples} 姿勢を確認（離散検査）":"Interference: sampled poses checked through "+requestedTime.ToString("0.###")+"s; no continuous-path certificate.";
+        }
         catch
         {
             if (lastCheckedTime is double previous)

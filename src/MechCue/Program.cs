@@ -28,6 +28,12 @@ static class Program
             catch { Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 2 && args[0] == "--motion-sampling-integration-test")
+        {
+            try { ApplicationConfiguration.Initialize(); Application.OleRequired(); Bridge.VerifyMotionSamplingInSolidEdge(args[1]); }
+            catch(Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Contains("--self-test")) { SelfTest.Run(); return; }
         if (args.Contains("--inspect-addins"))
         {
@@ -68,7 +74,7 @@ static class Program
         ApplicationConfiguration.Initialize();
         if (args.Contains("--smoke-test"))
         {
-            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface(); form.VerifyMotionPatterns(); form.VerifyConceptWorkflowFixes(); form.VerifyTimelineInterface(); form.VerifyToolbarAndReorder();
+            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface(); form.VerifyMotionPatterns(); form.VerifyConceptWorkflowFixes(); form.VerifyTimelineInterface(); form.VerifyToolbarAndReorder(); form.VerifyMotionInspectionUi();
             using var image = new Bitmap(form.Width, form.Height); form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size));
             image.Save(Path.Combine(AppContext.BaseDirectory, "preview.png")); form.Close(); return;
         }
@@ -217,7 +223,7 @@ public partial class MainForm : Form
         });
         live.CheckedChanged += (_, _) => { if (live.Checked && !loading) Guard(() => { Commit(); Drive((double)time.Value); }); UpdateConnection(); };
         collision.CheckedChanged += (_, _) => { PausePlayback(); lastCheckedTime = null; };
-        timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; if (t >= end) { if (loop.Checked && end > 0) t %= end; else { t = end; PausePlayback(); } } plot.FollowTime(t); time.Value = (decimal)t; });
+        timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; bool checkedLoopEnd=t>=end&&loop.Checked&&collision.Checked; if (t >= end) { if (loop.Checked && end > 0 && !collision.Checked) t %= end; else { t = end; PausePlayback(); } } plot.FollowTime(t); time.Value = (decimal)t; if(checkedLoopEnd)status.Text=UiText.IsJapanese?"検証再生は終端で停止しました。終端から始点へのループ移動は未検証です。":"Checked playback stopped at the end; loop reset transition is unverified."; });
         FormClosing += (_, e) =>
         {
             CancelVideoExport(); PausePlayback(); live.Checked = false;

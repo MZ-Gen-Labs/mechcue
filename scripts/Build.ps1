@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.3.1-alpha.02',
+    [string]$Version = '0.3.1-alpha.03',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -65,9 +65,11 @@ if ($WithMcp) {
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/MCP_WORKFLOW_FIXES_20261002.md') -Destination (Join-Path $taskMcp 'MCP_WORKFLOW_FIXES_20261002.md')
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/DETAIL_MCP_IMPROVEMENTS_20261003.md') -Destination (Join-Path $taskMcp 'DETAIL_MCP_IMPROVEMENTS_20261003.md')
     Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/MACHINING_MCP_20261003.md') -Destination (Join-Path $taskMcp 'MACHINING_MCP_20261003.md')
+    Copy-Item -LiteralPath (Join-Path $taskRoot 'docs/ADAPTIVE_MOTION_INSPECTION.md') -Destination (Join-Path $taskMcp 'ADAPTIVE_MOTION_INSPECTION.md')
     $taskMcpReadme = Join-Path $taskMcp 'README.md'
     [IO.File]::WriteAllText($taskMcpReadme, [IO.File]::ReadAllText($taskMcpReadme).Replace('../docs/CONCEPT_TARGETS.md','CONCEPT_TARGETS.md').Replace('../docs/DRAWING_AUTOMATION.md','DRAWING_AUTOMATION.md').Replace('../docs/PMI_AUTOMATION.md','PMI_AUTOMATION.md').Replace('../docs/SIMULATION_AUTOMATION.md','SIMULATION_AUTOMATION.md').Replace('../docs/MCP_WORKFLOW_FIXES_20261002.md','MCP_WORKFLOW_FIXES_20261002.md').Replace('../docs/DETAIL_MCP_IMPROVEMENTS_20261003.md','DETAIL_MCP_IMPROVEMENTS_20261003.md'))
     [IO.File]::WriteAllText($taskMcpReadme, [IO.File]::ReadAllText($taskMcpReadme).Replace('../docs/MACHINING_MCP_20261003.md','MACHINING_MCP_20261003.md'))
+    [IO.File]::WriteAllText($taskMcpReadme, [IO.File]::ReadAllText($taskMcpReadme).Replace('../docs/ADAPTIVE_MOTION_INSPECTION.md','ADAPTIVE_MOTION_INSPECTION.md'))
     Compress-Archive -Path (Join-Path $taskMcp '*') -DestinationPath (Join-Path $taskDistribution "MechCue-$Version-MCP-win-x64.zip")
 }
 if ($WithAddIn) {

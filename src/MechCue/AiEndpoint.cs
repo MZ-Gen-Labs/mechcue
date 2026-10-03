@@ -142,6 +142,7 @@ public partial class MainForm
             if(args.TryGetProperty("trackId",out var id) && !string.IsNullOrEmpty(id.GetString()))return tracks.Single(t=>t.Id==Guid.Parse(id.GetString()!));
             int index=args.GetProperty("trackNumber").GetInt32();if(index<1 || index>tracks.Count)throw new ArgumentOutOfRangeException("trackNumber");return tracks[index-1];
         }
+        if(motionInspectionBusy)throw new InvalidOperationException("Path inspection is running. Wait or cancel in the inspection window before other commands.");
         if(method=="get_state")return AiState();
         if(method=="get_video_export")return VideoStatus(args,false);
         if(method=="cancel_video_export")return VideoStatus(args,true);
@@ -151,10 +152,22 @@ public partial class MainForm
         if(method=="check_motion")
         {
             double start=Number("startTime"),end=Number("endTime"),step=Number("step");
-            if(!double.IsFinite(start)||!double.IsFinite(end)||!double.IsFinite(step)||start<0||end<=start||end>tracks.Max(t=>t.Points[^1].Time)||step<=0||Math.Ceiling((end-start)/step)>500)throw new ArgumentException("Use a chart interval and at most 501 sampled poses");
+            bool adaptive=!args.TryGetProperty("adaptive",out var adaptiveValue)||adaptiveValue.GetBoolean();
+            double linear=args.TryGetProperty("maxLinearStepMm",out var linearValue)?linearValue.GetDouble():5;
+            double angular=args.TryGetProperty("maxAngularStepDeg",out var angularValue)?angularValue.GetDouble():1;
+            int limit=args.TryGetProperty("maxSamples",out var limitValue)?limitValue.GetInt32():5001;
+            bool stopOnInterference=args.TryGetProperty("stopOnInterference",out var stopValue)&&stopValue.GetBoolean();
+            bool surfaceBased=!args.TryGetProperty("surfaceBased",out var surfaceValue)||surfaceValue.GetBoolean();
+            double surfaceStep=args.TryGetProperty("maxSurfaceStepMm",out var surfaceStepValue)?surfaceStepValue.GetDouble():5;
+            double clearance=args.TryGetProperty("requiredClearanceMm",out var clearanceValue)?clearanceValue.GetDouble():0;
+            if(!double.IsFinite(clearance)||clearance<0||clearance>10000)throw new ArgumentException("Clearance must be 0..10000 mm");
+            if(!double.IsFinite(start)||!double.IsFinite(end)||!double.IsFinite(step)||start<0||end<=start||end>tracks.Max(t=>t.Points[^1].Time)||step<=0)throw new ArgumentException("Use a finite positive chart interval and step");
             using var reflection = PauseCadReflection(); PausePlayback();Commit();
-            var samples=Enumerable.Range(0,(int)Math.Ceiling((end-start)/step)).Select(i=>start+i*step).Append(end).ToArray();
-            return bridge.CheckMotionSamples(samples);
+            double[] samples;
+            if(adaptive)samples=bridge.PlanMotionSamples(start,end,step,linear,angular,limit,surfaceBased,surfaceStep);
+            else {if(Math.Ceiling((end-start)/step)>500)throw new ArgumentException("Fixed mode supports at most 501 samples");samples=Enumerable.Range(0,(int)Math.Ceiling((end-start)/step)).Select(i=>start+i*step).Append(end).ToArray();}
+            var result=bridge.CheckMotionSamples(samples,stopOnInterference,adaptive,step,linear,angular,adaptive&&surfaceBased,surfaceStep,clearance);
+            RecordMotionInspection(System.Text.Json.JsonSerializer.SerializeToElement(result));return result;
         }
         if(method=="list_patterns") { StoreActivePattern(); return new { activePatternId=activePattern, patterns=patterns.Select(p=>new { id=p.Id,name=p.Name,description=p.Description,duration=p.Points.Values.Max(ps=>ps[^1].Time),speed=p.Speed,loop=p.Loop,collision=p.Collision }) }; }
         if(method is "switch_pattern" or "create_pattern" or "rename_pattern" or "delete_pattern") {

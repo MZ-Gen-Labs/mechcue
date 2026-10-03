@@ -2,21 +2,22 @@ namespace MechCue;
 public sealed partial class Bridge
 {
     readonly Dictionary<Track,string> nestedKeyPaths=new();
-    internal object CheckMotionSamples(double[] samples)
+    internal object CheckMotionSamples(double[] samples,bool stopOnInterference=false,bool adaptive=false,double step=1,double linearStep=5,double angularStep=1,bool surfaceBased=false,double surfaceStep=5,double clearanceMm=0)
     {
-        var restore=CaptureVideoPose();var results=new List<object>();
+        if(samples.Length==0)throw new ArgumentException("No samples");
+        if(!double.IsFinite(clearanceMm)||clearanceMm<0||clearanceMm>10000)throw new ArgumentException("Clearance must be 0..10000 mm");
+        var restore=CaptureVideoPose();var results=new List<System.Text.Json.JsonElement>();
         try
         {
             foreach(double position in samples)
             {
-                Apply(position);
-                // Preserve native status/count rather than interpreting an API error as clear.
-                results.Add(new {time=position,analysis=CadCheckInterference(CadName(doc!))});
+                var sample=InspectMotionPose(position,clearanceMm);results.Add(sample);
+                if(!sample.GetProperty("analysisComplete").GetBoolean()||(stopOnInterference&&!sample.GetProperty("passed").GetBoolean()))break;
             }
         }
         finally {restore();}
-        bool clear=results.All(r=>System.Text.Json.JsonSerializer.SerializeToElement(r).GetProperty("analysis").GetProperty("clear").GetBoolean());
-        return new {samples=results,allSamplesClear=clear,poseRestored=true,scope="Discrete static poses only; no swept-path guarantee, pair exclusion, minimum clearance or continuous collision certificate."};
+        var result=MotionInspectionSummary(samples,results,adaptive,step,linearStep,angularStep,surfaceBased,surfaceStep,clearanceMm,true);
+        return result;
     }
     internal void BindNested(Track track,string keyPath,bool modifySharedSubassembly)
     {

@@ -53,6 +53,7 @@ public partial class MainForm
         vertical.Panel1.Controls.Remove(chartHeading); row.Controls.Add(chartHeading); row.Controls.Add(patternChoice);
         var menuButton = new Button { Text = "⋯", Width = 30, Height = 27 };
         row.Controls.Add(menuButton); vertical.Panel1.Controls.Add(row);
+        var inspectButton=new Button{Text=PatternText("経路検査","Path inspection"),AutoSize=true,Height=27};row.Controls.Add(inspectButton);inspectButton.Click+=(_,_)=>Guard(ShowMotionInspection);
         foreach (var action in new[] { HostAction.PatternNew, HostAction.PatternDuplicate, HostAction.PatternRename, HostAction.PatternDelete, HostAction.PatternManage }) AddMenu(patternMenu, action);
         menuButton.Click += (_, _) => { RefreshMenus(); patternMenu.Show(menuButton, new Point(0, menuButton.Height)); };
         patternChoice.SelectionChangeCommitted += (_, _) => { if (!updatingPatterns && patternChoice.SelectedItem is MotionPattern p) Guard(() => SwitchPattern(p.Id)); RefreshPatternChoice(); };

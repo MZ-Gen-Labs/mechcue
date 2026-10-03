@@ -14,6 +14,7 @@ public partial class MainForm
         {
             this.owner = owner;
             owner.cadReflectionPauseDepth++;
+            owner.lastCheckedTime=null;
         }
         public void Dispose()
         {
