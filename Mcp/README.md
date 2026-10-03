@@ -280,3 +280,7 @@ Solid Edge起動・状態・安全な終了、アドイン経由のMechCue接続
 `solidedge_open_document` は、切替元や非表示の切替先とその参照子孫が未保存なら、ネイティブ警告を出す前に `document_switch_requires_save` で拒否します。`mutationStarted=false` の場合は開閉・保存を行っていません。チャートは `mechcue_save_document`、必要な参照文書は `solidedge_save_referenced_document(expectedDocument, documentPath)` で明示保存し、親アセンブリも保存してから切り替えます。参照保存は対象のファイルだけを保存し、サブアセンブリの未保存子孫は先に明示保存する必要があります。
 
 期限切れ・閉鎖した画面のIDには `session_not_found` と候補・復帰手順を返します。別画面への自動切替や編集の自動再送は行いません。`mechcue_list_sessions` で対象を選ぶか、現在文書を確認して `solidedge_open_mechcue` を使い保存済み設定を再読込してください。閉じた画面の未保存チャートは復元を保証しません。
+
+## 0.3.2 開発機能
+
+`solidedge_create_offset_plane` で汎用オフセット基準平面を作成し、押出し・切り欠き・穴で使用できます。`solidedge_list_metric_threads` は説明・ファミリー・呼び径の絞り込みとページ取得に対応します。詳細と残課題は [0.3.2開発状況](../docs/MCP_032_DEVELOPMENT.md) を参照してください。

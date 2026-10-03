@@ -45,17 +45,18 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];assert 'solidedge_close_document' in result['instructions'];checks.append('MCP initialization and saved temporary-document cleanup instructions')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==103,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==104,len(tools)
     for name in ['mechcue_list_inspection_parts','mechcue_get_inspection_reports']:assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['mechcue_get_video_export','solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference','solidedge_get_mechcue_settings']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('103 tools and read-only annotations')
+    checks.append('104 tools and read-only annotations')
     tool('mechcue_get_capabilities')
     for name,arguments in [
         ('solidedge_close_document',{'expectedDocument':'unused'}),
+        ('solidedge_create_offset_plane',{'expectedDocument':'unused','planeNumber':1,'offsetMm':10}),
         ('solidedge_save_referenced_document',{'expectedDocument':'unused','documentPath':'unused'}),
         ('solidedge_create_detail_assembly',{'expectedDocument':'unused','manifestPath':'unused','outputDirectory':'unused'}),
         ('solidedge_edit_extrusion_profile',{'expectedDocument':'unused','featureName':'test','widthMm':10}),
@@ -120,7 +121,9 @@ try:
     assert 'type must be' in str(result),result
     result=tool('solidedge_create_concept_machine',{'type':'mill5','outputDirectory':'unused','xTravelMm':0},True)
     assert 'travel must be' in str(result),result
-    checks.append('Invalid concept inputs rejected before CAD connection')
+    bad=tool('solidedge_create_offset_plane',{'expectedDocument':'unused','planeNumber':1,'offsetMm':0},True);assert 'Nonzero offsetMm' in str(bad),bad
+    bad=tool('solidedge_list_metric_threads',{'limit':0},True);assert 'limit 1..1000' in str(bad),bad
+    checks.append('Invalid concept/plane/thread filter inputs rejected before CAD connection')
     bad=tool('solidedge_plan_drawing',{'expectedDocument':'unused','frontOrientation':'bad'},True);assert 'frontOrientation' in str(bad),bad
     bad=tool('solidedge_dimension_drawing_view',{'expectedDocument':'unused','viewNumber':1,'maxDimensions':0},True);assert 'maxDimensions' in str(bad),bad
     bad=tool('solidedge_complete_drawing',{'expectedDocument':'unused','dimensionMode':'bad'},True);assert 'dimensionMode' in str(bad),bad
