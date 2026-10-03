@@ -25,6 +25,17 @@ public partial class MainForm
             }
         }
         finally { UiText.SetMode(savedLanguage, false); }
+        // A smaller monitor can constrain restored full bounds below the usual minimum.
+        form.MinimumSize = new Size(1044, 740); form.Width = 1044;
+        try
+        {
+            foreach (var languageMode in new[] { "ja", "en" })
+            {
+                UiText.SetMode(languageMode, false); Application.DoEvents();
+                Assert(form.top.Controls.Cast<Control>().All(c => c.Right <= form.top.ClientSize.Width - form.top.Padding.Right), "Narrow-monitor toolbar clips after localization");
+            }
+        }
+        finally { UiText.SetMode(savedLanguage, false); form.MinimumSize = new Size(1180, 740); }
         form.grid.Rows[1].Cells[1].Value = 77d; form.Commit();
         form.plot.Focus(); form.OnActivated(EventArgs.Empty); form.RefreshEditShortcuts();
         Assert(form.editShortcutIds.Count == 2, "Chart Undo/Redo shortcuts must register");
