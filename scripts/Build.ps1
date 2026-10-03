@@ -16,7 +16,11 @@ $taskStandalone = Join-Path $taskOutput 'standalone'
 & dotnet publish (Join-Path $taskRoot 'MechCue.csproj') -c Release --self-contained false -p:PlatformTarget=x64 "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskStandalone
 if ($LASTEXITCODE -ne 0) { throw 'Standalone build failed' }
 foreach ($taskCheck in @('--self-test','--smoke-test')) {
-    $taskProcess = Start-Process -FilePath (Join-Path $taskStandalone 'MechCue.exe') -ArgumentList $taskCheck -PassThru -Wait -WindowStyle Hidden
+    $taskCheckLog = Join-Path $taskStandalone ($taskCheck.TrimStart('-') + '-stdout.txt')
+    $taskCheckError = Join-Path $taskStandalone ($taskCheck.TrimStart('-') + '-stderr.txt')
+    # The console host exposes exception details from the WinExe test entry point.
+    $taskProcess = Start-Process -FilePath (Get-Command dotnet).Source -ArgumentList @(('"' + (Join-Path $taskStandalone 'MechCue.dll') + '"'), $taskCheck) -PassThru -Wait -WindowStyle Hidden -RedirectStandardOutput $taskCheckLog -RedirectStandardError $taskCheckError
+    Get-Content -LiteralPath $taskCheckLog, $taskCheckError
     if ($taskProcess.ExitCode -ne 0) { throw "Check failed: $taskCheck" }
 }
 $taskDistribution = Join-Path $taskOutput 'release'
