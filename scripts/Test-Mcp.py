@@ -45,14 +45,25 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];assert 'solidedge_close_document' in result['instructions'];checks.append('MCP initialization and saved temporary-document cleanup instructions')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==104,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==111,len(tools)
     for name in ['mechcue_list_inspection_parts','mechcue_get_inspection_reports']:assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['mechcue_get_video_export','solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference','solidedge_get_mechcue_settings']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('104 tools and read-only annotations')
+    checks.append('111 tools and read-only annotations')
+    bad=tool('solidedge_check_interference',{'expectedDocument':'unused','parts1Json':'[1]'},True)
+    assert 'unknown_tool_arguments' in str(bad) and 'mutationStarted' in str(bad),bad
+    bad=tool('mechcue_get_state',{'SessionId':'invalid'},True);assert 'unknown_tool_arguments' in str(bad),bad
+    checks.append('Unknown CAD/chart arguments rejected before invocation with correct names')
+    for name,arguments in [
+        ('solidedge_edit_hole',{'expectedDocument':'unused','featureName':'unused','changesJson':'{"diameterMm":8}'}),
+        ('solidedge_edit_hole_pattern',{'expectedDocument':'unused','featureName':'unused','changesJson':'{"xCount":3}'}),
+        ('solidedge_set_hole_thread',{'expectedDocument':'unused','featureName':'unused','threadDescription':'M8','tapDrillDiameterMm':6.8}),
+        ('solidedge_delete_machining_feature',{'expectedDocument':'unused','featureName':'unused','backupPath':'unused'})]:tool(name,arguments,True)
+    for name in ['solidedge_get_feature_details','solidedge_check_interference_pairs','solidedge_check_hole_interface']:
+        assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     tool('mechcue_get_capabilities')
     for name,arguments in [
         ('solidedge_close_document',{'expectedDocument':'unused'}),
@@ -117,6 +128,10 @@ try:
             assert 'kind must be part' not in message,message
             tool('solidedge_set_display_alerts',{'displayAlerts':False},True)
     mode('write')
+    bad=tool('solidedge_edit_hole',{'expectedDocument':'unused','featureName':'unused','changesJson':'{"depthMM":8}'},True);assert 'Unknown or duplicate edit field' in str(bad),bad
+    bad=tool('solidedge_edit_hole_pattern',{'expectedDocument':'unused','featureName':'unused','changesJson':'{"xCount":2,"xCount":3}'},True);assert 'Unknown or duplicate edit field' in str(bad),bad
+    bad=tool('solidedge_check_interference_pairs',{'expectedDocument':'unused','maxPairs':0},True);assert 'maxPairs' in str(bad),bad
+    checks.append('New machining mutations permission-gated; patch typos/duplicates and pair budget rejected before CAD')
     result=tool('solidedge_create_concept_machine',{'type':'invalid','outputDirectory':'unused'},True)
     assert 'type must be' in str(result),result
     result=tool('solidedge_create_concept_machine',{'type':'mill5','outputDirectory':'unused','xTravelMm':0},True)
