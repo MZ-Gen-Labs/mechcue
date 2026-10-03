@@ -20,7 +20,22 @@ public sealed partial class Bridge
         }
         if(entries.Count==0)throw new InvalidOperationException("Configured hole size file has no metric thread entries");return(path,entries.ToArray());
     }
-    public static object CadListMetricThreads() {var catalog=MachiningThreads();return new {sourceFile=catalog.Path,threads=catalog.Entries,note="Configured native legacy HoleSizeFile, metric straight thread entries; not the newer workbook hole-standard catalog. Exact description required. Tap drill diameter is caller-selected between internal minor and nominal diameter."};}
+    public static object CadListMetricThreads(string descriptionContains="", string family="", double nominalDiameterMm=0, int offset=0, int limit=1000)
+    {
+        CadFinite(nominalDiameterMm,nameof(nominalDiameterMm));
+        if(nominalDiameterMm<0 || offset<0 || limit<1 || limit>1000 || descriptionContains.Length>255 || family.Length>255)
+            throw new ArgumentException("Use nonnegative diameter/offset, limit 1..1000 and filter strings <=255 characters");
+        var catalog=MachiningThreads();
+        var matches=catalog.Entries.Where(e=>(descriptionContains=="" || e.Description.Contains(descriptionContains,StringComparison.OrdinalIgnoreCase)) &&
+            (family=="" || string.Equals(e.Family,family,StringComparison.OrdinalIgnoreCase)) &&
+            (nominalDiameterMm==0 || Math.Abs(e.NominalDiameterMm-nominalDiameterMm)<1e-6)).ToArray();
+        var page=matches.Skip(offset).Take(limit).ToArray();
+        return new {sourceFile=catalog.Path,threads=page,totalCount=catalog.Entries.Length,matchedCount=matches.Length,offset,limit,
+            nextOffset=offset<matches.Length && page.Length<matches.Length-offset ? (int?)(offset+page.Length):null,
+            families=catalog.Entries.Select(e=>e.Family).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            note="Configured native legacy HoleSizeFile, metric straight thread entries; not the newer workbook hole-standard catalog. Exact returned description required. Tap drill diameter is caller-selected between internal minor and nominal diameter."};
+    }
+
     static object MachiningFeature(object doc, string name)
     {
         var features=Get(GetItem(Get(doc,"Models"),1),"Features");
