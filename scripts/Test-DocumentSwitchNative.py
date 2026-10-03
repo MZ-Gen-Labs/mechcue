@@ -1,6 +1,6 @@
 """Native document recovery checks in NEW files; preserves pre-existing user windows."""
 import argparse,json,pathlib,subprocess,queue,threading,os,sys
-p=argparse.ArgumentParser();p.add_argument('--mcp',required=True);p.add_argument('--output',required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--mcp',required=True);p.add_argument('--output',required=True);p.add_argument('--reference');a=p.parse_args()
 root=pathlib.Path(a.output).resolve();root.mkdir(parents=True,exist_ok=False);sys.stdout.reconfigure(encoding='utf-8')
 env=os.environ.copy();env['MECHCUE_MCP_SETTINGS_PATH']=str(root/'access.json');env['MECHCUE_MCP_NO_TRAY']='1';(root/'access.json').write_text('{"schema":1,"mode":"write"}')
 startup=subprocess.STARTUPINFO();startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW;startup.wShowWindow=0
@@ -16,15 +16,17 @@ def req(method,params):
   if r.get('id')==seq:
    if 'error' in r:raise RuntimeError(r['error'])
    return r['result']
-def tool(name,error=False,**args):
- r=req('tools/call',dict(name=name,arguments=args));history.append(dict(tool=name,args=args,result=r));(root/'results.json').write_text(json.dumps(history,ensure_ascii=False,indent=2),encoding='utf-8')
- assert bool(r.get('isError'))==error,(name,r)
+def tool(tool_name,error=False,**args):
+ r=req('tools/call',dict(name=tool_name,arguments=args));history.append(dict(tool=tool_name,args=args,result=r));(root/'results.json').write_text(json.dumps(history,ensure_ascii=False,indent=2),encoding='utf-8')
+ assert bool(r.get('isError'))==error,(tool_name,r)
  if error:return r
  return json.loads(''.join(c.get('text','') for c in r['content']))
 def passed(message):checks.append(message);print('PASS '+message,flush=True)
 try:
  req('initialize',dict(protocolVersion='2025-11-25',capabilities={},clientInfo=dict(name='document recovery',version='1')))
  server.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');server.stdin.flush()
+ state=tool('solidedge_get_application_state')
+ if state['state']=='ready_no_document' and a.reference:tool('solidedge_open_document',filePath=str(pathlib.Path(a.reference).resolve()))
  original=tool('solidedge_get_document');before=tool('solidedge_get_application_state')
  assert not original['dirty'],'Save your active document before running the native regression'
  caps=tool('mechcue_get_capabilities');assert caps['releaseVersion'].startswith('0.3.1') and caps['reconnectAfterUpdate']['automatic']==False
@@ -47,6 +49,7 @@ try:
  tool('solidedge_save_document',expectedDocument=assembly)
  tool('solidedge_open_document',filePath=original['fullName']);tool('solidedge_open_document',filePath=assembly)
  passed('explicit save permits document switching')
+ tool('solidedge_open_document',filePath=child);tool('solidedge_open_document',filePath=assembly)
  nodes=tool('solidedge_get_assembly_tree',expectedDocument=assembly)['nodes']
  node=next(n for n in nodes if n['FileName'].lower()==part.lower())
  tool('solidedge_position_nested_part',expectedDocument=assembly,keyPath=node['KeyPath'],xMm=5,yMm=0,zMm=0,modifySharedSubassembly=True)
@@ -55,7 +58,9 @@ try:
  tool('solidedge_save_referenced_document',expectedDocument=assembly,documentPath=original['fullName'],error=True)
  result=tool('solidedge_save_referenced_document',expectedDocument=assembly,documentPath=child)
  assert result['saved'] and result['dirty']==False and result['activeDocument']==assembly
- passed('hidden referenced assembly saved explicitly; unrelated document refused')
+ passed('referenced assembly saved without activation; unrelated document refused')
+ tool('solidedge_save_document',expectedDocument=assembly)
+ tool('solidedge_open_document',filePath=child);tool('solidedge_close_document',expectedDocument=child,returnDocument=assembly)
  tool('solidedge_save_document',expectedDocument=assembly)
  tool('solidedge_close_document',expectedDocument=assembly,returnDocument=original['fullName'])
  after=tool('solidedge_get_application_state');current=tool('solidedge_get_document')
