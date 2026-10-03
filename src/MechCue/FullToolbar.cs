@@ -25,7 +25,10 @@ public partial class MainForm
                     button.Size = new Size(Math.Max(43, TextRenderer.MeasureText(button.Text, button.Font).Width + 8), 28);
                 }
                 if (control is FlowLayoutPanel modes)
+                {
+                    modes.AutoSizeMode = AutoSizeMode.GrowAndShrink;
                     foreach (Control mode in modes.Controls) mode.Margin = new Padding(1, 3, 1, 3);
+                }
             }
         }
         finally { top.ResumeLayout(true); }

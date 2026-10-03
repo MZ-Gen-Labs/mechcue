@@ -17,7 +17,7 @@ public partial class MainForm
                 UiText.SetMode(languageMode, false); Application.DoEvents();
                 var controls = form.top.Controls.Cast<Control>().Where(c => c.Visible).ToArray();
                 Assert(controls.Select(c => c.Top).Distinct().Count() == 1, "Full toolbar wraps at minimum width");
-                Assert(controls.All(c => c.Right <= form.top.ClientSize.Width - form.top.Padding.Right), "Single-row toolbar clips a command");
+                Assert(controls.All(c => c.Right <= form.top.ClientSize.Width - form.top.Padding.Right), "Single-row toolbar clips a command: " + languageMode + "; width=" + form.Width + "; toolbar=" + form.top.ClientSize + "; dpi=" + form.DeviceDpi + "; " + string.Join("; ", controls.Select(c => $"{c.GetType().Name} '{c.Text}' {c.Bounds}")));
                 Assert(form.reviewMode.Text == (languageMode == "ja" ? "表示" : "View"), "Display mode label mismatch");
                 Assert(form.top.Controls.OfType<Button>().Single(b => Equals(b.Tag, "menu-settings")).Width < 100, "Settings button remains excessively wide");
                 form.SetCompact(true); form.SetCompact(false); Application.DoEvents();
