@@ -39,6 +39,7 @@ public sealed partial class Bridge
     {
         var plan=PlanMotionSamples(Math.Min(fromTime,toTime),Math.Max(fromTime,toTime),1,5,1,5001,surfaceBased);
         if(toTime<fromTime)Array.Reverse(plan);
+        if(InspectionPolicy.IncludeNested||InspectionPolicy.VerifyContinuous||InspectionPolicy.AllowedContacts.Length>0)return ApplyVerifiedPath(plan);
         var restore=CaptureVideoPose();double at=fromTime;
         var results=new List<System.Text.Json.JsonElement>();
         try {

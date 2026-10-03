@@ -109,6 +109,8 @@ public sealed class SavedTrack
 }
 public sealed class DocumentSettings
 {
+    public MotionInspectionPolicy? InspectionPolicy {get;set;}
+    public double RequiredMotionClearanceMm {get;set;}
     public SavedConcept? Concept { get; set; }
     public List<MotionPattern> Patterns { get; set; } = [];
     public Guid ActivePatternId { get; set; }
@@ -123,6 +125,8 @@ public sealed class DocumentSettings
     public static DocumentSettings Parse(string json)
     {
         var settings = JsonSerializer.Deserialize<DocumentSettings>(json) ?? throw new InvalidDataException("Empty MechCue settings");
+        settings.InspectionPolicy?.Validate();
+        if(!double.IsFinite(settings.RequiredMotionClearanceMm)||settings.RequiredMotionClearanceMm<0||settings.RequiredMotionClearanceMm>10000)throw new InvalidDataException("Invalid inspection clearance");
         if(settings.Tracks==null||settings.Tracks.Any(t=>t?.Track==null))throw new InvalidDataException("Invalid MechCue tracks");
         if(settings.Concept is {} c) { c.Model.Validate(); c.Model.ValidateValues(c.Baseline); if(c.Tracks.Count!=c.Model.Axes.Count || c.Tracks.Values.Distinct().Count()!=c.Tracks.Count || c.Tracks.Values.Any(id=>!settings.Tracks.Any(t=>t.Track.Id==id)) || c.Model.Axes.Any(a=>!c.Tracks.ContainsKey(a.Id))) throw new InvalidDataException("Invalid concept chart mapping"); }
         if (settings.Version is not (1 or 2 or 3)) throw new InvalidDataException("Unsupported MechCue settings version: " + settings.Version);

@@ -16,7 +16,12 @@ public static partial class SelfTest
         var doc=new FakeCollisionDocument();var app=new FakeApplication{ActiveDocument=doc};app.OpenDocuments.Items.Add(doc);
         var moving=new FakePart{Name="Moving"};doc.Occurrences.Items.AddRange([moving,new FakePart{Name="Obstacle"}]);
         var track=new Track{Kind="部品座標",Points=[new(0,500),new(.5,600),new(1,500)]};
-        var bridge=new Bridge(app,doc);bridge.Bind(track,new Target("Moving",moving,"Matrix"));
+        var bridge=new Bridge(app,doc){InspectionPolicy=new(){IncludeNested=false,VerifyContinuous=false}};bridge.Bind(track,new Target("Moving",moving,"Matrix"));
+        Check(MotionBoundMath.Variation(peak,0,1)==200&&MotionBoundMath.Variation(peak,1,0)==200,"Travel bound lost interior peak or reverse interval");
+        Check(MotionBoundMath.Variation(spin,0,1)==360,"Travel bound collapsed a complete revolution");
+        Check(Bridge.BoxDistance([0,0,0,10,10,10],[13,14,0,20,20,10])==5,"Enclosing-box distance must be a Euclidean lower bound");
+        var settings=new DocumentSettings{Tracks=[new SavedTrack{Track=peak}],RequiredMotionClearanceMm=2,InspectionPolicy=new(){AllowedContacts=[new("/AA","/BB","Bearing seat")]}};
+        var restored=DocumentSettings.Parse(settings.Json());Check(restored.RequiredMotionClearanceMm==2&&restored.InspectionPolicy!.AllowedContacts[0].Reason=="Bearing seat","Inspection policy and named contact did not survive document serialization");
         var report=System.Text.Json.JsonSerializer.SerializeToElement(bridge.CheckMotionSamples(plan,false,true));
         Check(!report.GetProperty("allSamplesClear").GetBoolean()&&report.GetProperty("samplingComplete").GetBoolean(),"Full report hides interior collision or incomplete coverage");
         doc.ForcedStatus=5;report=System.Text.Json.JsonSerializer.SerializeToElement(bridge.CheckMotionSamples([0,1]));

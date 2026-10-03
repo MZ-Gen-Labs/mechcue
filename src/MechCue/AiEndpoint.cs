@@ -144,6 +144,13 @@ public partial class MainForm
         }
         if(motionInspectionBusy)throw new InvalidOperationException("Path inspection is running. Wait or cancel in the inspection window before other commands.");
         if(method=="get_state")return AiState();
+        if(method=="list_inspection_parts")return bridge.ListMotionInspectionParts();
+        if(method=="get_inspection_reports")return new{records=motionReports};
+        if(method=="set_inspection_policy"){
+            if(reviewMode.Checked)throw new InvalidOperationException("Creation mode required");
+            var policy=args.GetProperty("policy").Deserialize<MotionInspectionPolicy>(new JsonSerializerOptions{PropertyNameCaseInsensitive=true})??throw new ArgumentException("Missing policy");
+            bridge.ValidateMotionInspectionPolicy(policy);PausePlayback();bridge.InspectionPolicy=policy;lastCheckedTime=null;MarkDocumentSettingsChanged();return policy;
+        }
         if(method=="get_video_export")return VideoStatus(args,false);
         if(method=="cancel_video_export")return VideoStatus(args,true);
         if(videoExport?.Running==true)throw new InvalidOperationException("Video export is running. Wait for completion or cancel it before editing or playing.");
@@ -166,7 +173,8 @@ public partial class MainForm
             double[] samples;
             if(adaptive)samples=bridge.PlanMotionSamples(start,end,step,linear,angular,limit,surfaceBased,surfaceStep);
             else {if(Math.Ceiling((end-start)/step)>500)throw new ArgumentException("Fixed mode supports at most 501 samples");samples=Enumerable.Range(0,(int)Math.Ceiling((end-start)/step)).Select(i=>start+i*step).Append(end).ToArray();}
-            var result=bridge.CheckMotionSamples(samples,stopOnInterference,adaptive,step,linear,angular,adaptive&&surfaceBased,surfaceStep,clearance);
+            var policy=args.TryGetProperty("inspectionPolicy",out var configuration)?configuration.Deserialize<MotionInspectionPolicy>(new JsonSerializerOptions{PropertyNameCaseInsensitive=true})??throw new ArgumentException("Missing policy"):bridge.InspectionPolicy;
+            var result=bridge.CheckContinuousMotion(samples,clearance,policy,limit,stopOnInterference);
             RecordMotionInspection(System.Text.Json.JsonSerializer.SerializeToElement(result));return result;
         }
         if(method=="list_patterns") { StoreActivePattern(); return new { activePatternId=activePattern, patterns=patterns.Select(p=>new { id=p.Id,name=p.Name,description=p.Description,duration=p.Points.Values.Max(ps=>ps[^1].Time),speed=p.Speed,loop=p.Loop,collision=p.Collision }) }; }

@@ -195,6 +195,7 @@ public partial class MainForm
         PausePlayback(); live.Checked = autoApply.Checked = false;
         documentReady = false;
         string title = bridge.Connect();
+        bridge.InspectionPolicy=new();requiredMotionClearanceMm=bridge.PlaybackClearanceMm=0;
         status.Text = "接続：" + title;
         var json = bridge.ReadSettings();
         if (json != null) RestoreDocumentSettings(DocumentSettings.Parse(json));
@@ -210,6 +211,7 @@ public partial class MainForm
     void RestoreDocumentSettings(DocumentSettings settings)
     {
         PausePlayback(); live.Checked = autoApply.Checked = false; ClearEditHistory(); restorationWarnings.Clear();
+        bridge.InspectionPolicy=settings.InspectionPolicy??new();requiredMotionClearanceMm=bridge.PlaybackClearanceMm=settings.RequiredMotionClearanceMm;
         tracks.Clear(); tracks.AddRange(settings.Tracks.Select(entry => entry.Track));
         plot.Hidden.Clear(); foreach (var entry in settings.Tracks.Where(entry => entry.Hidden)) plot.Hidden.Add(entry.Track);
         speed.Value = settings.Speed; dragStep.Value = settings.DragStep; loop.Checked = settings.Loop; collision.Checked = settings.Collision; overlay.SelectedIndex = (settings.DisplayMode ?? (settings.Overlay ? "checked" : "selected")) switch { "selected" => 0, "all" => 2, _ => 1 }; plot.DisplayMode = ChartDisplayMode; RefreshLegend();
@@ -230,7 +232,7 @@ public partial class MainForm
         Current.Name = name.Text; Current.Kind = CurrentKind; Current.Axis = axis.Text; Current.Points = points;
         StoreActivePattern();
         var savedTracks=tracks.Select(track => new SavedTrack { Track = track, Hidden = plot.Hidden.Contains(track), Target = bridge.CaptureTarget(track) }).ToList();
-        return new DocumentSettings { Version = savedTracks.Any(t=>t.Target?.KeyPath!=null)?3:2, Patterns = patterns, ActivePatternId = activePattern, Concept = bridge.CaptureConcept(), Speed = speed.Value, DragStep = dragStep.Value, Loop = loop.Checked, Collision = collision.Checked, Overlay = ChartDisplayMode != "selected", DisplayMode = ChartDisplayMode, Tracks = savedTracks };
+        return new DocumentSettings { InspectionPolicy=bridge.InspectionPolicy,RequiredMotionClearanceMm=requiredMotionClearanceMm,Version = savedTracks.Any(t=>t.Target?.KeyPath!=null)?3:2, Patterns = patterns, ActivePatternId = activePattern, Concept = bridge.CaptureConcept(), Speed = speed.Value, DragStep = dragStep.Value, Loop = loop.Checked, Collision = collision.Checked, Overlay = ChartDisplayMode != "selected", DisplayMode = ChartDisplayMode, Tracks = savedTracks };
     }
     void WriteDocumentSettings()
     {

@@ -2,23 +2,30 @@ using System.Text.Json;
 namespace MechCue;
 public sealed partial class Bridge
 {
-    internal JsonElement InspectMotionPose(double position,double clearanceMm=0)
+    internal JsonElement InspectMotionPose(double position,double clearanceMm=0,MotionInspectionPolicy? policy=null,Action? validatePose=null)
     {
-        object analysis;MotionClearanceResult? clearance=null;
+        object analysis;MotionClearanceResult? clearance=null;MotionPairInspection? pairInspection=null;
         try {
             Apply(position);
+            validatePose?.Invoke();
+            if(policy!=null) {
+                pairInspection=InspectMotionPairs(clearanceMm,policy);clearance=pairInspection.Clearance;
+                analysis=new{clear=pairInspection.Clear,analysisComplete=pairInspection.AnalysisComplete,state=pairInspection.Clear?"clear":"interference-or-clearance-shortfall",comparison="instance-leaf-pairs",count=pairInspection.Pairs.Count(p=>!p.Clear),pairs=pairInspection.Pairs,excludedContacts=pairInspection.Excluded};
+            }
+            else {
             var parts=Enumerable.Range(1,Convert.ToInt32(Get(Get(doc!,"Occurrences"),"Count"))).Select(i=>CadOccurrence(doc!,i)).ToArray();
             if(parts.Length==0)throw new InvalidOperationException("No interference targets");
             object[] args=[parts.Length,InterferenceSet(parts),0,4,Type.Missing,Type.Missing,false,Type.Missing,Type.Missing,0,Type.Missing,Type.Missing,Type.Missing,Type.Missing,false];
             CadCallRef(doc!,"CheckInterference",[1,2,9,10,11,12,13],args);
             analysis=CadInterferenceResult(CadName(doc!),Enumerable.Range(1,parts.Length).ToArray(),[],args);
             if(clearanceMm>0)clearance=CheckMotionClearance(clearanceMm);
+            }
         }
         catch(Exception error){analysis=new{clear=false,analysisComplete=false,state="error",count=(int?)null,error=(error.InnerException??error).Message};}
         var native=JsonSerializer.SerializeToElement(analysis);
         bool complete=native.GetProperty("analysisComplete").GetBoolean()&&(clearanceMm==0||clearance?.AnalysisComplete==true);
         bool passed=complete&&native.GetProperty("clear").GetBoolean()&&(clearanceMm==0||clearance?.Clear==true);
-        return JsonSerializer.SerializeToElement(new{time=position,values=DrivenMotionTracks().Select(t=>new{trackId=t.Id,t.Name,t.Kind,t.Axis,value=t.At(position)}).ToArray(),analysis,clearance,analysisComplete=complete,passed});
+        return JsonSerializer.SerializeToElement(new{time=position,values=DrivenMotionTracks().Select(t=>new{trackId=t.Id,t.Name,t.Kind,t.Axis,value=t.At(position)}).ToArray(),analysis,clearance,leafPairs=pairInspection?.Pairs,analysisComplete=complete,passed});
     }
     internal JsonElement MotionInspectionSummary(double[] samples,List<JsonElement> results,bool adaptive,double step,double linearStep,double angularStep,bool surfaceBased,double surfaceStep,double clearanceMm,bool restored,bool cancelled=false)
     {

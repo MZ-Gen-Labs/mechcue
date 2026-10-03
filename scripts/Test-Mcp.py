@@ -45,13 +45,14 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];assert 'solidedge_close_document' in result['instructions'];checks.append('MCP initialization and saved temporary-document cleanup instructions')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==99,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==102,len(tools)
+    for name in ['mechcue_list_inspection_parts','mechcue_get_inspection_reports']:assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['mechcue_get_video_export','solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference','solidedge_get_mechcue_settings']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('99 tools and read-only annotations')
+    checks.append('102 tools and read-only annotations')
     tool('mechcue_get_capabilities')
     for name,arguments in [
         ('solidedge_close_document',{'expectedDocument':'unused'}),
@@ -154,6 +155,10 @@ try:
             time.sleep(.1)
         raise AssertionError('Test session missing')
     sid=own_session(host.pid);context={'sessionId':sid}
+    assert tool('mechcue_get_inspection_reports',context)['records']==[]
+    tool('mechcue_list_inspection_parts',context,True)
+    tool('mechcue_set_inspection_policy',context|{'policyJson':'{}'},True)
+    checks.append('Inspection records readable offline; part/policy operations refuse disconnected CAD')
     before_placement=tool('mechcue_get_state',context)
     tool('mechcue_place_window',context|{'position':0},True)
     tool('mechcue_place_window',context|{'position':3},True)

@@ -206,12 +206,14 @@ public partial class MainForm
         if (!collision.Checked) { lastCheckedTime = null; bridge.Apply(requestedTime); return; }
         try {
             int samples=1;
+            bool continuous=false;
             bridge.PlaybackClearanceMm=requiredMotionClearanceMm;
-            bridge.InspectionObserver=result=>RecordMotionInspection(result,merge:lastCheckedTime.HasValue);
+            bridge.InspectionObserver=result=>{continuous=result.GetProperty("continuousPathCertified").GetBoolean();RecordMotionInspection(result,merge:lastCheckedTime.HasValue);};
             if(lastCheckedTime is double previous)samples=bridge.ApplyCheckedPath(previous,requestedTime);
             else samples=bridge.ApplyCheckedPath(requestedTime,requestedTime);
             lastCheckedTime = requestedTime;
-            status.Text=UiText.IsJapanese?$"干渉検出: {requestedTime:0.###} 秒まで、今回 {samples} 姿勢を確認（離散検査）":"Interference: sampled poses checked through "+requestedTime.ToString("0.###")+"s; no continuous-path certificate.";
+            string scope=continuous?"連続区間ですきまを確認":"検査点を確認";
+            status.Text=UiText.IsJapanese?$"干渉検出: {requestedTime:0.###} 秒まで、今回 {samples} 姿勢 / {scope} / 対象外 {bridge.InspectionPolicy.AllowedContacts.Length} 組":$"Checked through {requestedTime:0.###} s: {samples} poses; {(continuous?"continuous clearance verified":"sample checked")}; {bridge.InspectionPolicy.AllowedContacts.Length} excluded pairs.";
         }
         catch
         {

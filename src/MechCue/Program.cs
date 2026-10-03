@@ -28,6 +28,12 @@ static class Program
             catch { Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 2 && args[0] == "--advanced-motion-integration-test")
+        {
+            try { ApplicationConfiguration.Initialize(); Application.OleRequired(); Bridge.VerifyAdvancedMotionInSolidEdge(args[1]); }
+            catch(Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 2 && args[0] == "--motion-sampling-integration-test")
         {
             try { ApplicationConfiguration.Initialize(); Application.OleRequired(); Bridge.VerifyMotionSamplingInSolidEdge(args[1]); }
