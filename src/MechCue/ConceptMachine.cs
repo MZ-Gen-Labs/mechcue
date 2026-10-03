@@ -125,6 +125,10 @@ public sealed class ConceptMachine
         foreach (var axis in Axes) if (!values.TryGetValue(axis.Id, out double value) || !double.IsFinite(value) || value < axis.Minimum || value > axis.Maximum) throw new ArgumentException($"Axis {axis.Id} must be within [{axis.Minimum}, {axis.Maximum}] {(axis.Kind == "linear" ? "mm" : "degrees")}.");
     }
     public Dictionary<string, double[]> Poses(IReadOnlyDictionary<string, double> values) {
+        var joints = AxisPoses(values);
+        return Bodies.ToDictionary(b => b.Id, b => Multiply(Multiply(joints[b.Parent], Bridge.CadTransform(b.CenterMm[0],b.CenterMm[1],b.CenterMm[2],0,0,0)), b.GeometryMatrix));
+    }
+    public Dictionary<string, double[]> AxisPoses(IReadOnlyDictionary<string, double> values) {
         ValidateValues(values);
         var joints = new Dictionary<string, double[]> { [""] = Bridge.CadTransform(0,0,0,0,0,0) };
         foreach (var axis in Axes) {
@@ -133,7 +137,7 @@ public sealed class ConceptMachine
             if (axis.Kind == "linear") xyz[n] += v; else r[n] = v;
             joints[axis.Id] = Multiply(joints[axis.Parent], Bridge.CadTransform(xyz[0],xyz[1],xyz[2],r[0],r[1],r[2]));
         }
-        return Bodies.ToDictionary(b => b.Id, b => Multiply(Multiply(joints[b.Parent], Bridge.CadTransform(b.CenterMm[0],b.CenterMm[1],b.CenterMm[2],0,0,0)), b.GeometryMatrix));
+        return joints;
     }
     public static double[] Multiply(double[] a, double[] b) {
         var result = new double[16];

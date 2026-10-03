@@ -115,7 +115,12 @@ public sealed partial class Bridge
             document = Get(CadOccurrence(document, partNumber), "OccurrenceDocument");
         }
         var planes = Get(document, "RefPlanes");
-        return new { partNumber, fullName = CadName(document), planes = Enumerable.Range(1, Convert.ToInt32(Get(planes, "Count"))).Select(i => new { number = i, name = Convert.ToString(Get(GetItem(planes, i), "Name")) }).ToArray() };
+        return new { partNumber, fullName = CadName(document), coordinateFrame = "Component document coordinates; not assembly world coordinates", units = "mm",
+            planes = Enumerable.Range(1, Convert.ToInt32(Get(planes, "Count"))).Select(i => {
+                var plane = GetItem(planes, i); var normal = ConceptPlaneVector(plane, "GetNormal"); var x = ConceptPlaneVector(plane, "GetReferenceDirection");
+                return new { number = i, name = Convert.ToString(Get(plane, "Name")), originMm = ConceptPlaneVector(plane, "GetRootPoint").Select(v => v * 1000).ToArray(), normal, xDirection = x,
+                    yDirection = new[] { normal[1]*x[2]-normal[2]*x[1], normal[2]*x[0]-normal[0]*x[2], normal[0]*x[1]-normal[1]*x[0] } };
+            }).ToArray() };
     }
     static int CadFeatureStatus(object feature)
     {
@@ -132,12 +137,13 @@ public sealed partial class Bridge
         }
         return new { fullName = CadName(document), modelingMode = Convert.ToInt32(Get(document, "ModelingMode")), features = result };
     }
-    public static object CadExtrude(string expectedDocument, string shape, double widthMm, double heightMm, double radiusMm, double depthMm, int planeNumber = 1, double xMm = 0, double yMm = 0, string operation = "add", string direction = "positive", string pointsJson = "", string featureName = "")
+    public static object CadExtrude(string expectedDocument, string shape, double widthMm, double heightMm, double radiusMm, double depthMm, int planeNumber = 1, double xMm = 0, double yMm = 0, string operation = "add", string direction = "positive", string pointsJson = "", string featureName = "", bool drivingDimensions = false)
     {
         foreach (var value in new[] { xMm, yMm }) CadFinite(value, "profile origin");
         CadFinite(depthMm, nameof(depthMm), true);
         int side = direction switch { "positive" => 2, "negative" => 1, "symmetric" => 3, _ => throw new ArgumentException("direction must be positive, negative or symmetric") };
         if (operation is not ("add" or "cut")) throw new ArgumentException("operation must be add or cut");
+        if (drivingDimensions && shape is not ("rectangle" or "circle")) throw new ArgumentException("Driving dimensions support rectangles/circles only");
         var vertices = new List<CadPoint>();
         if (shape == "rectangle") { CadFinite(widthMm, nameof(widthMm), true); CadFinite(heightMm, nameof(heightMm), true); vertices.AddRange([new(xMm, yMm), new(xMm + widthMm, yMm), new(xMm + widthMm, yMm + heightMm), new(xMm, yMm + heightMm)]); }
         else if (shape == "circle") CadFinite(radiusMm, nameof(radiusMm), true);
@@ -162,7 +168,13 @@ public sealed partial class Bridge
                 for (int i = 0; i < vertices.Count; i++) { var a = vertices[i]; var b = vertices[(i + 1) % vertices.Count]; lines.Add(Call(Get(profile, "Lines2d"), "AddBy2Points", a.X / 1000, a.Y / 1000, b.X / 1000, b.Y / 1000)); }
                 var relations = Get(profile, "Relations2d");
                 for (int i = 0; i < lines.Count; i++) Call(relations, "AddKeypoint", lines[i], 1, lines[(i + 1) % lines.Count], 0, Type.Missing);
+                if (drivingDimensions) {
+                    for (int i=0;i<4;i++) Call(relations,i%2==0?"AddHorizontal":"AddVertical",lines[i],Type.Missing);
+                    var dims=Get(profile,"Dimensions");
+                    foreach(var index in new[]{0,1}) { var dim=Call(dims,"AddLength",lines[index]);Set(dim,"Constraint",true); }
+                }
             }
+            if (drivingDimensions && shape == "circle") {var dim=Call(Get(profile,"Dimensions"),"AddCircularDiameter",GetItem(Get(profile,"Circles2d"),1));Set(dim,"Constraint",true);}
             if (Convert.ToInt32(Call(profile, "End", 1)) != 0) throw new InvalidOperationException("Solid Edge rejected the closed profile.");
             object feature;
             if (modelCount == 0) {

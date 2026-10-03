@@ -27,7 +27,8 @@ public sealed partial class Bridge
         catch(Exception error){return new {state=instances.Length==0?"not_running":"starting_or_unavailable",instances,error=(error.InnerException??error).Message};}
         try {
             var documents=CadOpenDocuments(app);int processId=CadProcessId(app);
-            return new {state=documents.Length==0?"ready_no_document":"ready",processId,instances,documents=documents.Select(CadInfo).ToArray()};
+            return new {state=documents.Length==0?"ready_no_document":"ready",processId,instances,
+                documents=documents.Select(d=>new {name=Convert.ToString(Get(d,"Name")),fullName=CadName(d),readOnly=Convert.ToBoolean(Get(d,"ReadOnly")),dirty=Convert.ToBoolean(Get(d,"Dirty")),windowCount=Convert.ToInt32(Get(Get(d,"Windows"),"Count"))}).ToArray()};
         } catch(Exception error){return new {state="starting_or_unavailable",instances,error=(error.InnerException??error).Message};}
     }
     public static object CadStartApplication()

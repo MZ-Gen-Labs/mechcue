@@ -121,7 +121,7 @@ public static class SolidEdgeTools
         catch (InvalidOperationException error) { throw new ModelContextProtocol.McpException(error.Message); }
         return worker.Value.Run(() => {
             try { McpAccessSettings.EnsureAllowed(write); var result = action(); DiagnosticLog.Write("mcp-cad-" + operation); return JsonSerializer.Serialize(result); }
-            catch (Exception error) { DiagnosticLog.Error("mcp-cad-" + operation, error); throw new ModelContextProtocol.McpException((error.InnerException ?? error).Message); }
+            catch (Exception error) { DiagnosticLog.Error("mcp-cad-" + operation, error); throw new ModelContextProtocol.McpException((error is System.Reflection.TargetInvocationException ? error.InnerException ?? error : error).Message); }
         });
     }
     static Task<string> Read(string method,int part=0,string expected="")

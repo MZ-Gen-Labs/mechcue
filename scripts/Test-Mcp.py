@@ -43,15 +43,29 @@ try:
         text=''.join(c.get('text','') for c in result.get('content',[]) if c.get('type')=='text')
         return json.loads(text)
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
-    assert 'tools' in result['capabilities'];checks.append('MCP initialization')
+    assert 'tools' in result['capabilities'];assert 'solidedge_close_document' in result['instructions'];checks.append('MCP initialization and saved temporary-document cleanup instructions')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==86,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==99,len(tools)
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['mechcue_get_video_export','solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference','solidedge_get_mechcue_settings']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('86 tools and read-only annotations')
+    checks.append('99 tools and read-only annotations')
+    tool('mechcue_get_capabilities')
+    for name,arguments in [
+        ('solidedge_close_document',{'expectedDocument':'unused'}),
+        ('solidedge_create_detail_assembly',{'expectedDocument':'unused','manifestPath':'unused','outputDirectory':'unused'}),
+        ('solidedge_edit_extrusion_profile',{'expectedDocument':'unused','featureName':'test','widthMm':10}),
+        ('solidedge_round_edges',{'expectedDocument':'unused','edgeIdsJson':'[]','radiusMm':3}),
+        ('solidedge_create_hole',{'expectedDocument':'unused','centersJson':'[]','diameterMm':8}),
+        ('solidedge_pattern_hole',{'expectedDocument':'unused','sourceFeatureName':'unused'}),
+        ('solidedge_chamfer_edges',{'expectedDocument':'unused','edgeIdsJson':'[]','setbackMm':1}),
+        ('solidedge_set_profile_dimension',{'expectedDocument':'unused','featureName':'unused','variableName':'unused','valueMm':10})]:tool(name,arguments,True)
+    for name in ['solidedge_list_metric_threads','solidedge_list_holes','solidedge_list_profile_dimensions']:
+        assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
+    assert next(t for t in tools if t['name']=='mechcue_get_capabilities')['annotations']['readOnlyHint']
+    assert next(t for t in tools if t['name']=='solidedge_list_edges')['annotations']['readOnlyHint']
     tool('mechcue_place_window',{'position':3},True)
     for name in ['solidedge_start_application','solidedge_exit_application','solidedge_open_mechcue','solidedge_set_variables','solidedge_set_custom_property','solidedge_position_nested_part']:
         arguments={'solidedge_exit_application':{'expectedProcessId':1},'solidedge_open_mechcue':{'expectedDocument':'unused'},'solidedge_set_variables':{'expectedDocument':'unused','variablesJson':'[]'},'solidedge_set_custom_property':{'expectedDocument':'unused','name':'test','value':'test'},'solidedge_position_nested_part':{'expectedDocument':'unused','keyPath':'/AA/BB','xMm':0,'yMm':0,'zMm':0}}.get(name,{})
