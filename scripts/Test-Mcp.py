@@ -99,7 +99,14 @@ try:
     tool('mechcue_migrate_concept_settings',{'expectedDocument':'unused','manifestPath':'unused','settingsJson':'{}'},True)
     checks.append('CAD mutations and application alert changes disabled without explicit write flag')
     def mode(value):
-        temp=settings_path.with_suffix('.tmp');temp.write_text(json.dumps({'schema':1,'mode':value}),encoding='utf-8');temp.replace(settings_path)
+        temp=settings_path.with_suffix('.tmp');temp.write_text(json.dumps({'schema':1,'mode':value}),encoding='utf-8')
+        # Windows CI can briefly hold the file during an atomic replacement.
+        deadline=time.monotonic()+5
+        while True:
+            try:temp.replace(settings_path);break
+            except PermissionError:
+                if time.monotonic()>=deadline:raise
+                time.sleep(.05)
     for value in ['read','write','chart','write','read']:
         mode(value)
         result=tool('solidedge_new_document',{'kind':'invalid'},True)
