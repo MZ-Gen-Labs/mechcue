@@ -2,8 +2,7 @@ namespace MechCue;
 
 public partial class MainForm
 {
-    const int UndoHotkeyId = 0x5A01, RedoHotkeyId = 0x5A02;
-    readonly HashSet<int> editShortcutIds = new();
+    readonly Dictionary<Control,EditShortcutWindow> editShortcutWindows = new();
     bool editShortcutWindowActive;
     Control? FocusedEditor()
     {
@@ -23,12 +22,20 @@ public partial class MainForm
     }
     void ConfigureEditShortcuts()
     {
-        IEnumerable<Control> All(Control control) => new[] { control }.Concat(control.Controls.Cast<Control>().SelectMany(All));
-        foreach (var control in All(this))
+        void Attach(Control control)
         {
+            if(editShortcutWindows.ContainsKey(control))return;
+            var window=new EditShortcutWindow(this);editShortcutWindows.Add(control,window);
+            control.HandleCreated+=(_,_)=>window.AssignHandle(control.Handle);
+            control.HandleDestroyed+=(_,_)=>window.ReleaseHandle();
+            if(control.IsHandleCreated)window.AssignHandle(control.Handle);
+            control.ControlAdded+=(_,e)=>{if(e.Control!=null)Attach(e.Control);};
             control.Enter += (_, _) => { if (control is TextBoxBase or NumericUpDown) ReleaseEditShortcuts(); else RefreshEditShortcuts(); };
             control.Leave += (_, _) => { if (IsHandleCreated && !IsDisposed) BeginInvoke(RefreshEditShortcuts); };
+            foreach(Control child in control.Controls)Attach(child);
         }
+        Attach(this);
+        Disposed+=(_,_)=>{foreach(var window in editShortcutWindows.Values)window.ReleaseHandle();editShortcutWindows.Clear();};
         grid.CellBeginEdit += (_, _) => ReleaseEditShortcuts();
         grid.CellEndEdit += (_, _) => RefreshEditShortcuts();
         commandHints.SetToolTip(top.Controls.OfType<Button>().Single(b => Equals(b.Tag, "元に戻す")), HostCommands.Hint(HostAction.Undo));
@@ -36,17 +43,18 @@ public partial class MainForm
     }
     void RefreshEditShortcuts()
     {
-        if (!editShortcutWindowActive || !IsHandleCreated || IsDisposed || IsTextEditing()) { ReleaseEditShortcuts(); return; }
-        foreach (var (id, key) in new[] { (UndoHotkeyId, Keys.Z), (RedoHotkeyId, Keys.Y) })
-            if (!editShortcutIds.Contains(id))
-            {
-                if (RegisterHotKey(Handle, id, 0x4002, (uint)key)) editShortcutIds.Add(id);
-                else DiagnosticLog.Write("edit-shortcut-unavailable", new { key, error = System.Runtime.InteropServices.Marshal.GetLastWin32Error() });
-            }
+        // Native child routing needs no global shortcut registration.
     }
     void ReleaseEditShortcuts()
     {
-        foreach (int id in editShortcutIds) UnregisterHotKey(Handle, id);
-        editShortcutIds.Clear();
+    }
+    sealed class EditShortcutWindow(MainForm owner):NativeWindow
+    {
+        internal bool Route(int message,Keys keys)=>message is 0x0100 or 0x0104&&owner.editShortcutWindowActive&&owner.TryEditShortcut(keys);
+        protected override void WndProc(ref Message message)
+        {
+            if(Route(message.Msg,ModifierKeys|(Keys)message.WParam.ToInt32()))return;
+            base.WndProc(ref message);
+        }
     }
 }

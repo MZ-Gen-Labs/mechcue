@@ -68,11 +68,6 @@ public partial class MainForm
     }
     protected override void WndProc(ref Message message)
     {
-        if (message.Msg == 0x0312 && editShortcutIds.Contains(message.WParam.ToInt32()))
-        {
-            TryEditShortcut(message.WParam.ToInt32() == UndoHotkeyId ? Keys.Control | Keys.Z : Keys.Control | Keys.Y);
-            return;
-        }
         if (message.Msg == 0x0312 && positionHotkeys.Contains(message.WParam.ToInt32()))
         {
             int position = WindowPositionShortcut(PositionModifiers | (Keys)(message.WParam.ToInt32() - PositionHotkeyBase));

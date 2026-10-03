@@ -19,6 +19,7 @@ public static partial class SelfTest
         TestConceptMachines();
         TestDetailPlanning();
         TestMotionSampling();
+        TestInspectionArchive();
         TestDrawingPlanning();
         TestDrag();
         TestTimelineEditing();

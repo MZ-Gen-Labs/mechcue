@@ -30,6 +30,9 @@ public sealed partial class Bridge
             var continuous=bridge.CheckContinuousMotion([0,1],1);
             Verify(continuous.GetProperty("continuousPathCertified").GetBoolean(),"Nested rigid motion certified using relative travel; common parent motion cancels");
             Verify(Math.Abs(Matrix(moving)[13])<1e-8,"Continuous inspection restores original pose");
+            var pointBefore=continuous.GetProperty("samples")[0].GetProperty("clearance").GetProperty("ClosestPair").GetProperty("Point1Mm")[1].GetDouble();
+            var pointAfter=continuous.GetProperty("samples")[1].GetProperty("clearance").GetProperty("ClosestPair").GetProperty("Point1Mm")[1].GetDouble();
+            Verify(Math.Abs(pointAfter-pointBefore-20)<1e-6,"Reused closest-point coordinates follow the common moving parent");
             track.Axis="X";track.Points=[new(0,0),new(1,160)];
             var crossing=bridge.CheckContinuousMotion([0,1],0,maxSamples:501);
             Verify(!crossing.GetProperty("allSamplesClear").GetBoolean()&&!crossing.GetProperty("continuousPathCertified").GetBoolean(),"Interval refinement detects collision missed by clear endpoints");
@@ -37,12 +40,34 @@ public sealed partial class Bridge
             Verify(limited.GetProperty("allSamplesClear").GetBoolean()&&!limited.GetProperty("continuousPathCertified").GetBoolean(),"Unresolved interval cannot become a certificate at a refinement limit");
             bridge.Unbind(track);
             CadPlacePart(assembly,part,xMm:5);var collision=bridge.InspectMotionPairs(0,allowBoth);Verify(collision.AnalysisComplete&&!collision.Clear,"Unexcluded nested-to-root collision remains detectable");
+            track.Axis="Y";track.Points=[new(0,0),new(1,20)];bridge.Bind(track,new Target("Moving module",moving,"Matrix"));
+            var independent=bridge.CheckContinuousMotion([0,1],0,allowBoth,maxSamples:501);
+            var individual=independent.GetProperty("continuousVerification").GetProperty("PairResults");
+            Verify(!independent.GetProperty("continuousPathCertified").GetBoolean()&&individual.EnumerateArray().Any(p=>p.GetProperty("state").GetString()=="verified-clear")&&individual.EnumerateArray().Any(p=>p.GetProperty("state").GetString()=="sample-violation"),"Normal pairs remain continuously verified despite a different colliding pair");
+            Verify(independent.GetProperty("fixedPairCacheHits").GetInt32()>0,"Fixed/common-motion pair measurements are reused within the guarded run");bridge.Unbind(track);
+            var unsupportedTrack=new Track{Kind="距離拘束",Points=[new(0,0),new(1,1)]};
+            bridge.Bind(unsupportedTrack,new Target("Unsupported constraint fixture",new SelfTest.FakeRelation(),"Offset"));
+            var unsupported=bridge.CheckContinuousMotion([0,1],0,allowBoth,501);bridge.Unbind(unsupportedTrack);
+            File.WriteAllText(Path.Combine(outputDirectory,"unsupported-model.json"),unsupported.GetRawText());
+            Verify(!unsupported.GetProperty("continuousPathCertified").GetBoolean()&&unsupported.GetProperty("continuousVerification").GetProperty("PairResults").EnumerateArray().Any(p=>p.GetProperty("state").GetString()=="sample-violation"),"Unsupported continuous models still label the pairs with native pose violations");
             CadSave(assembly);CadCloseDocument(assembly,BackName());Verify(original==null||Convert.ToBoolean(Get(original,"Dirty"))==dirty,"Original document dirty state unchanged");
             CadNew("assembly",@"C:\Siemens\Solid Edge 2026\Template\ISO Metric\iso metric assembly.asm");CadPlacePart(Name(),part,xMm:-30);CadPlacePart(Name(),part);
             string playbackAssembly=Path.Combine(outputDirectory,"playback.asm");CadSave(Name(),playbackAssembly);var playbackDocument=Get(app,"ActiveDocument");var playbackBridge=new Bridge(app,playbackDocument);var playbackPart=CadOccurrence(playbackDocument,1);
             var playbackTrack=new Track{Kind="部品座標",Axis="X",Points=[new(0,-30),new(1,-40)]};playbackBridge.Bind(playbackTrack,new Target("Playback moving",playbackPart,"Matrix"));
             var playbackReports=new List<JsonElement>();playbackBridge.InspectionObserver=playbackReports.Add;playbackBridge.ApplyCheckedPath(0,1);
             Verify(Math.Abs(Matrix(playbackPart)[12]+.040)<1e-8&&playbackReports[^1].GetProperty("continuousPathCertified").GetBoolean(),"Checked playback reaches the final pose only after certifying the whole interval");
+            var divided=playbackBridge.CheckContinuousMotion(Enumerable.Range(0,17).Select(i=>i/16d).ToArray(),1,maxSamples:2);
+            Verify(divided.GetProperty("samplingComplete").GetBoolean()&&divided.GetProperty("continuousPathCertified").GetBoolean()&&divided.GetProperty("chunkCount").GetInt32()>1&&divided.GetProperty("checkedSampleCount").GetInt32()==17,"Automatic batches exceed the per-batch point limit without losing coverage or the global certificate");
+            var capped=playbackBridge.CheckContinuousMotion([0,.5,1],1,new MotionInspectionPolicy{AutoSplit=true,MaxTotalSamples=3},2);
+            Verify(capped.GetProperty("samplingComplete").GetBoolean()&&capped.GetProperty("chunkCount").GetInt32()>1,"Total sample cap remains independent of the working batch size");
+            var bounded=playbackBridge.CheckContinuousMotion([0,1],1000,new MotionInspectionPolicy{AutoSplit=false},2);
+            Verify(!bounded.GetProperty("continuousPathCertified").GetBoolean(),"Disabling automatic splitting preserves a bounded non-certificate on violations");
+            var originalStamp=File.GetLastWriteTimeUtc(part);
+            try{
+                bool changed=false;
+                var invalidated=playbackBridge.CheckContinuousMotionAsync([0,.5,1],1,new(),2,CancellationToken.None,(count,_)=>{if(!changed&&count==1){changed=true;File.SetLastWriteTimeUtc(part,originalStamp.AddSeconds(2));}}).GetAwaiter().GetResult();
+                Verify(!invalidated.GetProperty("analysisComplete").GetBoolean()&&!invalidated.GetProperty("continuousPathCertified").GetBoolean()&&invalidated.GetProperty("error").GetString()!.Contains("geometry changed"),"Geometry file revision invalidates cached measurements and continuous certificates");
+            }finally{File.SetLastWriteTimeUtc(part,originalStamp);}
             playbackBridge.ApplyCheckedPath(1,0);playbackTrack.Points=[new(0,-30),new(1,30)];bool stopped=false;try{playbackBridge.ApplyCheckedPath(0,1);}catch(InvalidOperationException){stopped=true;}
             Verify(stopped&&Math.Abs(Matrix(playbackPart)[12]+.030)<1e-8&&!playbackReports[^1].GetProperty("allSamplesClear").GetBoolean(),"Checked playback stops on interior collision and restores interval-start pose");
             var cancelled=playbackBridge.CheckContinuousMotion([0,1],0,new(),501,cancellation:new CancellationToken(true));
@@ -64,7 +89,7 @@ public sealed partial class Bridge
             var fiveAxis=conceptBridge.CheckContinuousMotion([0,1],1,maxSamples:501);Verify(fiveAxis.GetProperty("continuousPathCertified").GetBoolean(),"Simultaneous XYZ/A/C concept motion including full C revolution has a continuous clearance certificate");
             Verify(ConceptSame(Matrix(playbackPart),home["moving"]),"Five-axis inspection restores actual concept body pose");
             CadSave(playbackAssembly);CadCloseDocument(playbackAssembly,BackName());
-            File.WriteAllText(Path.Combine(outputDirectory,"results.json"),JsonSerializer.Serialize(new{checks,internalGap,partial,clear,continuous,crossing,limited,collision,fiveAxis},new JsonSerializerOptions{WriteIndented=true}));
+            File.WriteAllText(Path.Combine(outputDirectory,"results.json"),JsonSerializer.Serialize(new{checks,internalGap,partial,clear,continuous,crossing,limited,collision,independent,divided,capped,bounded,fiveAxis},new JsonSerializerOptions{WriteIndented=true}));
         }
         catch(Exception error){File.WriteAllText(Path.Combine(outputDirectory,"error.txt"),error.ToString());throw;}
         finally{if(original!=null)CadActivateDocument(original);}

@@ -38,15 +38,15 @@ public partial class MainForm
         finally { UiText.SetMode(savedLanguage, false); form.MinimumSize = new Size(1180, 740); }
         form.grid.Rows[1].Cells[1].Value = 77d; form.Commit();
         form.plot.Focus(); form.OnActivated(EventArgs.Empty); form.RefreshEditShortcuts();
-        Assert(form.editShortcutIds.Count == 2, "Chart Undo/Redo shortcuts must register");
-        var undo = Message.Create(form.Handle, 0x0312, new IntPtr(UndoHotkeyId), IntPtr.Zero);
-        form.WndProc(ref undo); Assert(form.Current.Points[1].Value == 100, "Native Ctrl+Z did not undo chart editing");
-        var redo = Message.Create(form.Handle, 0x0312, new IntPtr(RedoHotkeyId), IntPtr.Zero);
-        form.WndProc(ref redo); Assert(form.Current.Points[1].Value == 77, "Native Ctrl+Y did not redo chart editing");
+        Assert(form.editShortcutWindows.ContainsKey(form.plot), "Native shortcut routing must attach to child handles");
+        Assert(form.editShortcutWindows[form.plot].Route(0x0100,Keys.Control|Keys.Z)&&form.Current.Points[1].Value == 100, "Native child Ctrl+Z did not undo chart editing");
+        Assert(form.editShortcutWindows[form.plot].Route(0x0100,Keys.Control|Keys.Y)&&form.Current.Points[1].Value == 77, "Native child Ctrl+Y did not redo chart editing");
+        Assert(!form.editShortcutWindows[form.plot].Route(0x0101,Keys.Control|Keys.Z),"Key release must not execute a second undo");
         form.name.Focus(); Application.DoEvents();
-        Assert(form.editShortcutIds.Count == 0 && !form.TryEditShortcut(Keys.Control | Keys.Z), "Text editing must keep its own Ctrl+Z");
+        Assert(!form.TryEditShortcut(Keys.Control | Keys.Z), "Text editing must keep its own Ctrl+Z");
         form.plot.Focus(); form.OnActivated(EventArgs.Empty); form.RefreshEditShortcuts();
-        form.OnDeactivate(EventArgs.Empty); Assert(form.editShortcutIds.Count == 0, "Undo/Redo shortcuts leaked outside chart activation");
+        form.OnDeactivate(EventArgs.Empty); Assert(!form.editShortcutWindowActive, "Undo routing leaked outside chart activation");
+        Assert(!form.editShortcutWindows[form.plot].Route(0x0100,Keys.Control|Keys.Z),"Inactive child must not undo");
         var actions = HostCommands.RibbonActions;
         Assert(Array.IndexOf(actions, HostAction.Redo) == Array.IndexOf(actions, HostAction.Undo) + 1 && HostCommands.Group(HostAction.Redo) == HostCommands.Group(HostAction.Undo), "Ribbon redo must follow undo in the edit group");
 

@@ -145,7 +145,7 @@ public partial class MainForm
         if(motionInspectionBusy)throw new InvalidOperationException("Path inspection is running. Wait or cancel in the inspection window before other commands.");
         if(method=="get_state")return AiState();
         if(method=="list_inspection_parts")return bridge.ListMotionInspectionParts();
-        if(method=="get_inspection_reports")return new{records=motionReports};
+        if(method=="get_inspection_reports")return InspectionReports(args);
         if(method=="set_inspection_policy"){
             if(reviewMode.Checked)throw new InvalidOperationException("Creation mode required");
             var policy=args.GetProperty("policy").Deserialize<MotionInspectionPolicy>(new JsonSerializerOptions{PropertyNameCaseInsensitive=true})??throw new ArgumentException("Missing policy");
@@ -159,7 +159,7 @@ public partial class MainForm
         if(method=="check_motion")
         {
             double start=Number("startTime"),end=Number("endTime"),step=Number("step");
-            bool adaptive=!args.TryGetProperty("adaptive",out var adaptiveValue)||adaptiveValue.GetBoolean();
+            bool adaptive=args.TryGetProperty("adaptive",out var adaptiveValue)&&adaptiveValue.GetBoolean();
             double linear=args.TryGetProperty("maxLinearStepMm",out var linearValue)?linearValue.GetDouble():5;
             double angular=args.TryGetProperty("maxAngularStepDeg",out var angularValue)?angularValue.GetDouble():1;
             int limit=args.TryGetProperty("maxSamples",out var limitValue)?limitValue.GetInt32():5001;
@@ -170,12 +170,14 @@ public partial class MainForm
             if(!double.IsFinite(clearance)||clearance<0||clearance>10000)throw new ArgumentException("Clearance must be 0..10000 mm");
             if(!double.IsFinite(start)||!double.IsFinite(end)||!double.IsFinite(step)||start<0||end<=start||end>tracks.Max(t=>t.Points[^1].Time)||step<=0)throw new ArgumentException("Use a finite positive chart interval and step");
             using var reflection = PauseCadReflection(); PausePlayback();Commit();
-            double[] samples;
-            if(adaptive)samples=bridge.PlanMotionSamples(start,end,step,linear,angular,limit,surfaceBased,surfaceStep);
-            else {if(Math.Ceiling((end-start)/step)>500)throw new ArgumentException("Fixed mode supports at most 501 samples");samples=Enumerable.Range(0,(int)Math.Ceiling((end-start)/step)).Select(i=>start+i*step).Append(end).ToArray();}
             var policy=args.TryGetProperty("inspectionPolicy",out var configuration)?configuration.Deserialize<MotionInspectionPolicy>(new JsonSerializerOptions{PropertyNameCaseInsensitive=true})??throw new ArgumentException("Missing policy"):bridge.InspectionPolicy;
+            policy.Validate();if(limit is <2 or >10001)throw new ArgumentException("maxSamples must be 2..10001 per batch");
+            int totalLimit=policy.AutoSplit?policy.MaxTotalSamples:limit;
+            double[] samples;
+            if(adaptive)samples=bridge.PlanMotionSamples(start,end,step,linear,angular,totalLimit,surfaceBased,surfaceStep);
+            else samples=bridge.PlanCoarseMotionSamples(start,end,step,totalLimit);
             var result=bridge.CheckContinuousMotion(samples,clearance,policy,limit,stopOnInterference);
-            RecordMotionInspection(System.Text.Json.JsonSerializer.SerializeToElement(result));return result;
+            RecordMotionInspection(System.Text.Json.JsonSerializer.SerializeToElement(result));return InspectionOperationSummary(motionReports[^1]);
         }
         if(method=="list_patterns") { StoreActivePattern(); return new { activePatternId=activePattern, patterns=patterns.Select(p=>new { id=p.Id,name=p.Name,description=p.Description,duration=p.Points.Values.Max(ps=>ps[^1].Time),speed=p.Speed,loop=p.Loop,collision=p.Collision }) }; }
         if(method is "switch_pattern" or "create_pattern" or "rename_pattern" or "delete_pattern") {

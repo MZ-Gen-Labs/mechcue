@@ -13,6 +13,14 @@ public partial class MainForm
         var partial=native.MotionInspectionSummary([0,4],[sample],true,1,5,1,true,5,1,true,true);
         RecordMotionInspection(partial);
         Assert(InspectionState(motionReports[^1]).Contains("未確認"),"Cancellation hides uninspected interval");
+        var overview=JsonSerializer.SerializeToElement(InspectionReports(JsonSerializer.SerializeToElement(new{limit=1})));
+        Assert(overview.GetProperty("records").GetArrayLength()==1&&overview.GetProperty("nextOffset").GetInt32()==1,"Report overview pagination lost records");
+        Assert(!overview.GetProperty("records")[0].GetProperty("Result").TryGetProperty("samples",out _),"Overview contains bulk sample data");
+        var page=JsonSerializer.SerializeToElement(InspectionReports(JsonSerializer.SerializeToElement(new{reportId=motionReports[0].Id,includeSamples=true,sampleOffset=1,sampleLimit=1})));
+        Assert(page.GetProperty("records")[0].GetProperty("Result").GetProperty("samples").GetArrayLength()==1,"Detailed sample paging lost its offset");
+        var failing=JsonSerializer.SerializeToElement(new{time=0,passed=false,analysisComplete=true,analysis=new{pairs=new[]{new{Part1="Motor",Part2="Table",NativeStatus=2,ClearanceShortfall=false}}}});
+        var failureReport=native.MotionInspectionSummary([0],[failing],false,1,5,1,false,5,0,true);
+        Assert(InspectionDetails(new(Guid.NewGuid(),Guid.NewGuid(),"Failure","fixture.asm","",DateTimeOffset.Now,0,failureReport)).Contains("Motor ↔ Table [専用干渉]"),"Native leaf pair names/classification missing from details");
         InspectionDialogTestHook=(dialog,run,all)=>dialog.Shown+=(_,_)=>{
             try {var table=dialog.Controls.OfType<DataGridView>().Single();Assert(table.Rows.Count==2,"Results dialog lost history");using var image=new Bitmap(dialog.Width,dialog.Height);dialog.DrawToBitmap(image,new Rectangle(Point.Empty,dialog.Size));image.Save(Path.Combine(AppContext.BaseDirectory,"motion-inspection-preview.png"));}
             finally{dialog.Close();}
@@ -29,6 +37,21 @@ public partial class MainForm
         RecordMotionInspection(PlaybackReport(0,2,false));RecordMotionInspection(PlaybackReport(2,4,true),merge:true);
         Assert(motionReports.Count==1&&!motionReports[0].Result.GetProperty("continuousPathCertified").GetBoolean(),"Verified later interval erased an earlier unverified playback interval");
         Assert(motionReports[0].Result.GetProperty("baseSampleTimes").GetArrayLength()==3,"Merged report lost its earlier base sampling times");motionReports.Clear();
+        VerifyArchivedReportUi();
+    }
+    void VerifyArchivedReportUi()
+    {
+        var samples=new MotionInspectionSeries("samples",200,1000000);var segments=new MotionInspectionSeries("segments",200,1000000);
+        for(int i=0;i<137;i++)samples.Add(new{time=i,passed=i!=41,analysisComplete=true,payload=new string('x',100)});
+        for(int i=0;i<136;i++)segments.Add(new ContinuousMotionSegment(i,i+1,"unverified",null,"fixture",1));
+        var result=JsonSerializer.SerializeToElement(new{samples=samples.Preview(),samplesTruncated=true,segmentsTruncated=true,checkedSampleCount=137,plannedSampleCount=137,startTime=0,endTime=136,analysisComplete=true,samplingComplete=true,allSamplesClear=false,continuousPathCertified=false,requiredClearanceMm=0,detailArchive=new{samples=samples.Manifest(),segments=segments.Manifest()},continuousVerification=new{Requested=true,NumericalMarginMm=.01,Segments=segments.Preview()}});
+        RecordMotionInspection(result);
+        var page=JsonSerializer.SerializeToElement(InspectionReports(JsonSerializer.SerializeToElement(new{reportId=motionReports[0].Id,includeSamples=true,sampleOffset=130,sampleLimit=10})));
+        var record=page.GetProperty("records")[0].GetProperty("Result");
+        if(record.GetProperty("totalSampleCount").GetInt32()!=137||record.GetProperty("samples").GetArrayLength()!=7||record.GetProperty("samples")[0].GetProperty("time").GetInt32()!=130||record.GetProperty("continuousVerification").GetProperty("Segments").GetArrayLength()!=6)throw new Exception("MCP paging lost archived samples or intervals beyond the preview");
+        string path=Path.Combine(AppContext.BaseDirectory,"archived-ui-report.json");ExportMotionInspection(path);
+        using(var exported=JsonDocument.Parse(File.ReadAllText(path))){var full=exported.RootElement.GetProperty("records")[0].GetProperty("Result");if(full.GetProperty("samples").GetArrayLength()!=137||full.GetProperty("continuousVerification").GetProperty("Segments").GetArrayLength()!=136||full.TryGetProperty("detailArchive",out _))throw new Exception("Portable JSON export lost archived details or retained machine-local dependencies");}
+        foreach(var retained in motionReports)MotionInspectionSeries.DeleteOwnedArchives(retained.Result);motionReports.Clear();
     }
     internal void VerifyNativeMotionInspectionUi(object application,object document,string outputDirectory)
     {

@@ -7,10 +7,12 @@ public sealed record MotionInspectionPolicy
     public bool VerifyContinuous {get;init;}=true;
     public double NumericalMarginMm {get;init;}=.01;
     public int MaxRefinementDepth {get;init;}=20;
+    public bool AutoSplit {get;init;}=true;
+    public int MaxTotalSamples {get;init;}=100001;
     public AllowedMotionContact[] AllowedContacts {get;init;}=[];
     public void Validate()
     {
-        if(!double.IsFinite(NumericalMarginMm)||NumericalMarginMm<.001||NumericalMarginMm>10||MaxRefinementDepth is <0 or >30||AllowedContacts==null||AllowedContacts.Length>1000)throw new ArgumentException("Invalid inspection policy");
+        if(!double.IsFinite(NumericalMarginMm)||NumericalMarginMm<.001||NumericalMarginMm>10||MaxRefinementDepth is <0 or >30||MaxTotalSamples is <2 or >100001||AllowedContacts==null||AllowedContacts.Length>1000)throw new ArgumentException("Invalid inspection policy");
         var seen=new HashSet<string>();
         foreach(var contact in AllowedContacts){if(contact==null||string.IsNullOrWhiteSpace(contact.Reason)||contact.Reason.Length>500||contact.FirstKeyPath==contact.SecondKeyPath||!ValidKeyPath(contact.FirstKeyPath)||!ValidKeyPath(contact.SecondKeyPath)||!seen.Add(PairKey(contact.FirstKeyPath,contact.SecondKeyPath)))throw new ArgumentException("Contacts require distinct exact leaf key paths and a reason; duplicates refused");}
     }

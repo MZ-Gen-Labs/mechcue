@@ -26,6 +26,8 @@ public partial class MainForm
         var fullSize = Size;
         void Shortcut(int position)
         {
+            // Background tests can lose activation while pumping native messages.
+            OnActivated(EventArgs.Empty);
             var message = Message.Create(Handle, 0x0312, new IntPtr(PositionHotkeyBase + (int)PositionShortcutKeys[position - 1]), IntPtr.Zero);
             WndProc(ref message); Application.DoEvents();
         }
@@ -51,7 +53,7 @@ public partial class MainForm
             Shortcut(position);
             var work = Screen.FromHandle(bridge.ApplicationWindowHandle).WorkingArea;
             if (compact || Bounds != PositionBounds(work, fullSize, position))
-                throw new Exception("First or different shortcut must move full chart without resizing or mode changes");
+                throw new Exception($"First or different shortcut must move full chart without resizing or mode changes: position={position}, compact={compact}, bounds={Bounds}, expected={PositionBounds(work,fullSize,position)}, size={fullSize}, minimum={MinimumSize}, work={work}");
             if (!Current.Points.SequenceEqual(points) || live.Checked)
                 throw new Exception("Window placement changed graph values or enabled reflection");
         }
