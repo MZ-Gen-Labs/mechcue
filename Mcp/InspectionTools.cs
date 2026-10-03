@@ -5,6 +5,8 @@ using ModelContextProtocol.Server;
 [McpServerToolType]
 public static class SolidEdgeInspectionTools
 {
+    [McpServerTool(ReadOnly=true),Description("Inspect static pose as individual nested leaf pairs: colliding/unknown pairs with instance-specific stable keyPath, path, module and file. set1Json/set2Json select top-level sets; empty set1 means all, nonempty set2 compares across sets only. maxPairs=1..10000; rejects budget before analysis. Disabled IncludeInInterference returns unknown. includeVolume=true repeats colliding pair analysis for native temporary text report; parses recognized Japanese/English decimal mm^3 lines, otherwise volume unknown. No interference solids/model changes or swept/path certification.")]
+    public static Task<string> solidedge_check_interference_pairs(string expectedDocument,string set1Json="[]",string set2Json="[]",int maxPairs=10000,bool ignoreThreadInterferences=false,bool includeVolume=false)=>SolidEdgeTools.ExecuteCad("check-interference-pairs",()=>Bridge.CadCheckInterferencePairs(expectedDocument,set1Json,set2Json,maxPairs,ignoreThreadInterferences,includeVolume),false);
     [McpServerTool(ReadOnly = true), Description("Read persisted embedded MechCue settings JSON from the active expected assembly. Does not include pending chart edits; use mechcue_save_document on the source first. Requires Read/select or Creation/edit mode.")]
     public static Task<string> solidedge_get_mechcue_settings(string expectedDocument)
         => SolidEdgeTools.ExecuteCad("get-mechcue-settings", () => Bridge.CadReadMechCueSettings(expectedDocument), false);

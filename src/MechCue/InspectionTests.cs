@@ -11,6 +11,11 @@ public static partial class SelfTest
             return JsonSerializer.SerializeToElement(Bridge.CadInterferenceResult("test.asm", [1], [2], args));
         }
         void Assert(bool result, string message) { if (!result) throw new Exception(message); }
+        Assert(Bridge.StaticReportVolume("    干渉体積 12.500 mm^3\n",1)==12.5,"Native Japanese cubic mm volume recognized");
+        Assert(Bridge.StaticReportVolume("    干渉体積 12.500 mm^3\r\r\n",1)==12.5,"Native Windows carriage returns normalized");
+        Assert(Bridge.StaticReportVolume("Interference Volume: 2.5 mm^3\nInterference Volume: 3.5 mm^3\n",2)==6,"Multiple native interference regions summed only with exact count");
+        foreach(var text in new[]{"Interference Volume 2.5 in^3\n","Interference Volume 2,5 mm^3\n","Interference Volume 12.5 mm^3\nextra","干渉体積\n"})
+            Assert(Bridge.StaticReportVolume(text,2)==null,"Unknown units/formats/missing regions never inferred");
         foreach (int status in new[] { 2, 3, 4, 5, 0, 99 })
             Assert(!Result(status, 0).GetProperty("clear").GetBoolean(), "Non-clear native status must not become clear.");
         Assert(!Result(1, 1).GetProperty("clear").GetBoolean(), "Contradictory native count must not become clear.");

@@ -60,6 +60,9 @@ public sealed partial class Bridge
             treatmentType=treatment,threadDescription=treatment==37?Convert.ToString(Get(data,"ThreadDescription")):"",threadDepthMm=threadDepthMethod==13?Convert.ToDouble(Get(data,"ThreadDepth"))*1000:(double?)null,
             threadDepthMethod,extentType=extent,depthMm=extent==13?Convert.ToDouble(Get(hole,"Depth"))*1000:(double?)null,
             threadDiameterOption=treatment==37?Convert.ToInt32(Get(data,"ThreadDiameterOption")):0,threadTapDrillDiameterMm=treatment==37?Convert.ToDouble(Get(data,"ThreadTapDrillDiameter"))*1000:0,
+            threadSetting=treatment==37?Convert.ToInt32(Get(data,"ThreadSetting")):0,
+            threadNominalDiameterMm=treatment==37?Convert.ToDouble(Get(data,"ThreadNominalDiameter"))*1000:0,
+            effectiveBoreDiameterMm=treatment!=37?Convert.ToDouble(Get(data,"HoleDiameter"))*1000:Convert.ToInt32(Get(data,"ThreadDiameterOption")) switch{0=>Convert.ToDouble(Get(data,"ThreadTapDrillDiameter"))*1000,1=>Convert.ToDouble(Get(data,"ThreadMinorDiameter"))*1000,2=>Convert.ToDouble(Get(data,"ThreadNominalDiameter"))*1000,_=>(double?)null},
             holeCount=Convert.ToInt32(Get(Get(profile,"Holes2d"),"Count")),physicalThread=Convert.ToBoolean(Get(hole,"CreatePhysicalThread"))};
     }
     public static object CadListHoles(string expectedDocument)
