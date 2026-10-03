@@ -8,6 +8,8 @@ static class Program
 {
     [STAThread] static void Main(string[] args)
     {
+        if (args.Contains("--self-test") || args.Contains("--smoke-test"))
+            AppContext.SetSwitch("MechCue.DisableWindowPlacement", true);
         if (args.Contains("--persistence-integration-test"))
         {
             try { ApplicationConfiguration.Initialize(); Application.OleRequired(); Bridge.VerifyDocumentPersistenceInSolidEdge(); }
@@ -66,7 +68,7 @@ static class Program
         ApplicationConfiguration.Initialize();
         if (args.Contains("--smoke-test"))
         {
-            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface(); form.VerifyMotionPatterns(); form.VerifyConceptWorkflowFixes();
+            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface(); form.VerifyMotionPatterns(); form.VerifyConceptWorkflowFixes(); form.VerifyTimelineInterface(); form.VerifyToolbarAndReorder();
             using var image = new Bitmap(form.Width, form.Height); form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size));
             image.Save(Path.Combine(AppContext.BaseDirectory, "preview.png")); form.Close(); return;
         }
@@ -106,6 +108,7 @@ public partial class MainForm : Form
     readonly CheckBox live = new() { Text = "Solid Edgeへ反映", AutoSize = true };
     readonly CheckBox collision = new() { Text = "干渉したら停止", AutoSize = true };
     readonly CheckBox loop = new() { Text = "繰り返し", AutoSize = true };
+    readonly CheckBox autoApply = new() { Text = "自動", AutoSize = true };
     readonly System.Windows.Forms.Timer timer = new() { Interval = 50 };
     readonly Stopwatch watch = new();
     double playStart;
@@ -123,21 +126,21 @@ public partial class MainForm : Form
         Width = 1440; Height = 900; MinimumSize = new(1180, 740);
         BackColor = Color.FromArgb(239, 243, 248);
         Font = new Font("Yu Gothic UI", 10);
-        top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10), BackColor = Color.White };
-        Add(top, "Solid Edgeに接続", ConnectDocument);
-        Add(top, "基準状態に戻す", () => { live.Checked = false; PausePlayback(); bridge.Restore(); status.Text = "接続時の基準状態に戻しました。"; });
-        Add(top, "切断", () => { live.Checked = false; PausePlayback(); StageOnClose(); status.Text = bridge.Disconnect() ?? "切断しました。グラフは保持しています。"; target.Items.Clear(); });
+        top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(5), BackColor = Color.White, WrapContents = false };
+        ConfigureCadMenu();
         ConfigureDataMenu();
+        ConfigureViewMenu();
+        ConfigureSettingsMenu();
         top.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true }); top.Controls.Add(time);
         Add(top, "▶ 再生", TogglePlayback);
-        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(loop); top.Controls.Add(live); top.Controls.Add(collision);
+        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(live); top.Controls.Add(collision); top.Controls.Add(loop); top.Controls.Add(autoApply);
         ConfigureModes(top);
-        Add(top, "使い方", ShowQuickStart);
         Add(top, "最小表示", () => SetCompact(true));
         split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 230, SplitterWidth = 8 };
         split.Panel1.Controls.Add(trackList);
         var trackButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 42 };
         Add(trackButtons, "＋ 機構を追加", () => { Commit(); tracks.Add(new() { Name = $"機構 {tracks.Count + 1}" }); RefreshTracks(tracks.Count - 1); MarkDocumentSettingsChanged(); });
+        Add(trackButtons, "− 削除", () => DeleteSelectedTrack(true));
         split.Panel1.Controls.Add(trackButtons);
         split.Panel1.Controls.Add(PanelHeading("機構一覧", HostAction.TracksPanel));
         trackList.BorderStyle = BorderStyle.None; trackList.ItemHeight = 32; trackList.IntegralHeight = false;
@@ -155,12 +158,12 @@ public partial class MainForm : Form
         Add(editor, "駆動先を登録・変更", () =>
         {
             if (target.SelectedItem is not Target t) throw new InvalidOperationException("駆動先を選んでください。");
-            PausePlayback(); live.Checked = false; Commit(); bridge.Bind(Current, t); lastCheckedTime = null; MarkDocumentSettingsChanged(); bridge.ClearSelection();
+            using var reflection = PauseCadReflection(); PausePlayback(); Commit(); bridge.Bind(Current, t); lastCheckedTime = null; MarkDocumentSettingsChanged(); bridge.ClearSelection();
             PopulateTargets(); status.Text = $"登録：{Current.Name} → {t.Label}。固定拘束は直接駆動の登録中だけ抑制し、解除・切断時に復元します。";
         });
         Add(editor, "この機構の割り当てを解除", () =>
         {
-            PausePlayback(); live.Checked = false; bridge.Unbind(Current); MarkDocumentSettingsChanged();
+            using var reflection = PauseCadReflection(); PausePlayback(); bridge.Unbind(Current); MarkDocumentSettingsChanged();
             PopulateTargets(); status.Text = "この機構を基準状態に戻して解除しました。接続・他の登録・グラフは保持しています。";
         });
         editor.Controls.Add(axisHelp);
@@ -179,7 +182,6 @@ public partial class MainForm : Form
         Add(compactBar, "編集画面へ戻る", () => SetCompact(false));
         Add(compactBar, "▶ 再生", TogglePlayback);
         Controls.Add(split); Controls.Add(top); Controls.Add(compactBar); Controls.Add(connection); Controls.Add(status);
-        ConfigureViewMenu();
         split.Panel1MinSize = 100; workspace.Panel2MinSize = 150; vertical.Panel2MinSize = 60;
         kind.Items.AddRange(["距離拘束", "角度拘束", "部品移動", "部品回転", "部品座標"]); axis.Items.AddRange(["X", "Y", "Z"]);
         grid.Columns.Add("Time", "時間 [s]"); grid.Columns.Add("Value", "変位 [mm] / 角度 [°]");
@@ -197,23 +199,25 @@ public partial class MainForm : Form
         };
         trackList.SelectedIndexChanged += (_, _) => LoadTrack();
         kind.SelectedIndexChanged += (_, _) => { UpdateAxisHelp(); if (!loading) Guard(PopulateTargets); };
-        time.ValueChanged += (_, _) => Guard(() => { plot.Time = (double)time.Value; plot.Invalidate(); if (live.Checked) Drive(plot.Time); });
+        time.ValueChanged += (_, _) => Guard(() => { plot.FollowPlayback = timer.Enabled; plot.Time = (double)time.Value; plot.Invalidate(); if (live.Checked) Drive(plot.Time); });
         plot.Seek = t => { PausePlayback(); time.Value = (decimal)Math.Clamp(t, 0, (double)time.Maximum); };
         plot.EditStarting = index =>
         {
             bool ready = false;
-            Guard(() => { PausePlayback(); Commit(); trackList.SelectedIndex = index; Remember(Current); ready = true; });
+            Guard(() => { PausePlayback(); Commit(); trackList.SelectedIndex = index; pendingPlotEdit = [(Current, Current.Points.ToList())]; ready = true; });
             return ready;
         };
         plot.Edited = index => Guard(() =>
         {
+            if (pendingPlotEdit != null) RecordHistory(pendingPlotEdit);
+            pendingPlotEdit = null;
             trackList.SelectedIndex = index; LoadTrack();
             ApplyPreview(); MarkDocumentSettingsChanged();
             status.Text = "点を変更しました。下の表にも反映済みです。";
         });
         live.CheckedChanged += (_, _) => { if (live.Checked && !loading) Guard(() => { Commit(); Drive((double)time.Value); }); UpdateConnection(); };
         collision.CheckedChanged += (_, _) => { PausePlayback(); lastCheckedTime = null; };
-        timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; if (t >= end) { if (loop.Checked && end > 0) t %= end; else { t = end; PausePlayback(); } } time.Value = (decimal)t; });
+        timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; if (t >= end) { if (loop.Checked && end > 0) t %= end; else { t = end; PausePlayback(); } } plot.FollowTime(t); time.Value = (decimal)t; });
         FormClosing += (_, e) =>
         {
             CancelVideoExport(); PausePlayback(); live.Checked = false;
@@ -223,9 +227,13 @@ public partial class MainForm : Form
         };
         RefreshTracks(0);
         ConfigurePatterns();
+        ConfigureTimeNavigation();
         ConfigureDiagnostics();
         ConfigureAi();
         ConfigureLanguage();
+        ConfigureFullToolbar();
+        ConfigureEditShortcuts();
+        ConfigureTrackReordering();
         ConfigureDocumentPersistence();
         Shown += (_, _) =>
         {
@@ -233,7 +241,7 @@ public partial class MainForm : Form
             split.SplitterDistance = 200;
             workspace.SplitterDistance = Math.Max(400, workspace.Width - 310);
             vertical.SplitterDistance = Math.Max(200, vertical.Height - 230);
-            if (hostedApplication != null && !fourbarDemo)
+            if (hostedApplication != null && !fourbarDemo && !bridge.Connected)
                 Guard(ConnectDocument);
             if (fourbarDemo) Guard(() =>
             {
@@ -247,10 +255,12 @@ public partial class MainForm : Form
                 status.Text = "fourbar.asmに接続済み：拘束 #5 を登録。『Solid Edgeへ反映』をオンにしてグラフをドラッグしてください。";
             });
         };
+        ConfigureWindowPlacement();
     }
     public void ShutdownFromHost()
     {
         if (IsDisposed) return;
+        SaveWindowPlacement();
         CancelVideoExport(); PausePlayback(); live.Checked = false;
         try { StageOnClose(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine(ex); }
         bridge.Disconnect(); Dispose();
@@ -268,10 +278,10 @@ public partial class MainForm : Form
         if (documentSettingsDirty && bridge.Connected) connection.Text += " / 設定変更あり：CAD保存";
         connection.ForeColor = live.Checked ? Color.DarkGreen : Color.DarkOrange;
     }
-    void Error(Exception ex) { DiagnosticLog.Error("ui-error", ex, DiagnosticState()); status.Text = "停止：" + (ex.InnerException ?? ex).Message; if(aiExecuting){aiError=ex;return;} MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
-    void RefreshTracks(int selected, bool refreshTargets = true) { loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
+    void Error(Exception ex) { autoApply.Checked = false; DiagnosticLog.Error("ui-error", ex, DiagnosticState()); status.Text = "停止：" + (ex.InnerException ?? ex).Message; if(aiExecuting){aiError=ex;return;} MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
+    void RefreshTracks(int selected, bool refreshTargets = true) { trackList.CancelReorder(); loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
         foreach (var t in tracks) trackList.Items.Add(t.Name, !plot.Hidden.Contains(t));
-        trackList.SelectedIndex = selected; loading = false; plot.Tracks = tracks; LoadTrack(refreshTargets); plot.Invalidate(); }
+        trackList.SelectedIndex = selected; loading = false; plot.Tracks = tracks; plot.UpdateViewport(); LoadTrack(refreshTargets); plot.Invalidate(); }
     void RefreshLegend()
     {
         legend.SuspendLayout();
@@ -290,7 +300,7 @@ public partial class MainForm : Form
         if (loading) return;
         loading = true; var t = Current; name.Text = t.Name; kind.SelectedItem = t.Kind; axis.SelectedItem = t.Axis;
         grid.Rows.Clear(); foreach (var p in t.Points) grid.Rows.Add(p.Time, p.Value);
-        loading = false; UpdateAxisHelp(); kind.Enabled = !bridge.IsConcept(Current); if(bridge.IsConcept(Current)) axis.Enabled=false; plot.Selected = trackList.SelectedIndex; RefreshLegend(); plot.Invalidate(); if (refreshTargets) Guard(PopulateTargets);
+        loading = false; UpdateAxisHelp(); kind.Enabled = !bridge.IsConcept(Current); if(bridge.IsConcept(Current)) axis.Enabled=false; plot.Selected = trackList.SelectedIndex; RefreshLegend(); plot.UpdateViewport(); if (refreshTargets) Guard(PopulateTargets);
     }
     void PopulateTargets()
     {
@@ -321,10 +331,10 @@ public partial class MainForm : Form
         if (loaded.Count == 0) throw new InvalidOperationException("グラフがありません。");
         if (loaded.Any(t => t == null || t.Id == Guid.Empty) || loaded.Select(t => t.Id).Distinct().Count() != loaded.Count) throw new InvalidDataException("Invalid track IDs");
         foreach (var t in loaded) { t.Validate(); if (!kind.Items.Contains(t.Kind) || !axis.Items.Contains(t.Axis)) throw new InvalidOperationException("駆動方法または軸が不正です。"); }
-        PausePlayback(); history.Clear(); tracks.Clear(); tracks.AddRange(loaded); RefreshTracks(0); ResetPatterns();
+        PausePlayback(); ClearEditHistory(); tracks.Clear(); tracks.AddRange(loaded); RefreshTracks(0); ResetPatterns();
     }
 }
-class Plot : Control
+partial class Plot : Control
 {
     public bool EditMode = true;
     public double ValueStep;
@@ -341,7 +351,9 @@ class Plot : Control
     public Action<int, int>? PointSelected;
     public List<Track> Tracks = [];
     public int Selected;
-    public double Time;
+    double currentTime;
+    public bool FollowPlayback;
+    public double Time { get => currentTime; set { currentTime = value; if (FollowPlayback) FollowTime(value); } }
     public Action<double>? Seek;
     public Func<int, bool>? EditStarting;
     public Action<int>? Edited;
@@ -353,15 +365,18 @@ class Plot : Control
     KeyPoint? originalEndPoint;
     bool draggingSegment;
     bool freeDrag;
+    int groupFirst, groupLast;
+    List<KeyPoint>? originalGroup;
     protected virtual Keys DragModifiers => ModifierKeys;
     Point mouseOrigin;
     bool moved;
     readonly ToolTip hint = new();
-    record PlotScale(double End, double Min, double Max, float Top, float Bottom, int Width, int RightMargin = 30)
+    record PlotScale(double End, double Min, double Max, float Top, float Bottom, int Width, int RightMargin = 30, double Start = 0, double Span = 0)
     {
-        public float X(double time) => (float)(65 + time / End * Math.Max(1, Width - 65 - RightMargin));
+        double Duration => Span > 0 ? Span : End;
+        public float X(double time) => (float)(65 + (time - Start) / Duration * Math.Max(1, Width - 65 - RightMargin));
         public float Y(double value) => (float)(Bottom - (value - Min) / (Max - Min) * (Bottom - Top));
-        public double Time(float x) => Math.Clamp((x - 65.0) / Math.Max(1, Width - 65 - RightMargin), 0, 1) * End;
+        public double Time(float x) => Start + Math.Clamp((x - 65.0) / Math.Max(1, Width - 65 - RightMargin), 0, 1) * Duration;
         public double Value(float y) => Min + (Bottom - y) / Math.Max(1, Bottom - Top) * (Max - Min);
     }
     static readonly Color[] Colors = [Color.DodgerBlue, Color.DarkOrange, Color.MediumSeaGreen, Color.MediumPurple, Color.Firebrick, Color.Teal, Color.SaddleBrown, Color.DeepPink];
@@ -375,7 +390,7 @@ class Plot : Control
     public void RefreshLanguage()
     {
         AccessibleName = UiText.Text("タイムチャート：点をドラッグして編集、線分を上下に移動、空白で時刻変更");
-        hint.SetToolTip(this, UiText.Text("点・線分：上下移動 / Ctrl＋ドラッグ：時間も移動 / 空白・Shift＋ドラッグ：時刻変更 / Esc：編集取消"));
+        hint.SetToolTip(this, UiText.IsJapanese ? "点・線分：上下移動 / Ctrl：時刻も編集 / Alt＋線分：連続する水平部分も移動 / Shift：時刻変更 / Ctrl＋ホイール：時間軸拡大縮小 / ホイール：横移動 / Esc：取消" : "Drag: move values / Ctrl: also edit time / Alt + segment: include adjoining plateaus / Shift: seek / Ctrl + wheel: zoom time / Wheel: pan / Esc: cancel");
     }
     PlotScale GetScale(int index)
     {
@@ -389,10 +404,10 @@ class Plot : Control
         // Constant (or nearly constant) values still need a useful editing range.
         if (max - min <= Math.Max(1e-6, Math.Max(Math.Abs(max), Math.Abs(min)) * 1e-6))
             padding = Math.Max(padding, Math.Max(10, Math.Max(Math.Abs(max), Math.Abs(min)) * 0.1));
-        if (Overlay) return new PlotScale(dragScale?.End ?? End, min - padding, max + padding, 32, Math.Max(33, Height - 30), Width, 65);
+        if (Overlay) return new PlotScale(dragScale?.End ?? End, min - padding, max + padding, 32, Math.Max(33, Height - 30), Width, 65, ViewStart, ViewSpan);
         float rowHeight = (Height - 35f) / Math.Max(1, visible.Length);
         int row = Array.IndexOf(visible, index);
-        return new PlotScale(dragScale?.End ?? End, min - padding, max + padding, row * rowHeight + 25, Math.Max(row * rowHeight + 26, (row + 1) * rowHeight - 16), Width);
+        return new PlotScale(dragScale?.End ?? End, min - padding, max + padding, row * rowHeight + 25, Math.Max(row * rowHeight + 26, (row + 1) * rowHeight - 16), Width, 30, ViewStart, ViewSpan);
     }
     internal PointF PointLocation(int track, int point)
     {
@@ -401,12 +416,14 @@ class Plot : Control
     }
     (int Track, int Point) Hit(Point mouse)
     {
+        if (mouse.X < 65 || mouse.X > Width - (Overlay ? 65 : 30)) return (-1, -1);
         foreach (int n in Editable)
         {
             var scale = GetScale(n);
             for (int i = 0; i < Tracks[n].Points.Count; i++)
             {
                 var p = Tracks[n].Points[i];
+                if (p.Time < ViewStart || p.Time > ViewEnd) continue;
                 if (Math.Pow(mouse.X - scale.X(p.Time), 2) + Math.Pow(mouse.Y - scale.Y(p.Value), 2) <= 100) return (n, i);
             }
         }
@@ -414,6 +431,7 @@ class Plot : Control
     }
     (int Track, int Point) HitSegment(Point mouse)
     {
+        if (mouse.X < 65 || mouse.X > Width - (Overlay ? 65 : 30)) return (-1, -1);
         double nearest = 49;
         (int Track, int Point) result = (-1, -1);
         foreach (int n in Editable)
@@ -436,24 +454,31 @@ class Plot : Control
     {
         base.OnMouseDown(e);
         if (e.Button != MouseButtons.Left) return;
-        Focus(); var hit = Hit(e.Location); bool segment = false;
+        Focus(); bool groupDrag = (DragModifiers & Keys.Alt) != 0;
+        var hit = groupDrag ? HitSegment(e.Location) : Hit(e.Location); bool segment = groupDrag && hit.Track >= 0;
         if (hit.Track < 0) { hit = HitSegment(e.Location); segment = hit.Track >= 0; }
         if (EditMode && hit.Track >= 0 && (DragModifiers & Keys.Shift) == 0)
         {
             if (EditStarting != null && !EditStarting(hit.Track)) return;
             // A pending table edit can have moved the point during EditStarting.
             hit = segment ? HitSegment(e.Location) : Hit(e.Location); if (hit.Track < 0) return;
-            freeDrag = (DragModifiers & Keys.Control) != 0;
+            freeDrag = !groupDrag && (DragModifiers & Keys.Control) != 0;
             dragScale = GetScale(hit.Track); dragTrack = hit.Track; dragPoint = hit.Point;
             dragViewScale = dragScale;
             originalPoint = Tracks[dragTrack].Points[dragPoint]; mouseOrigin = e.Location; moved = false;
             draggingSegment = segment; originalEndPoint = segment ? Tracks[dragTrack].Points[dragPoint + 1] : null;
+            originalGroup = null;
+            if (groupDrag && segment)
+            {
+                (groupFirst, groupLast) = HorizontalNeighbors(Tracks[dragTrack].Points, dragPoint);
+                originalGroup = Tracks[dragTrack].Points.GetRange(groupFirst, groupLast - groupFirst + 1);
+            }
             PointSelected?.Invoke(dragTrack, dragPoint);
             Selected = dragTrack; Cursor = freeDrag ? Cursors.SizeAll : Cursors.SizeNS; Capture = true; Invalidate();
         }
         else { scrubbing = true; Capture = true; Seek?.Invoke(GetTime(e.X)); }
     }
-    double GetTime(int x) => Math.Clamp((x - 65.0) / Math.Max(1, Width - (Overlay ? 130 : 95)), 0, 1) * End;
+    double GetTime(int x) => ViewStart + Math.Clamp((x - 65.0) / Math.Max(1, Width - (Overlay ? 130 : 95)), 0, 1) * ViewSpan;
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
@@ -471,7 +496,9 @@ class Plot : Control
                 // Always calculate from the mouse-down values; motion must not accumulate.
                 track.Points[dragPoint] = originalPoint;
                 track.Points[dragPoint + 1] = originalEndPoint;
-                track.ShiftSegment(dragPoint, delta);
+                if (originalGroup != null)
+                    for (int i = groupFirst; i <= groupLast; i++) track.Points[i] = originalGroup[i - groupFirst] with { Value = originalGroup[i - groupFirst].Value + delta };
+                else track.ShiftSegment(dragPoint, delta);
                 if (freeDrag)
                 {
                     double dt = time - originalPoint.Time;
@@ -517,11 +544,14 @@ class Plot : Control
         int index = dragTrack; bool changed = moved;
         if (cancel && index >= 0 && originalPoint != null)
         {
+            if (originalGroup != null)
+                for (int i = groupFirst; i <= groupLast; i++) Tracks[index].Points[i] = originalGroup[i - groupFirst];
             Tracks[index].Points[dragPoint] = originalPoint;
             if (draggingSegment && originalEndPoint != null) Tracks[index].Points[dragPoint + 1] = originalEndPoint;
         }
         dragTrack = dragPoint = -1; dragScale = dragViewScale = null; originalPoint = originalEndPoint = null;
         draggingSegment = false; moved = false; scrubbing = false;
+        originalGroup = null;
         Capture = false; Cursor = Cursors.Cross; Invalidate();
         if (!cancel && index >= 0 && changed) Edited?.Invoke(index);
     }
@@ -536,9 +566,10 @@ class Plot : Control
         {
             for (int i = 0; i <= 4; i++)
             {
-                float x = scale.X(scale.End * i / 4);
+                double tick = scale.Start + (scale.Span > 0 ? scale.Span : scale.End) * i / 4;
+                float x = scale.X(tick);
                 g.DrawLine(Pens.LightGray, x, scale.Top, x, scale.Bottom);
-                g.DrawString($"{scale.End * i / 4:0.##} s", Font, Brushes.Gray, x - 10, scale.Bottom + 3);
+                g.DrawString($"{tick:0.######} s", Font, Brushes.Gray, x - 10, scale.Bottom + 3);
             }
         }
         void Axis(PlotScale scale, bool right, string unit)
@@ -550,7 +581,7 @@ class Plot : Control
                 double value = scale.Min + (scale.Max - scale.Min) * i / 4;
                 float y = scale.Y(value);
                 g.DrawString($"{value:0.###}", Font, Brushes.Gray, x, y - 7);
-                if (!right) g.DrawLine(Pens.Gainsboro, scale.X(0), y, scale.X(scale.End), y);
+                if (!right) g.DrawLine(Pens.Gainsboro, scale.X(scale.Start), y, scale.X(scale.Start + (scale.Span > 0 ? scale.Span : scale.End)), y);
             }
         }
         if (Overlay)
@@ -579,15 +610,22 @@ class Plot : Control
                 g.DrawString($"{scale.Min:0.###}", Font, Brushes.Gray, 3, bottom - 12);
             }
             using var pen = new Pen(TrackColor(n), n == Selected ? 3.5f : 1.5f);
-            g.DrawLines(pen, t.Points.Select(p => new PointF(X(p.Time), Y(p.Value))).ToArray());
+            var clip = g.Save(); g.SetClip(new RectangleF(65, top, Math.Max(1, Width - 65 - scale.RightMargin), Math.Max(1, bottom - top)));
+            // Keep one sample on each side so segments crossing the viewport
+            // boundary render correctly, without drawing the entire dense chart.
+            int firstVisible = Math.Max(0, t.Points.FindLastIndex(p => p.Time < ViewStart));
+            int firstAfter = t.Points.FindIndex(p => p.Time > ViewEnd);
+            int lastVisible = firstAfter < 0 ? t.Points.Count - 1 : firstAfter;
+            var visibleLine = t.Points.Skip(firstVisible).Take(lastVisible - firstVisible + 1).Select(p => new PointF(X(p.Time), Y(p.Value))).ToArray();
+            if (visibleLine.Length >= 2) g.DrawLines(pen, visibleLine);
             if (dragTrack == n && draggingSegment)
             {
                 using var selectedPen = new Pen(Color.Crimson, 5);
-                var a = t.Points[dragPoint]; var b = t.Points[dragPoint + 1];
-                g.DrawLine(selectedPen, X(a.Time), Y(a.Value), X(b.Time), Y(b.Value));
+                int first = originalGroup == null ? dragPoint : groupFirst, last = originalGroup == null ? dragPoint + 1 : groupLast;
+                g.DrawLines(selectedPen, t.Points.Skip(first).Take(last - first + 1).Select(p => new PointF(X(p.Time), Y(p.Value))).ToArray());
             }
             if (!Overlay || n == Selected)
-                foreach (var p in t.Points) { g.FillEllipse(Brushes.White, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); g.DrawEllipse(pen, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); }
+                foreach (var p in t.Points.Where(p => p.Time >= ViewStart && p.Time <= ViewEnd)) { g.FillEllipse(Brushes.White, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); g.DrawEllipse(pen, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); }
             if (dragTrack == n && dragPoint >= 0)
             {
                 var p = t.Points[dragPoint];
@@ -595,11 +633,12 @@ class Plot : Control
             }
             float cursor = X(Time); g.DrawLine(Pens.Crimson, cursor, top, cursor, bottom);
             g.FillEllipse(Brushes.Crimson, cursor - 4, Y(t.At(Time)) - 4, 8, 8);
+            g.Restore(clip);
         }
     }
 }
 
-class MechanismList : CheckedListBox
+partial class MechanismList : CheckedListBox
 {
     internal void ClickAt(Point point)
     {
@@ -608,14 +647,16 @@ class MechanismList : CheckedListBox
         Focus();
         if (point.X < SystemInformation.MenuCheckSize.Width + 8)
             SetItemChecked(index, !GetItemChecked(index));
-        else SelectedIndex = index;
+        else if (index == SelectedIndex || BeforeSelectItem == null || BeforeSelectItem()) SelectedIndex = index;
     }
     protected override void WndProc(ref Message m)
     {
         if (m.Msg is 0x201 or 0x203)
         {
             long position = m.LParam.ToInt64();
-            ClickAt(new Point((short)(position & 0xffff), (short)((position >> 16) & 0xffff)));
+            var point = new Point((short)(position & 0xffff), (short)((position >> 16) & 0xffff));
+            ClickAt(point);
+            if (m.Msg == 0x201) BeginReorder(point);
             return;
         }
         base.WndProc(ref m);

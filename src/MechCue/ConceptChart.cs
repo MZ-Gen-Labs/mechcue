@@ -74,6 +74,6 @@ public partial class MainForm
         var added=bridge.ImportConcept(path,tracks);foreach(var t in added)if(!tracks.Contains(t))tracks.Add(t);
         if (unboundTracks == "hide") foreach (var t in tracks)
             if (!bridge.IsConcept(t) && bridge.BoundLabel(t) == null && bridge.PendingLabel(t) == null) plot.Hidden.Add(t);
-        history.Clear();RefreshTracks(tracks.IndexOf(added[0]));MarkDocumentSettingsChanged();status.Text="概略軸を取り込みました。現在値で初期化し、反映はオフです。";
+        ClearEditHistory();RefreshTracks(tracks.IndexOf(added[0]));MarkDocumentSettingsChanged();status.Text="概略軸を取り込みました。現在値で初期化し、反映はオフです。";
     }
 }

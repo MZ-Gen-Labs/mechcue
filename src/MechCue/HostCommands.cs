@@ -1,7 +1,7 @@
 namespace MechCue;
 public static class HostCommands
 {
-    public static HostAction[] RibbonActions => Enum.GetValues<HostAction>().Where(a => a is not (HostAction.Stop or HostAction.Minimize or HostAction.Maximize or HostAction.PatternNew or HostAction.PatternRename or HostAction.PatternDelete)).ToArray();
+    public static HostAction[] RibbonActions => Enum.GetValues<HostAction>().Where(a => a is not (HostAction.Stop or HostAction.Minimize or HostAction.Maximize or HostAction.PatternNew or HostAction.PatternRename or HostAction.PatternDelete or HostAction.Redo)).SelectMany(a => a == HostAction.Undo ? new[] { a, HostAction.Redo } : new[] { a }).ToArray();
     public static string Caption(HostAction action) => UiText.Text(action switch {
         (HostAction)1 => "タイムチャート",
         (HostAction)2 => "再生 / 一時停止",
@@ -22,7 +22,7 @@ public static class HostCommands
         (HostAction)17 => "反復",
         (HostAction)18 => "グラフ表示",
         (HostAction)19 => "編集",
-        (HostAction)20 => "動作確認",
+        (HostAction)20 => "表示",
         (HostAction)21 => "元に戻す",
         (HostAction)22 => "使い方",
         (HostAction)23 => "機構追加",
@@ -44,6 +44,7 @@ public static class HostCommands
         HostAction.PatternNew => UiText.IsJapanese ? "新規作成" : "New motion",
         HostAction.PatternRename => UiText.IsJapanese ? "名前変更" : "Rename",
         HostAction.PatternDelete => UiText.IsJapanese ? "削除" : "Delete",
+        HostAction.Redo => UiText.IsJapanese ? "やり直し" : "Redo",
         _ => "MechCue" });
     public static bool IsToggle(HostAction action) => action is HostAction.Apply or HostAction.Collision or HostAction.Loop or HostAction.Edit or HostAction.Review or HostAction.Ai or HostAction.TracksPanel or HostAction.SettingsPanel or HostAction.PointsPanel;
     public static string Hint(HostAction action) => action switch {
@@ -52,6 +53,8 @@ public static class HostCommands
         HostAction.Collision => UiText.IsJapanese ? "干渉したら停止する設定を切り替えます。" : "Toggle stopping on interference.",
         HostAction.Overlay => UiText.IsJapanese ? "選択のみ → 選択＋チェック → 全機構の表示を切り替えます。" : "Cycle Selected only, Selected + checked and All tracks.",
         HostAction.Ai => UiText.IsJapanese ? "AIからの接続を切り替えます。標準はオンです。" : "Toggle AI access; enabled by default.",
+        HostAction.Undo => UiText.IsJapanese ? "グラフの編集を元に戻します（チャート内でCtrl＋Z）。" : "Undo graph editing (Ctrl+Z in the chart).",
+        HostAction.Redo => UiText.IsJapanese ? "取り消したグラフ編集をやり直します（チャート内でCtrl＋Y）。" : "Redo graph editing (Ctrl+Y in the chart).",
         HostAction.TracksPanel or HostAction.SettingsPanel or HostAction.PointsPanel => UiText.IsJapanese ? "パネルの表示と非表示を切り替えます。" : "Show or hide this panel.",
         HostAction.Compact => UiText.CommandHint("最小表示"), HostAction.Save => UiText.CommandHint("CADに保存"),
         HostAction.JsonOpen => UiText.CommandHint("開く"), HostAction.JsonSave => UiText.CommandHint("保存"),
@@ -80,6 +83,7 @@ public static class HostCommands
         (HostAction)19 => "編集",
         (HostAction)20 => "編集",
         (HostAction)21 => "編集",
+        HostAction.Redo => "編集",
         (HostAction)22 => "表示",
         (HostAction)23 => "機構",
         (HostAction)24 => "機構",

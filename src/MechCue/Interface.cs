@@ -2,19 +2,21 @@ namespace MechCue;
 
 public partial class MainForm
 {
-    void SetCompact(bool enabled)
+    void SetCompact(bool enabled, Rectangle? anchorWork = null, int anchorPosition = 0)
     {
         if (compact == enabled) return;
         var elapsed = System.Diagnostics.Stopwatch.StartNew();
         PausePlayback();
         // Layout changes must not enumerate assembly targets through COM.
         if (enabled) CommitEditor(false);
+        using var redraw = new WindowRedrawPause(this);
         var layouts = new Control[] { this, top, compactBar, split, workspace, vertical };
         foreach (var control in layouts) control.SuspendLayout();
+        deferPlacementBounds = anchorWork.HasValue;
         try
         {
             compact = enabled;
-            var playback = new Control[] { time, speed, loop, live, collision };
+            var playback = new Control[] { time, speed, live, collision, loop, autoApply };
             if (enabled)
             {
                 editBounds = Bounds; editWindowState = WindowState;
@@ -24,12 +26,13 @@ public partial class MainForm
                 compactBar.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true, Name = "compactTime" });
                 compactBar.Controls.Add(time);
                 compactBar.Controls.Add(new Label { Text = "速度", AutoSize = true, Name = "compactSpeed" });
-                compactBar.Controls.Add(speed); compactBar.Controls.Add(loop); compactBar.Controls.Add(live); compactBar.Controls.Add(collision);
+                compactBar.Controls.Add(speed); compactBar.Controls.Add(live); compactBar.Controls.Add(collision); compactBar.Controls.Add(loop); compactBar.Controls.Add(autoApply);
                 int position = compactBar.Controls.OfType<Button>().Count();
-                foreach (var control in new Control[] { compactBar.Controls["compactTime"]!, time, compactBar.Controls["compactSpeed"]!, speed, loop, live, collision })
+                foreach (var control in new Control[] { compactBar.Controls["compactTime"]!, time, compactBar.Controls["compactSpeed"]!, speed, live, collision, loop, autoApply })
                     compactBar.Controls.SetChildIndex(control, position++);
                 time.Width = 85; speed.Width = 55;
-                WindowState = FormWindowState.Normal; MinimumSize = new(650, 400); Size = new(900, 550);
+                MinimumSize = new(650, 400);
+                if (!anchorWork.HasValue) { WindowState = FormWindowState.Normal; Size = new(900, 550); }
             }
             else
             {
@@ -38,8 +41,10 @@ public partial class MainForm
                     top.Controls.Add(control); top.Controls.SetChildIndex(control, playbackPositions[control]);
                 }
                 foreach (Control label in compactBar.Controls.Cast<Control>().Where(c => c.Name.StartsWith("compact")).ToArray()) label.Dispose();
-                time.Width = 100; speed.Width = 65;
-                MinimumSize = new(1180, 740); Bounds = editBounds; WindowState = editWindowState;
+                time.Width = 85; speed.Width = 55;
+                // Form.MinimumSize can resize the native HWND directly. For
+                // anchored expansion, set it only after the final bounds.
+                if (!anchorWork.HasValue) { MinimumSize = new(1180, 740); Bounds = editBounds; WindowState = editWindowState; }
             }
             split.Panel1Collapsed = enabled || tracksHidden; workspace.Panel2Collapsed = enabled || settingsHidden; vertical.Panel2Collapsed = enabled || pointsHidden;
             chartHeading.Visible = true;
@@ -53,7 +58,19 @@ public partial class MainForm
         }
         finally
         {
+            if (anchorWork is Rectangle work)
+            {
+                var requestedMinimum = enabled ? MinimumSize : new Size(1180, 740);
+                var minimum = new Size(Math.Min(requestedMinimum.Width, work.Width), Math.Min(requestedMinimum.Height, work.Height));
+                var restoredSize = enabled ? minimum : editBounds.Size;
+                var size = new Size(Math.Max(minimum.Width, restoredSize.Width), Math.Max(minimum.Height, restoredSize.Height));
+                deferPlacementBounds = false;
+                Bounds = PositionBounds(work, size, anchorPosition);
+                MinimumSize = minimum;
+            }
+            else deferPlacementBounds = false;
             foreach (var control in layouts.Reverse()) control.ResumeLayout(true);
+            if (!enabled) FitFullToolbar();
 
             if (!enabled) {
                 split.SplitterDistance = Math.Clamp(panelSizes.Tracks, split.Panel1MinSize, Math.Max(split.Panel1MinSize, split.Width - split.SplitterWidth - split.Panel2MinSize));
@@ -61,6 +78,7 @@ public partial class MainForm
                 vertical.SplitterDistance = Math.Clamp(vertical.Height - vertical.SplitterWidth - panelSizes.Points, vertical.Panel1MinSize, Math.Max(vertical.Panel1MinSize, vertical.Height - vertical.SplitterWidth - vertical.Panel2MinSize));
             }
             Invalidate(true);
+            redraw.Dispose();
             DiagnosticLog.Write("compact-switch", new { enabled, elapsedMs = elapsed.ElapsedMilliseconds });
         }
     }
@@ -75,6 +93,7 @@ public partial class MainForm
                 button.AutoSize = false;
                 button.Size = new Size(Equals(button.Tag, "編集画面へ戻る") ? 65 : 32, 28);
                 button.AccessibleName = UiText.CommandLabel(button.Tag as string ?? "");
+                if (Equals(button.Tag, "ウィンドウ位置")) button.AccessibleName = UiText.IsJapanese ? "表示位置" : "Window corner";
             }
         }
         commandHints.SetToolTip(live, UiText.IsJapanese ? "現在時刻の値をSolid Edgeへ反映します。" : "Apply the current time values to Solid Edge.");
@@ -88,7 +107,7 @@ public partial class MainForm
     void ShowQuickStart()
     {
         MessageBox.Show(this, UiText.IsJapanese ?
-            "① グラフを編集\n点・線分をドラッグ：上下移動。Ctrl＋ドラッグ：時間と値を変更。Shift：時刻変更。Esc：取消。\n\n" +
+            "① グラフを編集\n点・線分をドラッグ：上下移動。Ctrl＋ドラッグ：時間と値を変更。Alt＋線分ドラッグ：隣接する同値の水平部分もまとめて移動。Shift：時刻変更。Esc：取消。\n時間軸：＋／−で拡大縮小、全体でリセット、横スクロールで表示範囲を移動。Ctrl＋ホイールでも拡大縮小できます。再生中は時刻に追従します。\n\n" +
             "② Solid Edgeに接続し、機構ごとに駆動先を登録\nCADで部品を選択して候補を表示し、対象を強調して確認します。割り当て変更は、その機構の解除だけで行えます。\n\n" +
             "③『Solid Edgeへ反映』をオンにして動作確認\n時間カーソルを動かすか再生します。反映がオフならCADは動きません。\n\n" +
             "値：距離はmm、角度は度。拘束は絶対値、部品移動・回転は登録時からの変化量、部品座標はアセンブリ内の絶対座標です。\n\n" +
@@ -105,8 +124,10 @@ public partial class MainForm
             : "拘束の向きは選んだ面・拘束で決まります。X/Y/Zの選択は拘束駆動には使いません。候補をCADで強調して確認してください。";
     }
     readonly RadioButton editMode = new() { Text = "編集", Checked = true, AutoSize = true };
-    readonly RadioButton reviewMode = new() { Text = "動作確認", AutoSize = true };
+    readonly RadioButton reviewMode = new() { Text = "表示", AutoSize = true };
     readonly Stack<List<(Track Track, List<KeyPoint> Points)>> history = new();
+    readonly Stack<List<(Track Track, List<KeyPoint> Points)>> redoHistory = new();
+    List<(Track Track, List<KeyPoint> Points)>? pendingPlotEdit;
     readonly NumericUpDown origin = Number(0, -1000000, 1000000);
     readonly NumericUpDown stroke = Number(100, -1000000, 1000000);
     readonly NumericUpDown moveSeconds = Number(1, 0.001m, 10000);
@@ -125,9 +146,10 @@ public partial class MainForm
         reviewMode.CheckedChanged += (_, _) =>
         {
             PausePlayback(); plot.EditMode = !reviewMode.Checked;
-            status.Text = reviewMode.Checked ? "動作確認：グラフをクリック・ドラッグして時刻を変更します。" : "編集：点・線分を上下移動。Ctrlで時間も移動。Shiftで時刻変更、Escで取消。";
+            status.Text = reviewMode.Checked ? "表示：グラフをクリック・ドラッグして時刻を変更します。" : "編集：点・線分を上下移動。Ctrlで時間も移動。Shiftで時刻変更、Escで取消。";
         };
         Add(toolbar, "元に戻す", Undo);
+        Add(toolbar, "やり直す", Redo);
         plot.PointSelected = (index, point) =>
         {
             DiagnosticLog.Write("select-point", new { index, point, layout = DiagnosticState() });
@@ -146,15 +168,24 @@ public partial class MainForm
     void Remember(Track track)
     {
         if (history.Count > 0 && history.Peek().Count == 1 && ReferenceEquals(history.Peek()[0].Track, track) && history.Peek()[0].Points.SequenceEqual(track.Points)) return;
-        history.Push([(track, track.Points.ToList())]);
+        RecordHistory([(track, track.Points.ToList())]);
     }
+    void RecordHistory(List<(Track Track, List<KeyPoint> Points)> changes) { redoHistory.Clear(); history.Push(changes); }
+    void ClearEditHistory() { history.Clear(); redoHistory.Clear(); pendingPlotEdit = null; }
     void Undo()
     {
-        PausePlayback();
-        if (history.Count == 0) { status.Text = "戻せる編集はありません。"; return; }
-        var changes = history.Pop(); foreach(var change in changes)change.Track.Points = change.Points;
+        RestoreEdit(history, redoHistory, false);
+    }
+    void Redo() => RestoreEdit(redoHistory, history, true);
+    void RestoreEdit(Stack<List<(Track Track, List<KeyPoint> Points)>> source, Stack<List<(Track Track, List<KeyPoint> Points)>> destination, bool redo)
+    {
+        PausePlayback(); if (redo) CommitEditor(false);
+        if (source.Count == 0) { status.Text = redo ? "やり直せる編集はありません。" : "戻せる編集はありません。"; return; }
+        var changes = source.Pop();
+        destination.Push(changes.Select(c => (c.Track, c.Track.Points.ToList())).ToList());
+        foreach (var change in changes) change.Track.Points = change.Points.ToList();
         int index = tracks.IndexOf(changes[0].Track); RefreshTracks(Math.Max(0, index)); ApplyPreview(); MarkDocumentSettingsChanged();
-        status.Text = "グラフの編集を元に戻しました。";
+        status.Text = redo ? "グラフの編集をやり直しました。" : "グラフの編集を元に戻しました。";
     }
     void ApplyPreview() { if (live.Checked) Drive((double)time.Value); }
     void ConfigurePreset(FlowLayoutPanel panel)
@@ -171,6 +202,7 @@ public partial class MainForm
     double? lastCheckedTime;
     void Drive(double requestedTime)
     {
+        if (cadReflectionPauseDepth > 0) return;
         if (!collision.Checked) { lastCheckedTime = null; bridge.Apply(requestedTime); return; }
         try { bridge.ApplyChecked(requestedTime); lastCheckedTime = requestedTime; }
         catch
@@ -185,9 +217,10 @@ public partial class MainForm
     }
     void ReadCurrentValues()
     {
-        if(bridge.IsConcept(Current)){PausePlayback();live.Checked=false;Commit();double current=bridge.ConceptCurrentValue(Current);Remember(Current);Current.Points=Current.Points.Select(p=>p with {Value=current}).ToList();LoadTrack();MarkDocumentSettingsChanged();status.Text="概略軸の現在値を全点に設定しました。";return;}
+        using var reflection = PauseCadReflection();
+        if(bridge.IsConcept(Current)){PausePlayback();Commit();double current=bridge.ConceptCurrentValue(Current);Remember(Current);Current.Points=Current.Points.Select(p=>p with {Value=current}).ToList();LoadTrack();MarkDocumentSettingsChanged();status.Text="概略軸の現在値を全点に設定しました。";return;}
         if (target.SelectedItem is not Target chosen) throw new InvalidOperationException("駆動先を選んでください。");
-        PausePlayback(); live.Checked = false; Commit();
+        PausePlayback(); Commit();
         double value = bridge.CurrentValue(Current, chosen);
         Remember(Current);
         Current.Points = Current.Points.Select(p => p with { Value = value }).ToList();
@@ -196,7 +229,7 @@ public partial class MainForm
     }
     void FromCadSelection()
     {
-        PausePlayback(); live.Checked = false; Commit();
+        using var reflection = PauseCadReflection(); PausePlayback(); Commit();
         var candidates = bridge.TargetsFromSelection(Current.Kind);
         target.Items.Clear(); target.Items.AddRange(candidates.ToArray());
         if (candidates.Count > 0) target.SelectedIndex = 0;
@@ -252,7 +285,12 @@ public partial class MainForm
         }
         split.SplitterDistance = 180; workspace.SplitterDistance = Math.Max(300, workspace.Width - 260); vertical.SplitterDistance = Math.Max(150, vertical.Height - 180);
         if (split.IsSplitterFixed || workspace.IsSplitterFixed || vertical.IsSplitterFixed || vertical.Panel2.Height < 60) throw new Exception("Resizable panel splitters failed");
-        if (dataMenu.Items.Count != 7 || top.Controls.OfType<Button>().Any(b => Equals(b.Tag,"保存") || Equals(b.Tag,"表を書き出し"))) throw new Exception("Data menu consolidation failed");
+        IEnumerable<ToolStripMenuItem> MenuItems(ToolStripItemCollection items) => items.OfType<ToolStripMenuItem>().SelectMany(i => new[] { i }.Concat(MenuItems(i.DropDownItems)));
+        var dataActions = MenuItems(dataMenu.Items).Where(i => i.Tag is HostAction).Select(i => (HostAction)i.Tag!).ToHashSet();
+        if (!dataActions.SetEquals(new[] { HostAction.Save, HostAction.JsonOpen, HostAction.JsonSave, HostAction.TableExport, HostAction.TableImport })
+            || dataMenu.Items.Count != 4 || top.Controls.OfType<Button>().Any(b => Equals(b.Tag,"保存") || Equals(b.Tag,"表を書き出し"))) throw new Exception("Data menu consolidation lost a command");
+        if (!MenuItems(settingsMenu.Items).Any(i => Equals(i.Tag, HostAction.Ai)) || !MenuItems(settingsMenu.Items).Any(i => Equals(i.Tag, HostAction.Help))
+            || MenuItems(settingsMenu.Items).Count(i => i.Tag is string tag && tag.StartsWith("language-")) != 3) throw new Exception("Settings menu lost standalone controls");
         int originalDistance = vertical.SplitterDistance;
         vertical.Panel2MinSize = 0; vertical.SplitterDistance = vertical.Height - vertical.SplitterWidth - 42;
         PerformLayout(); Application.DoEvents();
@@ -326,12 +364,12 @@ public partial class MainForm
             UiText.SetMode("en", false); Commit();
             if (kind.Text != "Distance constraint") throw new Exception("Driver display did not change to English");
             if (Current.Kind != "距離拘束" || CurrentKind != "距離拘束") throw new Exception("Language changed internal driver identifiers");
-            var connectButton = top.Controls.OfType<Button>().Single(b => Equals(b.Tag, "Solid Edgeに接続"));
-            if (connectButton.Text != "Connect" || !(commandHints.GetToolTip(connectButton) ?? "").StartsWith("Connect")) throw new Exception("English command/hint mismatch");
+            var connectItem = cadMenu.Items.OfType<ToolStripMenuItem>().Single(i => Equals(i.Tag, HostAction.Connect));
+            if (connectItem.Text != HostCommands.Caption(HostAction.Connect) || !(connectItem.ToolTipText ?? "").StartsWith("Connect")) throw new Exception("English command/hint mismatch");
             if (grid.Columns[0].HeaderText != "Time [s]") throw new Exception("English column header missing");
             using (var snapshot = new Bitmap(Width, Height)) { DrawToBitmap(snapshot, new Rectangle(Point.Empty, Size)); snapshot.Save(Path.Combine(AppContext.BaseDirectory, "english-preview.png")); }
             UiText.SetMode("ja", false);
-            if (connectButton.Text != "接続") throw new Exception("Japanese switch did not restore short label");
+            if (connectItem.Text != HostCommands.Caption(HostAction.Connect)) throw new Exception("Japanese switch did not restore menu label");
             if (UiText.Resolve("auto", new System.Globalization.CultureInfo("ja-JP")) != "ja" || UiText.Resolve("auto", new System.Globalization.CultureInfo("de-DE")) != "en" || UiText.Resolve("en", new System.Globalization.CultureInfo("ja-JP")) != "en") throw new Exception("Automatic/manual language resolution mismatch");
         }
         finally { UiText.SetMode(savedLanguage, false); }

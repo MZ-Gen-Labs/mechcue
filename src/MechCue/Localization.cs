@@ -53,7 +53,6 @@ public partial class MainForm
         language.Items.AddRange(["自動 / Auto", "日本語", "English"]);
         language.SelectedIndex = UiText.Mode == "ja" ? 1 : UiText.Mode == "en" ? 2 : 0;
         language.SelectedIndexChanged += (_, _) => { if (!translating) Guard(() => UiText.SetMode(language.SelectedIndex == 1 ? "ja" : language.SelectedIndex == 2 ? "en" : "auto")); };
-        top.Controls.Add(new Label { Text = "言語", AutoSize = true }); top.Controls.Add(language);
         kind.FormattingEnabled = true; kind.Format += (_, e) => e.Value = UiText.Text(Convert.ToString(e.ListItem) ?? "");
         target.FormattingEnabled = true; target.Format += (_, e) => e.Value = UiText.Text(Convert.ToString(e.ListItem) ?? "");
         WatchText(this);
@@ -86,13 +85,27 @@ public partial class MainForm
         control.Text = control is Button && control.Tag is string key ? UiText.CommandLabel(key) : UiText.Text(original);
         if ((control.Parent == compactBar || control.Parent == top) && control is Button button)
         {
-            if (Equals(button.Tag, "▶ 再生") || Equals(button.Tag, "停止")) button.Text = "";
+            if (button.Tag is "▶ 再生" or "停止" or "元に戻す" or "やり直す" or "最小表示")
+            {
+                button.Text = ""; button.AutoSize = false; button.Size = new(32, 28);
+                button.AccessibleName = button.Tag is "やり直す" ? (UiText.IsJapanese ? "やり直す" : "Redo") : UiText.CommandLabel((string)button.Tag);
+            }
             else if (Equals(button.Tag, "編集画面へ戻る")) button.Text = UiText.IsJapanese ? "戻る" : "Back";
+            else if (Equals(button.Tag, "ウィンドウ位置")) button.Text = "▦";
         }
         if (control == live) control.Text = UiText.IsJapanese ? "反映" : "Apply";
         if (control == collision) control.Text = UiText.IsJapanese ? "干渉" : "Collision";
         if (control == loop) control.Text = UiText.IsJapanese ? "反復" : "Loop";
-        if (control is Button) commandHints.SetToolTip(control, UiText.CommandHint(control.Tag as string ?? original));
+        if (control == autoApply) control.Text = UiText.IsJapanese ? "自動" : "Auto";
+        if (control == reviewMode) control.Text = UiText.IsJapanese ? "表示" : "View";
+        if (control.Tag is "menu-cad") control.Text = "CAD ▾";
+        if (control.Tag is "menu-settings") control.Text = UiText.IsJapanese ? "設定 ▾" : "Settings ▾";
+        if (control is Button) commandHints.SetToolTip(control, control.Tag is "やり直す" ? (UiText.IsJapanese ? "取り消したグラフ編集をやり直します。" : "Redo the undone graph edit.") : UiText.CommandHint(control.Tag as string ?? original));
+        if (control is Button cornerButton && Equals(cornerButton.Tag, "ウィンドウ位置"))
+        {
+            cornerButton.AccessibleName = UiText.IsJapanese ? "表示位置" : "Window corner";
+            commandHints.SetToolTip(cornerButton, UiText.IsJapanese ? "表示位置を選択。Ctrl+Shift+1〜9（テンキー配置）でも移動できます。" : "Choose position; Ctrl+Shift+1–9 uses numeric keypad layout.");
+        }
         translating = previous;
     }
     void RefreshLanguage()
@@ -114,14 +127,31 @@ public partial class MainForm
         finally { loading = previousLoading; }
         RefreshMenus();
         RefreshPlayback();
+        FitFullToolbar();
         plot.RefreshLanguage();
         if (compact) FitCompactBar(); plot.Invalidate();
     }
     void StartPlayback()
     {
+        try
+        {
         Commit();
         double end = tracks.Max(t => t.Points[^1].Time);
-        if ((double)time.Value >= end - 0.0005) time.Value = (decimal)tracks.Min(t => t.Points[0].Time);
+        using (PauseCadReflection())
+        {
+            if ((double)time.Value >= end - 0.0005) time.Value = (decimal)tracks.Min(t => t.Points[0].Time);
+            if (autoApply.Checked)
+            {
+                if (!bridge.Connected) throw new InvalidOperationException(UiText.IsJapanese ? "自動反映にはSolid Edgeへの接続が必要です。" : "Connect to Solid Edge before automatic Apply.");
+                live.Checked = true;
+            }
+        }
+        // Let a failed initial pose abort playback, rather than swallowing it
+        // in the checkbox event and starting the timer after the failure.
+        if (live.Checked) Drive((double)time.Value);
         playStart = (double)time.Value; watch.Restart(); timer.Start(); RefreshPlayback();
+        plot.FollowTime(playStart);
+        }
+        catch { PausePlayback(); live.Checked = autoApply.Checked = false; throw; }
     }
 }

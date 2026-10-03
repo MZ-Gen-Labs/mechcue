@@ -19,6 +19,7 @@ public static partial class SelfTest
         TestConceptMachines();
         TestDrawingPlanning();
         TestDrag();
+        TestTimelineEditing();
         TestOverlay();
         TestConnectionRecovery();
         TestReassignment();
@@ -29,6 +30,8 @@ public static partial class SelfTest
         TestChartTables();
         TestVideoExport();
         TestWorkflowExtensions();
+        TestWindowPlacement();
+        TestWindowPlacementUi();
         var preset = MotionPreset.OutAndBack(10, 50, 2, 1);
         var presetTrack = new Track { Points = preset };
         Assert(presetTrack.At(0) == 10 && presetTrack.At(2.5) == 60 && presetTrack.At(5) == 10, "Preset origin, hold, and return");

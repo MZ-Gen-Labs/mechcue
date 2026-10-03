@@ -17,14 +17,17 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents, IMec
     IConnectionPoint? commands;
     int cookie;
     MainForm? chart;
+    HostUiDispatcher? uiDispatcher;
     readonly Dictionary<int, HostAction> runtimeCommands = new();
     readonly HashSet<string> configured = new(StringComparer.OrdinalIgnoreCase);
 
     public void OnConnection(object Application, SE.SeConnectMode ConnectMode, SE.AddIn AddInInstance)
     {
+        uiDispatcher = new HostUiDispatcher();
+        DiagnosticLog.Write("addin-ui-thread", new { thread = Environment.CurrentManagedThreadId, apartment = Thread.CurrentThread.GetApartmentState().ToString() });
         application = Application;
         addIn = (SE.ISEAddInEx)AddInInstance;
-        addIn.GuiVersion = 12;
+        addIn.GuiVersion = 14;
         addIn.Description = "\nMechCue";
         addIn.Object = this;
         var container = (IConnectionPointContainer)addIn.AddInEvents;
@@ -52,7 +55,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents, IMec
                 if (bFirstTime)
                 {
                     var button = addIn.AddCommandBarButton(EnvCatID, "MechCue\n" + HostCommands.Group(action), (int)action);
-                    ((SE.ICommandButtonStyle)button).Style = HostCommands.IsToggle(action) ? 7 : action == HostAction.Play ? 3 : 5;
+                    ((SE.ICommandButtonStyle)button).Style = HostCommands.IsToggle(action) ? 7 : 5;
                     if (Marshal.IsComObject(button)) Marshal.ReleaseComObject(button);
                 }
             }
@@ -80,6 +83,12 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents, IMec
     }
     public string OpenChart(string expectedDocument)
     {
+        var dispatcher = uiDispatcher ?? throw new InvalidOperationException("Add-in disconnected");
+        return dispatcher.Invoke(() => OpenChartOnUiThread(expectedDocument));
+    }
+    string OpenChartOnUiThread(string expectedDocument)
+    {
+        DiagnosticLog.Write("addin-open-chart", new { thread = Environment.CurrentManagedThreadId, apartment = Thread.CurrentThread.GetApartmentState().ToString() });
         if(application==null)throw new InvalidOperationException("Add-in disconnected");
         dynamic app=application;
         if(!string.Equals(Convert.ToString(app.ActiveDocument.FullName),expectedDocument,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Active document differs from expectedDocument");
@@ -115,6 +124,7 @@ public sealed class TimeChartAddIn : SE.ISolidEdgeAddIn, SE.ISEAddInEvents, IMec
     {
         try { chart?.ShutdownFromHost(); } catch (Exception ex) { Log(ex.ToString()); }
         chart = null;
+        uiDispatcher?.Dispose(); uiDispatcher = null;
         try { if (cookie != 0) commands?.Unadvise(cookie); } catch (Exception ex) { Log(ex.ToString()); }
         cookie = 0; commands = null; addIn = null; application = null; configured.Clear(); runtimeCommands.Clear();
         Log("Disconnected");

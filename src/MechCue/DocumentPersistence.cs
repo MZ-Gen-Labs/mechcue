@@ -192,7 +192,7 @@ public partial class MainForm
     }
     void ConnectDocument()
     {
-        PausePlayback(); live.Checked = false;
+        PausePlayback(); live.Checked = autoApply.Checked = false;
         documentReady = false;
         string title = bridge.Connect();
         status.Text = "接続：" + title;
@@ -209,7 +209,7 @@ public partial class MainForm
     }
     void RestoreDocumentSettings(DocumentSettings settings)
     {
-        PausePlayback(); live.Checked = false; history.Clear(); restorationWarnings.Clear();
+        PausePlayback(); live.Checked = autoApply.Checked = false; ClearEditHistory(); restorationWarnings.Clear();
         tracks.Clear(); tracks.AddRange(settings.Tracks.Select(entry => entry.Track));
         plot.Hidden.Clear(); foreach (var entry in settings.Tracks.Where(entry => entry.Hidden)) plot.Hidden.Add(entry.Track);
         speed.Value = settings.Speed; dragStep.Value = settings.DragStep; loop.Checked = settings.Loop; collision.Checked = settings.Collision; overlay.SelectedIndex = (settings.DisplayMode ?? (settings.Overlay ? "checked" : "selected")) switch { "selected" => 0, "all" => 2, _ => 1 }; plot.DisplayMode = ChartDisplayMode; RefreshLegend();
@@ -243,13 +243,13 @@ public partial class MainForm
     {
         CancelVideoExport();
         if (writingDocument || !documentReady || !bridge.Connected) return;
-        try { PausePlayback(); live.Checked = false; WriteDocumentSettings(); status.Text = "MechCueの設定をアセンブリへ反映しました。"; }
+        try { using var reflection = PauseCadReflection(); PausePlayback(); WriteDocumentSettings(); status.Text = "MechCueの設定をアセンブリへ反映しました。"; }
         catch (Exception ex) { status.Text = "MechCue設定の保存に失敗しました：" + (ex.InnerException ?? ex).Message; if(aiExecuting)aiError=ex;else MessageBox.Show(this, UiText.Text(status.Text), "MechCue", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
     void SaveToDocument()
     {
         if (!documentReady) throw new InvalidOperationException("先にSolid Edgeに接続してください。");
-        PausePlayback(); live.Checked = false; WriteDocumentSettings(); bridge.SaveDocument();
+        using var reflection = PauseCadReflection(); PausePlayback(); WriteDocumentSettings(); bridge.SaveDocument();
         status.Text = "グラフと駆動先をアセンブリに保存しました。";
     }
     void StageOnClose()

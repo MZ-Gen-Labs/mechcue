@@ -9,6 +9,8 @@ public static partial class SelfTest
         void Stage(string name)=>File.AppendAllText(Path.Combine(AppContext.BaseDirectory,"workflow-test-progress.txt"),name+Environment.NewLine);
         Stage("operations");
         void Assert(bool condition,string message){if(!condition)throw new Exception(message);}
+        TestHostUiDispatch();
+        TestAutomationStartup();
         var operations=new AiOperations();int calls=0;
         var pending=new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
         string id=Guid.NewGuid().ToString();var command=JsonSerializer.SerializeToElement(new {method="save_document",args=new {expectedDocument="test"}});
@@ -62,5 +64,55 @@ public static partial class SelfTest
     {
         public bool Subassembly=>true;
         public FakeDocument OccurrenceDocument=>child;
+    }
+    static void TestHostUiDispatch()
+    {
+        var started = new TaskCompletionSource<HostUiDispatcher>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                using var dispatcher = new HostUiDispatcher();
+                started.SetResult(dispatcher);
+                Application.Run();
+            }
+            catch (Exception error) { started.TrySetException(error); }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA); thread.Start();
+        var host = started.Task.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+        try
+        {
+            int owner = host.Invoke(() => Environment.CurrentManagedThreadId);
+            MainForm? form = null;
+            // A transient MTA caller must not own the form, even after it exits.
+            Exception? callerError = null;
+            var caller = new Thread(() =>
+            {
+                try { host.Invoke(() => { form = new MainForm(); _ = form.Handle; return true; }); }
+                catch (Exception error) { callerError = error; }
+            });
+            caller.SetApartmentState(ApartmentState.MTA); caller.Start();
+            if (!caller.Join(5000)) throw new Exception("External COM caller dispatch timed out");
+            if (callerError != null) throw callerError;
+            if (host.Invoke(() => Environment.CurrentManagedThreadId) != owner ||
+                !form!.ProbeAiUi(CancellationToken.None).GetAwaiter().GetResult())
+                throw new Exception("Form must remain responsive on host STA after external caller exits");
+
+            using var blocked = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            var busy = Task.Run(() => host.Invoke(() => { blocked.Set(); release.Wait(); return true; }));
+            if (!blocked.Wait(5000)) throw new Exception("UI block test did not start");
+            try
+            {
+                if (form.ProbeAiUi(CancellationToken.None).GetAwaiter().GetResult())
+                    throw new Exception("A window handle alone must not imply UI responsiveness");
+            }
+            finally { release.Set(); busy.GetAwaiter().GetResult(); }
+            if (!form.ProbeAiUi(CancellationToken.None).GetAwaiter().GetResult())
+                throw new Exception("UI responsiveness must recover after busy work finishes");
+            host.Invoke(() => { form.Dispose(); return true; });
+        }
+        finally { host.Invoke(() => { Application.ExitThread(); return true; }); }
+        if (!thread.Join(5000)) throw new Exception("Host UI dispatcher test thread did not stop");
     }
 }

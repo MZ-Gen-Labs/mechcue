@@ -11,10 +11,11 @@ public sealed class AiEndpoint : IDisposable
     readonly Func<JsonElement,CancellationToken,Task<object>> handle;
     readonly string file;
     readonly Func<bool>? ready;
+    readonly Func<CancellationToken,Task<bool>>? probeUi;
     public AiSession Session { get; }
-    public AiEndpoint(string title,Func<JsonElement,CancellationToken,Task<object>> handle,Func<bool>? ready=null)
+    public AiEndpoint(string title,Func<JsonElement,CancellationToken,Task<object>> handle,Func<bool>? ready=null,Func<CancellationToken,Task<bool>>? probeUi=null)
     {
-        this.handle=handle;this.ready=ready;string id=Guid.NewGuid().ToString("N");
+        this.handle=handle;this.ready=ready;this.probeUi=probeUi;string id=Guid.NewGuid().ToString("N");
         Session=new(id,"MechCue-"+id,title,Environment.ProcessId);
         Directory.CreateDirectory(SessionDirectory);file=Path.Combine(SessionDirectory,id+".json");
         File.WriteAllText(file,JsonSerializer.Serialize(Session));_ = Task.Run(Serve);
@@ -51,7 +52,7 @@ public sealed class AiEndpoint : IDisposable
                 using var parsed=JsonDocument.Parse(line);var request=parsed.RootElement.Clone();
                 string method=request.GetProperty("method").GetString()!;
                 object result;
-                if(method=="ping")result=new {session=Session,reachable=true,uiReady=ready?.Invoke()??true,protocolVersion=2};
+                if(method=="ping")result=new {session=Session,reachable=true,uiReady=ready?.Invoke()??true,uiResponsive=probeUi==null?(bool?)null:await probeUi(stop.Token).ConfigureAwait(false),protocolVersion=2};
                 else if(method=="get_operation")result=operations.Get(request.GetProperty("args").GetProperty("operationId").GetString()!);
                 else if(method=="start_operation")
                 {
@@ -85,9 +86,9 @@ public partial class MainForm
     }
     void ConfigureAi()
     {
-        top.Controls.Add(aiAccess);aiAccess.CheckedChanged+=(_,_)=>{
+        aiAccess.CheckedChanged+=(_,_)=>{
             aiEndpoint?.Dispose();aiEndpoint=null;
-            if(aiAccess.Checked)aiEndpoint=new AiEndpoint(Text,DispatchAi,()=>IsHandleCreated&&!IsDisposed);
+            if(aiAccess.Checked)aiEndpoint=new AiEndpoint(Text,DispatchAi,()=>IsHandleCreated&&!IsDisposed,ProbeAiUi);
         };
         Disposed+=(_,_)=>{CancelVideoExport();aiEndpoint?.Dispose();aiEndpoint=null;};
         aiAccess.Checked = true;
@@ -95,6 +96,18 @@ public partial class MainForm
     bool aiExecuting;
     Exception? aiError;
     readonly SemaphoreSlim aiDispatchGate=new(1,1);
+    internal async Task<bool> ProbeAiUi(CancellationToken cancellationToken)
+    {
+        if (IsDisposed || !IsHandleCreated) return false;
+        var response = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            BeginInvoke(() => response.TrySetResult(!IsDisposed));
+            return await response.Task.WaitAsync(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException) { return false; }
+        catch (InvalidOperationException) { return false; }
+    }
     async Task<object> DispatchAi(JsonElement request,CancellationToken cancellationToken)
     {
         await aiDispatchGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -113,7 +126,7 @@ public partial class MainForm
                 var result=HandleAi(request);if(aiError!=null)throw aiError;
                 completion.TrySetResult(result);
             }
-            catch(Exception ex){DiagnosticLog.Error("mcp", ex, DiagnosticState());completion.TrySetException(ex);}
+            catch(Exception ex){PausePlayback(); live.Checked = autoApply.Checked = false; DiagnosticLog.Error("mcp", ex, DiagnosticState());completion.TrySetException(ex);}
             finally{aiExecuting=false;aiError=null;}
         }); }catch(Exception ex){DiagnosticLog.Error("mcp", ex, DiagnosticState());completion.TrySetException(ex);}
         return completion.Task;
@@ -134,11 +147,12 @@ public partial class MainForm
         if(method=="cancel_video_export")return VideoStatus(args,true);
         if(videoExport?.Running==true)throw new InvalidOperationException("Video export is running. Wait for completion or cancel it before editing or playing.");
         if(method=="export_video")return StartVideoExport(args);
+        if(method=="place_window")return PlaceWindow(args.GetProperty("position").GetInt32());
         if(method=="check_motion")
         {
             double start=Number("startTime"),end=Number("endTime"),step=Number("step");
             if(!double.IsFinite(start)||!double.IsFinite(end)||!double.IsFinite(step)||start<0||end<=start||end>tracks.Max(t=>t.Points[^1].Time)||step<=0||Math.Ceiling((end-start)/step)>500)throw new ArgumentException("Use a chart interval and at most 501 sampled poses");
-            PausePlayback();live.Checked=false;Commit();
+            using var reflection = PauseCadReflection(); PausePlayback();Commit();
             var samples=Enumerable.Range(0,(int)Math.Ceiling((end-start)/step)).Select(i=>start+i*step).Append(end).ToArray();
             return bridge.CheckMotionSamples(samples);
         }
@@ -163,7 +177,7 @@ public partial class MainForm
         if(method=="migrate_concept"){MigrateConceptSettings(args.GetProperty("expectedDocument").GetString()!,args.GetProperty("manifestPath").GetString()!,args.GetProperty("settingsJson").GetString()!,args.TryGetProperty("hideUnboundTracks",out var hide) && hide.GetBoolean());return AiState();}
         if(method=="bind_nested")
         {
-            PausePlayback();live.Checked=false;Commit();var track=Target();
+            using var reflection = PauseCadReflection(); PausePlayback();Commit();var track=Target();
             var expected=args.GetProperty("expectedDocument").GetString();
             if(!bridge.Connected||!string.Equals(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)),expected,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Connected document differs from expectedDocument");
             string kind=args.GetProperty("kind").GetString()!,direction=args.GetProperty("axis").GetString()!;
@@ -172,7 +186,7 @@ public partial class MainForm
             string oldKind=track.Kind,oldAxis=track.Axis;track.Kind=kind;track.Axis=direction;
             try{bridge.BindNested(track,args.GetProperty("keyPath").GetString()!,args.GetProperty("modifySharedSubassembly").GetBoolean());}
             catch{track.Kind=oldKind;track.Axis=oldAxis;throw;}
-            plot.Hidden.Remove(track);history.Clear();RefreshTracks(tracks.IndexOf(track));MarkDocumentSettingsChanged();return AiState();
+            plot.Hidden.Remove(track);ClearEditHistory();RefreshTracks(tracks.IndexOf(track));MarkDocumentSettingsChanged();return AiState();
         }
         if(method=="stop"){PausePlayback();return AiState();}
         if(method=="play"){StartPlayback();return AiState();}
@@ -180,9 +194,9 @@ public partial class MainForm
             double position=Number("time");if(!double.IsFinite(position)||position<0||position>tracks.Max(t=>t.Points[^1].Time))throw new ArgumentOutOfRangeException("time");
             PausePlayback();time.Value=(decimal)position;return AiState();
         }
-        if(method=="undo"){PausePlayback();live.Checked=false;Undo();return AiState();}
+        if(method=="undo"){using var reflection = PauseCadReflection(); PausePlayback();Undo();return AiState();}
         if(method is not ("set_keyframe" or "reset_values" or "resample" or "set_keyframes" or "delete_keyframe"))throw new InvalidOperationException("Unknown MechCue command: "+method);
-        PausePlayback();live.Checked=false;Commit();
+        using var editReflection = PauseCadReflection(); PausePlayback();Commit();
         if(bridge.Connected)_=bridge.Document;
         var changes=new Dictionary<Track,List<KeyPoint>>();
         switch(method)
@@ -228,13 +242,13 @@ public partial class MainForm
         }
         foreach(var points in changes.Values){new Track{Points=points}.Validate();if(points[^1].Time>100000)throw new ArgumentOutOfRangeException("time");}
         foreach(var change in changes)bridge.ValidateConceptPoints(change.Key,change.Value);
-        history.Push(changes.Keys.Select(t=>(t,t.Points.ToList())).ToList());
+        RecordHistory(changes.Keys.Select(t=>(t,t.Points.ToList())).ToList());
         foreach(var change in changes)change.Key.Points=change.Value;
         RefreshTracks(trackList.SelectedIndex);MarkDocumentSettingsChanged();status.Text="AIからグラフを編集しました。";
         return AiState();
     }
     object AiState()=>new {
-        activePatternId=activePattern,patternName=patterns.FirstOrDefault(p=>p.Id==activePattern)?.Name,sessionId=aiEndpoint?.Session.Id,connected=bridge.Connected,playing=timer.Enabled,applyToCad=live.Checked,time=(double)time.Value,status=status.Text,
+        activePatternId=activePattern,patternName=patterns.FirstOrDefault(p=>p.Id==activePattern)?.Name,sessionId=aiEndpoint?.Session.Id,connected=bridge.Connected,playing=timer.Enabled,applyToCad=live.Checked,autoApplyOnPlay=autoApply.Checked,time=(double)time.Value,status=status.Text,
         tracks=tracks.Select((t,i)=>new {number=i+1,id=t.Id,name=t.Name,kind=t.Kind,axis=t.Axis,hidden=plot.Hidden.Contains(t),unit=Plot.IsAngle(t)?"deg":"mm",target=bridge.BoundLabel(t) ?? bridge.PendingLabel(t),points=t.Points.Select(p=>new{time=p.Time,value=p.Value}).ToArray()}).ToArray()
     };
 }

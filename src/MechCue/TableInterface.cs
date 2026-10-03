@@ -4,7 +4,9 @@ public enum HostAction {
     Connect=8, Disconnect=9, Restore=10, JsonOpen=11, JsonSave=12, TableExport=13, TableImport=14,
     Apply=15, Collision=16, Loop=17, Overlay=18, Edit=19, Review=20, Undo=21, Help=22,
     AddTrack=23, Update=24, SelectedPart=25, AllTargets=26, ReadCurrent=27, Highlight=28,
-    Assign=29, Unassign=30, Preset=31, Ai=32, TracksPanel=33, SettingsPanel=34, PointsPanel=35, PatternSwitch=36, PatternDuplicate=37, PatternManage=38, PatternNew=39, PatternRename=40, PatternDelete=41
+    Assign=29, Unassign=30, Preset=31, Ai=32, TracksPanel=33, SettingsPanel=34, PointsPanel=35, PatternSwitch=36, PatternDuplicate=37, PatternManage=38, PatternNew=39, PatternRename=40, PatternDelete=41,
+    // Resource slot 42 is the existing playback-pause bitmap.
+    Redo=43
 }
 public partial class MainForm
 {
@@ -22,8 +24,8 @@ public partial class MainForm
             case HostAction.Compact: SetCompact(!compact); break;
             case HostAction.Save: SaveToDocument(); break;
             case HostAction.Connect: ConnectDocument(); break;
-            case HostAction.Disconnect: InvokeEditorButton("切断"); break;
-            case HostAction.Restore: InvokeEditorButton("基準状態に戻す"); break;
+            case HostAction.Disconnect: DisconnectDocument(); break;
+            case HostAction.Restore: RestoreReference(); break;
             case HostAction.JsonOpen: LoadFile(); break;
             case HostAction.JsonSave: SaveFile(); break;
             case HostAction.TableExport: ExportTable(); break;
@@ -35,6 +37,7 @@ public partial class MainForm
             case HostAction.Edit: if (compact) SetCompact(false); editMode.Checked = true; break;
             case HostAction.Review: reviewMode.Checked = true; break;
             case HostAction.Undo: Undo(); break;
+            case HostAction.Redo: Redo(); break;
             case HostAction.Help: ShowQuickStart(); break;
             case HostAction.AddTrack: InvokeEditorButton("＋ 機構を追加"); break;
             case HostAction.Update: Commit(); break;
@@ -75,7 +78,7 @@ public partial class MainForm
                 var current=tracks.SingleOrDefault(t=>t.Id==imported.Id);
                 if(current!=null && (bridge.BoundLabel(current)!=null || bridge.PendingLabel(current)!=null) && (current.Kind!=imported.Kind || current.Axis!=imported.Axis))throw new InvalidOperationException("割り当て済みの機構の駆動方法・軸は変更できません。先に解除してください。");
             }
-        PausePlayback();live.Checked=false;
+        using var reflection = PauseCadReflection(); PausePlayback();
         CommitEditor(false);
         foreach(var imported in loaded)
         {

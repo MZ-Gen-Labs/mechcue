@@ -57,18 +57,19 @@ public partial class MainForm
         menuButton.Click += (_, _) => { RefreshMenus(); patternMenu.Show(menuButton, new Point(0, menuButton.Height)); };
         patternChoice.SelectionChangeCommitted += (_, _) => { if (!updatingPatterns && patternChoice.SelectedItem is MotionPattern p) Guard(() => SwitchPattern(p.Id)); RefreshPatternChoice(); };
         commandHints.SetToolTip(menuButton, PatternText("動作の新規作成・複製・名前変更・削除・管理", "Create, duplicate, rename, delete and manage motions"));
-        commandHints.SetToolTip(patternChoice, PatternText("動作パターンを切り替えます。再生を停止し、反映をオフにして先頭へ戻ります。", "Switch motion pattern; stop playback, disable CAD reflection and rewind."));
+        commandHints.SetToolTip(patternChoice, PatternText("動作パターンを切り替えます。再生を停止して先頭へ戻ります。反映・干渉・反復の選択は保持します。", "Switch motion pattern; stop playback and rewind, preserving Apply, Collision and Loop selections."));
         Disposed += (_, _) => patternMenu.Dispose(); RefreshPatternChoice();
     }
     void SwitchPattern(Guid id)
     {
         EnsurePatterns(); var next = patterns.Single(p => p.Id == id); if(id == activePattern) return;
+        using var reflection = PauseCadReflection();
         PausePlayback(); CommitEditor(false); StoreActivePattern();
         next.Validate(tracks.Select(t => t.Id)); foreach(var t in tracks) bridge.ValidateConceptPoints(t,next.Points[t.Id]);
-        live.Checked = false; activePattern = id;
+        activePattern = id;
         foreach(var t in tracks) t.Points = next.Points[t.Id].ToList();
-        speed.Value = next.Speed; loop.Checked = next.Loop; collision.Checked = next.Collision;
-        history.Clear(); lastCheckedTime = null; time.Value = 0; RefreshTracks(Math.Max(0,trackList.SelectedIndex),false); RefreshPatternChoice(); MarkDocumentSettingsChanged();
+        speed.Value = next.Speed;
+        ClearEditHistory(); lastCheckedTime = null; time.Value = 0; RefreshTracks(Math.Max(0,trackList.SelectedIndex),false); RefreshPatternChoice(); MarkDocumentSettingsChanged();
         status.Text = PatternText("動作切替：", "Motion: ") + next.Name;
     }
     string CheckedPatternName(string name, Guid? except = null)

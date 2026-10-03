@@ -16,6 +16,10 @@ MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリ
 
 ## 操作例
 
+`mechcue_place_window(position=1～9, sessionId="対象セッションID")` はSolid Edgeを最大化し、現在の表示モード・大きさを保ってタイムチャートをテンキー配置の9か所へ移動します。1は左下、5は中央、9は右上です。省略時は3（右下）。画面に収まらない大きさは補正します。MCPから繰り返し呼んでもモードは切り替わりません。位置・大きさ・最小表示状態は次回も保持します。[キー操作と詳細](../docs/WINDOW_PLACEMENT.md)。
+
+`mechcue_get_session_health` の `reachable` は通信の到達性、`uiReady` はウィンドウハンドルの存在、`uiResponsive` は1秒以内に画面スレッドが照会を処理したかを表します。`uiReady=true` だけでは画面の正常応答を意味しません。`uiResponsive=false` はCAD処理中または画面停止の可能性があり、追加編集を重ねず確認してください。古い版では `uiResponsive` が存在しないため、応答性は未確認として扱います。
+
 - 「MechCueの機構一覧を確認して、一番目の機構の2秒の値を100にして」
 - 「全機構を0秒から10秒まで1秒間隔で再設定して。元の形状は補間で保持して」
 - 「機構2の全点の値を100にして。時間はそのままにして」
@@ -38,9 +42,9 @@ MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリ
 
 番号は1から始まります。AIはまず一覧を取得し、並び替えで変わらない `trackId` を使うことを推奨します。画面が複数ある場合は `sessionId` が必要です。読み取り対象は確定済みのグラフです。グラフ編集を開始する際は数値表の保留中の編集も確定します。
 
-グラフ変更は駆動先を保持し、再生停止・CAD反映オフになります。再サンプリングは既存グラフを直線補間し、元の最終時刻より後は最終値を保持します。終了時刻の点も含めます。時間を引き伸ばす操作ではありません。1機構10001点、全体100000点までです。一括変更も1回のUndoで戻せます。
+グラフ変更は駆動先と反映チェックを保持し、再生を停止します。編集中のCAD反映を一時停止するため、その操作ではCADは動きません。次の再生・時刻操作は保持した反映チェックに従います。再サンプリングは既存グラフを直線補間し、元の最終時刻より後は最終値を保持します。終了時刻の点も含めます。時間を引き伸ばす操作ではありません。1機構10001点、全体100000点までです。一括変更も1回のUndoで戻せます。
 
-再生と時刻指定は、既存の「Solid Edgeへ反映」の設定に従います。AIから自動的に反映をオンにする機能はありません。グラフを確認して画面で有効にしてください。最終時刻からの再生は先頭から開始します。CAD保存・対象割り当ては画面で行います。
+再生と時刻指定は、既存の「Solid Edgeへ反映」の設定に従います。画面で「自動」をオンにした場合、再生開始時に反映を有効にします。初期姿勢の反映に失敗すると再生を開始せず、反映と自動をオフにします。時刻指定だけでは自動オンにしません。最終時刻からの再生は先頭から開始します。CAD保存・対象割り当ては画面で行います。
 
 ## Solid Edgeの機能
 
@@ -200,7 +204,7 @@ MCP本体はAIアプリが自動起動するstdioサーバーです。常駐す�
 
 ### 概念から詳細への設定移行
 
-1. 元の概念アセンブリをアクティブにし、接続済みセッションへ `mechcue_save_document(expectedDocument, sessionId)` を実行します。グラフ・全動作パターン・割当てを埋め込み、CADを保存します。再生と反映を停止し、保存時の参照姿勢へ戻します。
+1. 元の概念アセンブリをアクティブにし、接続済みセッションへ `mechcue_save_document(expectedDocument, sessionId)` を実行します。グラフ・全動作パターン・割当てを埋め込み、CADを保存します。再生を停止し、反映チェックを保持したまま保存時の参照姿勢へ戻します。
 2. `solidedge_get_mechcue_settings(expectedDocument)` の `settingsJson` を取得します。この読取は保存済み設定のみを返し、未保存の画面編集を含みません。
 3. 詳細アセンブリと、その直下の部品／剛体サブアセンブリを参照する概念マニフェストを用意します。軸ID・親子関係・方向・原点・範囲は元と同じにし、元の参照姿勢に配置します。
 4. 詳細アセンブリに接続したセッションへ `mechcue_migrate_concept_settings(expectedDocument, manifestPath, settingsJson, hideUnboundTracks=true, sessionId)` を実行します。全グラフID・動作ID・キーフレームと参照軸値を保持して、マニフェストの構成へ一括再割当てします。移行先に埋込設定や既存割当てがある場合は上書きしません。概略軸以外の駆動先を含む元設定も拒否します。形状編集やCAD保存は行いません。要求全体はAI接続の64 Ki文字以内に収めてください。
@@ -214,7 +218,7 @@ MCP本体はAIアプリが自動起動するstdioサーバーです。常駐す�
 - 干渉レポートは `reportCreated` と `reportSource` を返します。ネイティブ結果が確実にclearで、Solid Edgeがファイルを生成しない場合は `mechcue-clear-summary` の要約を生成します。その他の結果でファイルがない場合は解析結果と警告を返し、干渉なしとは扱いません。ネイティブの部品ペア情報の欠落を補完したことにはなりません。
 - 表示設定・画像出力は `dirtyBefore` と `dirtyAfter` を返します。形状を動かさない表示操作でも、文書の保存状態が変わる場合があります。自動保存はしません。
 
-Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechcue_switch_pattern`, `mechcue_rename_pattern`, `mechcue_delete_pattern`. Chart edits affect the active pattern; targets remain shared. Switching pauses, rewinds and disables CAD reflection without moving CAD. Save to CAD persists all patterns.
+Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechcue_switch_pattern`, `mechcue_rename_pattern`, `mechcue_delete_pattern`. Chart edits affect the active pattern; targets remain shared. Switching pauses and rewinds without moving CAD, preserving the current Apply/Collision/Loop selections. Subsequent play/seek follows the retained Apply selection. Save to CAD persists all patterns.
 
 更新時はインストーラーが、インストール先のMCP本体とトレイ設定を終了します。更新中の自動再起動は一時停止します。AIとのMCP接続は更新後に再接続してください。トレイ設定アイコンの終了だけではMCP本体は終了しません。旧版は専用の終了通知を持たないため、インストール先を確認してMCPプロセスのみ終了します。Solid Edgeや他フォルダのMCPは対象にしません。
 
