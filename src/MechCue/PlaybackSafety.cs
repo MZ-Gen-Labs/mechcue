@@ -67,6 +67,8 @@ public partial class MainForm
         double surfaceStep = args.TryGetProperty("maxSurfaceStepMm", out var ss) ? ss.GetDouble() : 5;
         double clearance = args.TryGetProperty("requiredClearanceMm", out var gap) ? gap.GetDouble() : 0;
         bool stop = args.TryGetProperty("stopOnInterference", out var st) && st.GetBoolean();
+        double budget = args.TryGetProperty("timeBudgetSeconds", out var tb) ? tb.GetDouble() : 10;
+        if (!double.IsFinite(budget) || budget < 1 || budget > 3600) throw new ArgumentException("timeBudgetSeconds must be 1..3600");
         var policy = args.TryGetProperty("inspectionPolicy", out var ip) ? ip.Deserialize<MotionInspectionPolicy>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true })! : bridge.InspectionPolicy;
         if (!double.IsFinite(clearance) || clearance < 0 || clearance > 10000) throw new ArgumentException("Clearance must be 0..10000 mm");
         if (!double.IsFinite(start) || !double.IsFinite(end) || !double.IsFinite(step) || start < 0 || end <= start || end > tracks.Max(t => t.Points[^1].Time) || step <= 0) throw new ArgumentException("Use a finite positive chart interval and step");
@@ -75,13 +77,25 @@ public partial class MainForm
         PausePlayback(); Commit(); bridge.ValidateMotionInspectionPolicy(policy);
         int totalLimit = policy.AutoSplit ? policy.MaxTotalSamples : limit;
         double[] plan = adaptive ? bridge.PlanMotionSamples(start, end, step, linear, angular, totalLimit, surface, surfaceStep) : bridge.PlanCoarseMotionSamples(start, end, step, totalLimit);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        deadline.CancelAfter(TimeSpan.FromSeconds(10));
-        mcpInspectionCancellation = deadline; motionInspectionBusy = true;
+        // Separate sources tell an expired time budget from mechcue_stop or a closed request.
+        using var stopRequest = new CancellationTokenSource();
+        using var timeBudget = new CancellationTokenSource(TimeSpan.FromSeconds(budget));
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation, stopRequest.Token, timeBudget.Token);
+        mcpInspectionCancellation = stopRequest; motionInspectionBusy = true;
         try {
             var result = await bridge.CheckContinuousMotionAsync(plan, clearance, policy, limit, deadline.Token, stopOnInterference: stop);
             RecordMotionInspection(result);
-            return InspectionOperationSummary(motionReports[^1]);
+            var summary = (Dictionary<string, JsonElement>)InspectionOperationSummary(motionReports[^1]);
+            bool cancelled = summary.TryGetValue("cancelled", out var c) && c.ValueKind == JsonValueKind.True;
+            bool timedOut = cancelled && timeBudget.IsCancellationRequested && !stopRequest.IsCancellationRequested && !cancellation.IsCancellationRequested;
+            bool complete = summary.TryGetValue("samplingComplete", out var sc) && sc.ValueKind == JsonValueKind.True;
+            bool clear = summary.TryGetValue("allSamplesClear", out var ac) && ac.ValueKind == JsonValueKind.True;
+            summary["timeBudgetSeconds"] = JsonSerializer.SerializeToElement(budget);
+            summary["timedOut"] = JsonSerializer.SerializeToElement(timedOut);
+            // allSamplesClear covers only the checked samples; a stopped or partial run is never "clear".
+            summary["verdict"] = JsonSerializer.SerializeToElement(!clear ? "interference_or_unknown" : complete && !cancelled ? "clear" : "incomplete");
+            if (timedOut) summary["recovery"] = JsonSerializer.SerializeToElement("Time budget exhausted; samples after lastCheckedTime are unverified. Rerun with a larger timeBudgetSeconds (up to 3600) or a shorter interval.");
+            return summary;
         }
         finally { motionInspectionBusy = false; mcpInspectionCancellation = null; }
     }

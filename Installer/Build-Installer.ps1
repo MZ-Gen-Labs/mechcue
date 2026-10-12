@@ -2,7 +2,7 @@ param(
     [string]$PayloadDirectory,
     [string]$McpDirectory,
     [string]$OutputDirectory,
-    [string]$Version = '0.3.2-alpha.04',
+    [string]$Version = '0.3.2-alpha.05',
     [string]$CompilerPath = $env:INNO_SETUP_COMPILER
 )
 $ErrorActionPreference = 'Stop'

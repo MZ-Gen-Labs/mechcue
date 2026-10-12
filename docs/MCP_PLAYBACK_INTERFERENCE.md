@@ -70,7 +70,7 @@ Solid Edgeの干渉解析結果も用いる。
 モーダルダイアログの確認待ちにしない。
 
 MCPの `check_motion` は、UIスレッド上のCAD呼び出し間で処理を譲る。
-10秒の予算を持ち、`mechcue_stop` で協調的に中止できる。
+既定で10秒の予算を持ち、`argumentsJson`の`timeBudgetSeconds`（1〜3600秒）で変更できる。`mechcue_stop` で協調的に中止できる。予算を使い切った場合は結果に`timedOut=true`と`verdict="incomplete"`を返し、`lastCheckedTime`より後の区間は未確認とする。`verdict="clear"`は、中止されずに全区間を検査し、すべて干渉なしだった場合だけ返す（`allSamplesClear`は検査した姿勢だけの判定）。
 処理中も状態取得とUI応答確認が可能。検査・編集の競合を拒否する。
 完了・中止は `mechcue_get_operation` で確認し、中止した残り区間は未確認として残す。
 時間予算と中止はネイティブCAD呼び出しの間で確認するもので、
