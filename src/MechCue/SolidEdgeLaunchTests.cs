@@ -23,6 +23,14 @@ public static partial class SelfTest
         Assert(!launch.Start.Environment.ContainsKey("UGS_LICENSE_SERVER"), "Absent licensing setting is not invented");
         Assert(launch.Sources["SE_LICENSE_SERVER"] == "Machine" && launch.Sources["SPLM_LICENSE_SERVER"] == "Process", "Launch reports sources without license values");
         Assert(launch.Start.WorkingDirectory == Environment.SystemDirectory, "Launch uses executable directory");
+        Assert(launch.Start.RedirectStandardInput && launch.Start.RedirectStandardOutput && launch.Start.RedirectStandardError, "Launched child never inherits the MCP stdio channel");
+        // A detached child writing after its pipes are closed must neither block nor fail to finish.
+        var noisy = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"), "/d /c dir /s \"" + Environment.SystemDirectory + "\\drivers\" & exit 0") { UseShellExecute = false, CreateNoWindow = true };
+        SolidEdgeLaunch.DetachStandardStreams(noisy);
+        using (var detached = Process.Start(noisy)!) {
+            detached.StandardInput.Close(); detached.StandardOutput.Close(); detached.StandardError.Close();
+            Assert(detached.WaitForExit(10000), "Detached child with closed pipes finishes");
+        }
         // Exercise the actual process boundary: shell launch cannot carry custom Environment.
         launch.Start.Arguments = "/d /c set SE_LICENSE_SERVER";
         launch.Start.RedirectStandardOutput = true;

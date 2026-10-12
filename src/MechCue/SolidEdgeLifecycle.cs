@@ -47,6 +47,7 @@ public sealed partial class Bridge
         var launch=SolidEdgeLaunch.Prepare(executable);
         DiagnosticLog.Write("solid-edge-launch",new {executable,workingDirectory=launch.Start.WorkingDirectory,licenseEnvironmentSources=launch.Sources});
         using var process=Process.Start(launch.Start)??throw new InvalidOperationException("Solid Edge launch failed");
+        process.StandardInput.Close();process.StandardOutput.Close();process.StandardError.Close();
         return new {state="launched",processId=process.Id,licenseEnvironmentSources=launch.Sources,message="Poll application state; licensing/startup may require user interaction."};
     }
     public static object CadExitApplication(int expectedProcessId)
