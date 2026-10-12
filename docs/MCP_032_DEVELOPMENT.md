@@ -77,3 +77,9 @@ API仕様: [AddParallelByDistance](https://support.industrysoftware.automation.s
 - **コラム位置の不具合**：mill3／mill4／mill5でコラムがベースの後ろ端に固定されていて、サドル（奥行260 mm）と最初から干渉していた。前面をサドルの半分の奥行＋Y移動量の半分＋20 mmの位置に置き、ベースを延ばした。mill5ではトラニオンと回転テーブルが30 mm重なっていたため、トラニオンを下げた。
 - **検査**：SelfTestに、4種類すべてで直線軸の移動範囲の端の組み合わせで部品が重ならないことの確認を追加。Solid Edge上の検査（`--concept-integration-test`）に、変数があること、寸法を変えても中心が保たれることの確認を追加し、4種類すべて合格。生成したmill3を、原点と移動範囲の端4通りでSolid Edge標準の干渉解析にかけ、干渉なしを確認。
 - **対象外**：回転軸を傾けた姿勢（mill5のA軸など）での干渉は、この生成時検査の対象外。既存の構想モデルは作り直さない限り変わらない。
+
+## 0.3.2-alpha.05：変数ツールと経路検査の結果表示の修正
+
+- **変数ツール**：`solidedge_list_variables`／`solidedge_set_variables`が、寸法オブジェクト自身の名前（`Dimension 363`）を変数名として扱っていた。そのため、alpha.04の構想部品の`SizeX`／`SizeY`／`SizeZ`を読み書きできなかった。Solid Edgeの変数表の名前（`Variables.GetName`）を使うようにし、以前の名前での指定も受け付ける。開発版MCPで、生成したmill3のコラムの`SizeX`を200→260 mmに変更できることを確認した。
+- **経路検査の時間制限**：MCPの`check_motion`の10秒の予算を、`argumentsJson`の`timeBudgetSeconds`（1〜3600秒、既定10秒）で変えられるようにした。予算切れのときは`timedOut=true`と`verdict="incomplete"`を返す。`verdict="clear"`は、中止されずに全区間を検査し、すべて干渉なしだった場合だけ返す。従来は打ち切られても`allSamplesClear=true`が返り、干渉なしと誤解されやすかった。
+- **検査が終わらない原因**：生成したmill3の検査が終わらなかったのは、時間制限ではなく、すきま0のまま滑る部品の組（ベース–サドル、サドル–テーブル）が未登録だったため。`AllowedContacts`に登録すると、10秒以内に完了し、連続区間で干渉なしと確認できた（試験用プログラムで開発版の画面をSolid Edgeに接続して確認）。
