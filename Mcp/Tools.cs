@@ -24,9 +24,9 @@ public static class MechCueTools
     public static object mechcue_list_sessions()
     {
         if(!Directory.Exists(AiEndpoint.SessionDirectory))return Array.Empty<AiSession>();
-        var sessions=new List<AiSession>();
+        var sessions=new List<AiSession>();HashSet<string>? pipes=null;
         foreach(string file in Directory.GetFiles(AiEndpoint.SessionDirectory,"*.json"))
-            try{var session=JsonSerializer.Deserialize<AiSession>(File.ReadAllText(file));if(session!=null && session.Pipe=="MechCue-"+session.Id && Guid.TryParseExact(session.Id,"N",out _) && !System.Diagnostics.Process.GetProcessById(session.ProcessId).HasExited)sessions.Add(session);}catch(IOException){}catch(JsonException){}catch(ArgumentException){}catch(System.ComponentModel.Win32Exception){}
+            try{var session=JsonSerializer.Deserialize<AiSession>(File.ReadAllText(file));if(session!=null && AiEndpoint.IsLive(session,pipes??=AiEndpoint.PipeNames()))sessions.Add(session);}catch(IOException){}catch(JsonException){}
         return sessions;
     }
     [McpServerTool,Description("Import concept-machine axes into an enabled MechCue window connected to that assembly. Creates constant tracks from measured current pose without moving CAD; repeated import preserves existing tracks. unboundTracks=preserve (default) or hide hides unassigned tracks without deleting them; assigned and unresolved tracks are retained. Stops playback and disables CAD reflection. manifestPath absolute; optional sessionId. Save to CAD persists mappings.")]

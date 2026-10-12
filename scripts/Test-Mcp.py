@@ -194,6 +194,18 @@ try:
     missing=tool('mechcue_get_state',{'sessionId':'00000000000000000000000000000000'},True)
     assert 'session_not_found' in str(missing) and 'mutationStarted' in str(missing) and 'mechcue_list_sessions' in str(missing),missing
     checks.append('Expired session returns recovery instructions and never selects another window')
+    # A crashed window leaves its record; Windows may reuse its process ID for another program.
+    session_dir=pathlib.Path(os.environ['LOCALAPPDATA'])/'MechCue'/'Sessions';session_dir.mkdir(parents=True,exist_ok=True)
+    stale=[]
+    for record in [{'ProcessStartUtcTicks':1},{}]:
+        sid=os.urandom(16).hex();path=session_dir/(sid+'.json');stale.append((sid,path))
+        path.write_text(json.dumps({'Id':sid,'Pipe':'MechCue-'+sid,'Title':'stale test','ProcessId':os.getpid(),**record}),encoding='utf-8')
+    try:
+        listed={x.get('id',x.get('Id')) for x in tool('mechcue_list_sessions')}
+        assert not listed & {sid for sid,_ in stale},listed
+    finally:
+        for _,path in stale:path.unlink(missing_ok=True)
+    checks.append('Stale session records with a reused process ID are not listed')
     sid=own_session(host.pid);context={'sessionId':sid}
     assert tool('mechcue_get_inspection_reports',context)['records']==[]
     tool('mechcue_list_inspection_parts',context,True)

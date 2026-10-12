@@ -135,7 +135,6 @@ Root: HKLM; Subkey: "Software\Classes\CLSID\{{79B86022-7C7D-4768-A3A7-CF8EBD1F78
 Root: HKLM; Subkey: "Software\Classes\CLSID\{{79B86022-7C7D-4768-A3A7-CF8EBD1F7826}\Summary"; ValueType: string; ValueName: "411"; ValueData: "Time-displacement assembly control"
 Root: HKLM; Subkey: "Software\Classes\MechCue.TimeChartAddIn"; ValueType: none; Flags: uninsdeletekey
 Root: HKLM; Subkey: "Software\Classes\MechCue.TimeChartAddIn\CLSID"; ValueType: string; ValueName: ""; ValueData: "{code:AddInClsid}"
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\MechCue.TimeChart_is1"; ValueType: string; ValueName: "InstallMode"; ValueData: "{code:InstallMode}"
 
 [Icons]
 Name: "{autoprograms}\MechCue"; Filename: "{app}\MechCue.exe"; Components: standalone
@@ -155,10 +154,7 @@ Filename: "{app}\MCP\control\MechCue.Mcp.Control.exe"; Components: mcp; Flags: n
 [Code]
 var StandaloneDefaultApplied: Boolean;
 
-function PreviousInstallMode: String;
-begin
-  if not RegQueryStringValue(HKLM64, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\MechCue.TimeChart_is1', 'InstallMode', Result) then Result := '';
-end;
+#include "AddInOnlyDetection.iss"
 
 { Earlier versions shipped a separate add-in-only setup. Keep such installations
   add-in only on update unless the user selects the standalone app (or passes /COMPONENTS). }
@@ -166,7 +162,7 @@ procedure ApplyStandaloneDefault;
 begin
   if StandaloneDefaultApplied then Exit;
   StandaloneDefaultApplied := True;
-  if (PreviousInstallMode = 'AddInOnly') and (Pos('/COMPONENTS=', Uppercase(GetCmdTail)) = 0) and (Pos('/TYPE=', Uppercase(GetCmdTail)) = 0) then
+  if PreviousAddInOnlySetup and (Pos('/COMPONENTS=', Uppercase(GetCmdTail)) = 0) and (Pos('/TYPE=', Uppercase(GetCmdTail)) = 0) then
   begin
     Log('Previous add-in-only installation: standalone app deselected by default');
     WizardSelectComponents('!standalone');
@@ -178,11 +174,6 @@ begin
   { Also runs on silent installs, before the selected components are installed. }
   if CurPageID = wpSelectComponents then ApplyStandaloneDefault;
   Result := True;
-end;
-
-function InstallMode(Param: String): String;
-begin
-  if WizardIsComponentSelected('standalone') then Result := 'Full' else Result := 'AddInOnly';
 end;
 
 procedure ClearMcpUpdateMarker;

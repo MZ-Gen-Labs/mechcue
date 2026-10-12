@@ -7,8 +7,9 @@ if ((Get-FileHash -LiteralPath $taskSetup.FullName -Algorithm SHA256).Hash.ToLow
 $taskRequired = @('MechCue.AddIn.comhost.dll','MechCue.AddIn.dll','MechCue.AddIn.deps.json','MechCue.AddIn.runtimeconfig.json','MechCue.dll','MechCue.runtimeconfig.json','MechCue.deps.json')
 foreach ($taskName in $taskRequired) { if ($taskName -notin $taskManifest.Payload.Name) { throw "Missing compiler input: $taskName" } }
 if (!$taskManifest.StandaloneComponent -or 'MechCue.exe' -notin $taskManifest.Payload.Name) { throw 'Setup lacks the optional standalone component' }
-$taskScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Installer\MechCue.iss') -Raw
-foreach ($taskPattern in @('Name: "standalone";[^\r\n]*Types: standard custom','Name: "addin";','MechCue\.exe"; DestDir: "\{app\}"; Flags: ignoreversion; Components: standalone','Name: "\{app\}\\MechCue\.exe"; Components: not standalone',"WizardSelectComponents\('!standalone'\)")) {
+$taskScript = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Installer\MechCue.iss') -Raw) + (Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Installer\AddInOnlyDetection.iss') -Raw)
+if ($taskScript -match 'ValueName: "InstallMode"') { throw 'InstallMode registry values do not persist in the Inno uninstall key' }
+foreach ($taskPattern in @('Name: "standalone";[^\r\n]*Types: standard custom','Name: "addin";','MechCue\.exe"; DestDir: "\{app\}"; Flags: ignoreversion; Components: standalone','Name: "\{app\}\\MechCue\.exe"; Components: not standalone',"WizardSelectComponents\('!standalone'\)",'PreviousAddInOnlySetup','Inno Setup: Deselected Components')) {
     if ($taskScript -notmatch $taskPattern) { throw "Installer component definition missing: $taskPattern" }
 }
 if ($taskManifest.Payload.Name | Where-Object { $_ -match 'CADTeam|[\\/]|\.pdb$' }) { throw 'Unexpected compiler input' }

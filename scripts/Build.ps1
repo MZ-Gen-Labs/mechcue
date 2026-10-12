@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.3.2-alpha.02',
+    [string]$Version = '0.3.2-alpha.03',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -83,6 +83,7 @@ if ($WithAddIn) {
     & dotnet run --project (Join-Path $taskRoot 'tools\ComContractCheck\ComContractCheck.csproj') -c Release "-p:RestoreConfigFile=$taskRoot\NuGet.Config"
     if ($LASTEXITCODE -ne 0) { throw 'COM contract checks failed' }
     if ($WithMcp) { & (Join-Path $PSScriptRoot 'Test-InstallerUpdate.ps1') -McpDirectory $taskMcp -OutputDirectory (Join-Path $taskOutput 'installer-update-test') }
+    & (Join-Path $PSScriptRoot 'Test-InstallerDetection.ps1') -OutputDirectory (Join-Path $taskOutput 'installer-detection-test')
     $taskInstaller = Join-Path $taskOutput 'installer'
     & (Join-Path $taskRoot 'Installer\Build-Installer.ps1') -PayloadDirectory $taskAddIn -McpDirectory $taskMcp -OutputDirectory $taskInstaller -Version $Version
     & powershell.exe -NoProfile -STA -File (Join-Path $PSScriptRoot 'Test-Installer.ps1') -Path (Join-Path $taskInstaller 'MechCue-Setup.exe')
