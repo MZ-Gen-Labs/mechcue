@@ -35,7 +35,7 @@ public sealed class ConceptMachine
     {
         foreach (double length in new[] { xTravelMm, yTravelMm, zTravelMm })
             if (!double.IsFinite(length) || length < 10 || length > 5000) throw new ArgumentException("Axis travel must be between 10 and 5000 mm.");
-        if (type is not ("mill3" or "mill4" or "mill5" or "gantry")) throw new ArgumentException("type must be mill3, mill4, mill5 or gantry.");
+        if (type is not ("mill3" or "mill4" or "mill5" or "gantry" or "arm5")) throw new ArgumentException("type must be mill3, mill4, mill5, gantry or arm5.");
         var model = new ConceptMachine { Type = type };
         void Axis(string id, string parent, string direction, double travel, string kind = "linear", double[]? origin = null) {
             model.Axes.Add(new() { Id = id, Parent = parent, Direction = direction, Kind = kind, Minimum = -travel / 2, Maximum = travel / 2, OriginMm = origin ?? [0, 0, 0] }); model.Values[id] = 0;
@@ -43,7 +43,29 @@ public sealed class ConceptMachine
         void Box(string id, string parent, double x, double y, double z, double cx, double cy, double cz) => model.Bodies.Add(new() { Id = id, Parent = parent, SizeMm = [x, y, z], CenterMm = [cx, cy, cz] });
         void Cylinder(string id, string parent, double diameter, double depth, double cx, double cy, double cz) => model.Bodies.Add(new() { Id = id, Parent = parent, Shape = "cylinder", SizeMm = [diameter, diameter, depth], CenterMm = [cx, cy, cz] });
         double w = xTravelMm + 400, d = yTravelMm + 400, h = zTravelMm + 600;
-        if (type == "gantry") {
+        if (type == "arm5") {
+            // Table-mounted five-axis arm (travel arguments do not apply). Joint frames follow the parent
+            // link: J1 turret about Z, J2 shoulder / J3 elbow / J4 wrist pitch about Y, J5 wrist roll about X.
+            // Adjacent links sit side by side in Y, so pitch rotations never sweep a link through its neighbour.
+            Box("base", "", 200, 200, 100, -250, 0, 790);
+            Box("table-top", "", 1000, 700, 40, 0, 0, 720);
+            foreach (var (tag, x, y) in new[] { ("front-left", -440, -290), ("front-right", 440, -290), ("back-left", -440, 290), ("back-right", 440, 290) })
+                Box("table-leg-" + tag, "", 60, 60, 700, x, y, 350);
+            Axis("J1", "", "Z", 340, "rotary", [-250, 0, 840]);
+            Cylinder("turret", "J1", 180, 80, 0, 0, 40);
+            Box("shoulder", "J1", 120, 190, 60, 0, 0, 110);
+            Axis("J2", "J1", "Y", 180, "rotary", [0, 0, 110]);
+            Box("upper-arm", "J2", 80, 80, 400, 0, 135, 160);
+            Axis("J3", "J2", "Y", 270, "rotary", [0, 135, 320]);
+            Box("forearm", "J3", 360, 70, 70, 140, 75, 0);
+            Axis("J4", "J3", "Y", 240, "rotary", [300, 75, 0]);
+            Box("wrist", "J4", 160, 60, 60, 50, 65, 0);
+            Axis("J5", "J4", "X", 360, "rotary", [130, 65, 0]);
+            Box("hand", "J5", 40, 100, 60, 20, 0, 0);
+            Box("finger-1", "J5", 60, 15, 30, 70, 40, 0); // 65 mm between fingers grips the 60 mm workpiece with clearance
+            Box("finger-2", "J5", 60, 15, 30, 70, -40, 0);
+            Box("workpiece", "", 60, 60, 60, 250, 0, 770);
+        } else if (type == "gantry") {
             Box("base", "", w, d, 100, 0, 0, 50);
             // The bridge travels along the two Y rails; the trolley travels on the bridge.
             Axis("Y", "", "Y", yTravelMm); Axis("X", "Y", "X", xTravelMm); Axis("Z", "X", "Z", zTravelMm);
