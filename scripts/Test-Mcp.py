@@ -45,14 +45,14 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];assert 'solidedge_close_document' in result['instructions'];checks.append('MCP initialization and saved temporary-document cleanup instructions')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==111,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==113,len(tools)
     for name in ['mechcue_list_inspection_parts','mechcue_get_inspection_reports']:assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['mechcue_get_video_export','solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     for name in ['solidedge_get_assembly_tree','solidedge_get_view','solidedge_check_interference','solidedge_get_mechcue_settings']:
         assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
-    checks.append('111 tools and read-only annotations')
+    checks.append('113 tools and read-only annotations')
     bad=tool('solidedge_check_interference',{'expectedDocument':'unused','parts1Json':'[1]'},True)
     assert 'unknown_tool_arguments' in str(bad) and 'mutationStarted' in str(bad),bad
     bad=tool('mechcue_get_state',{'SessionId':'invalid'},True);assert 'unknown_tool_arguments' in str(bad),bad
@@ -85,6 +85,11 @@ try:
         arguments={'solidedge_exit_application':{'expectedProcessId':1},'solidedge_open_mechcue':{'expectedDocument':'unused'},'solidedge_set_variables':{'expectedDocument':'unused','variablesJson':'[]'},'solidedge_set_custom_property':{'expectedDocument':'unused','name':'test','value':'test'},'solidedge_position_nested_part':{'expectedDocument':'unused','keyPath':'/AA/BB','xMm':0,'yMm':0,'zMm':0}}.get(name,{})
         tool(name,arguments,True)
     checks.append('Lifecycle, nested placement and metadata/variable write permission gates')
+    tool('mechcue_set_playback_options',{'expectedDocument':'unused','applyToCad':True,'stopOnInterference':True},True)
+    checks.append('Playback Apply/Interference options require Creation/edit permission')
+    assert 'subdivideInspection' in next(t for t in tools if t['name']=='mechcue_set_playback_options')['inputSchema']['properties']
+    tool('mechcue_set_playback_options',{'expectedDocument':'unused','subdivideInspection':False},True)
+    checks.append('Subdivision option schema and Creation/edit permission')
     catalog=tool('solidedge_list_concept_templates')
     assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
@@ -94,6 +99,7 @@ try:
     tool('solidedge_extrude_profile',{'expectedDocument':'test.par','shape':'rectangle','depthMm':10,'widthMm':20,'heightMm':30},True)
     tool('solidedge_save_document',{'expectedDocument':'test.par','outputPath':'test.par'},True)
     tool('solidedge_auto_pmi',{'expectedDocument':'unused'},True)
+    tool('solidedge_add_pmi_distance',{'expectedDocument':'unused','id':'d','fromPart':'1','fromPoint':'vertex:min,min,min','toPart':'2','toPoint':'circle:zmin','axis':'Z'},True)
     tool('solidedge_show_pmi_view',{'expectedDocument':'unused','viewName':'MechCue PMI XY'},True)
     for name,arguments in [
         ('solidedge_create_simulation_study',{'expectedDocument':'unused'}),
@@ -145,6 +151,11 @@ try:
     checks.append('Invalid drawing direction and dimension options rejected before CAD connection')
     bad=tool('solidedge_auto_pmi',{'expectedDocument':'unused','dimensionMode':'bad'},True);assert 'dimensionMode' in str(bad),bad
     bad=tool('solidedge_auto_pmi',{'expectedDocument':'unused','maxDimensions':0},True);assert 'maxDimensions' in str(bad),bad
+    distance={'expectedDocument':'unused','id':'d','fromPart':'1','fromPoint':'vertex:min,min,min','toPart':'2','toPoint':'circle:zmin','axis':'Z'}
+    bad=tool('solidedge_add_pmi_distance',{**distance,'axis':'W'},True);assert 'axis must be' in str(bad),bad
+    bad=tool('solidedge_add_pmi_distance',{**distance,'plane':'XY'},True);assert 'does not contain axis' in str(bad),bad
+    bad=tool('solidedge_add_pmi_distance',{**distance,'toPoint':'edge:1'},True);assert 'point must be' in str(bad),bad
+    bad=tool('solidedge_add_pmi_distance',{**distance,'id':''},True);assert 'id is required' in str(bad),bad
     checks.append('PMI write permissions and invalid options rejected before CAD access')
     simulation_bad=[
         ('solidedge_create_simulation_study',{'meshSizeMm':-1},'meshSizeMm'),

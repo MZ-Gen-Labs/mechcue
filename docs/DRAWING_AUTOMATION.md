@@ -2,6 +2,8 @@
 
 0.2.0-alpha.8から、保存済み3Dモデルの図面をMCPで作成できます。概略アセンブリ、箱、板、単純円筒、段差形状、円形穴を持つ部品が主な対象です。
 
+部品`.par`・板金`.psm`に加えて、アセンブリ`.asm`も既存の`solidedge_auto_drawing`で図面化できます。アセンブリをアクティブにして保存後、そのパスを`expectedDocument`、新しい`.dft`の保存先を`outputPath`に指定します。既存図面へのアセンブリビュー追加は`solidedge_add_drawing_view`を使用します。
+
 ## MCPコマンド
 
 | コマンド | 用途 |

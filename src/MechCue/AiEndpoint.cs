@@ -110,6 +110,7 @@ public partial class MainForm
     }
     async Task<object> DispatchAi(JsonElement request,CancellationToken cancellationToken)
     {
+        if(request.GetProperty("method").GetString() is "get_state" or "stop")return await DispatchAiCore(request,cancellationToken).ConfigureAwait(false);
         await aiDispatchGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try{return await DispatchAiCore(request,cancellationToken).ConfigureAwait(false);}
         finally{aiDispatchGate.Release();}
@@ -118,16 +119,17 @@ public partial class MainForm
     {
         var completion=new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
         if(IsDisposed || !IsHandleCreated)return Task.FromException<object>(new InvalidOperationException("MechCue window is closed"));
-        try { BeginInvoke(()=>{
+        try { BeginInvoke(async ()=>{
+            bool previousExecuting=aiExecuting;Exception? previousError=aiError;
             try {
                 cancellationToken.ThrowIfCancellationRequested();
                 if(!aiAccess.Checked || IsDisposed)throw new InvalidOperationException("AI access is disabled");
                 aiExecuting=true;aiError=null;
-                var result=HandleAi(request);if(aiError!=null)throw aiError;
+                var result=request.GetProperty("method").GetString()=="check_motion"?await RunAiMotionInspectionAsync(request,cancellationToken):HandleAi(request);if(aiError!=null)throw aiError;
                 completion.TrySetResult(result);
             }
-            catch(Exception ex){PausePlayback(); live.Checked = autoApply.Checked = false; DiagnosticLog.Error("mcp", ex, DiagnosticState());completion.TrySetException(ex);}
-            finally{aiExecuting=false;aiError=null;}
+            catch(Exception ex){if(request.GetProperty("method").GetString()!="set_playback_options"){PausePlayback(); live.Checked = autoApply.Checked = false;} DiagnosticLog.Error("mcp", ex, DiagnosticState());completion.TrySetException(ex);}
+            finally{aiExecuting=previousExecuting;aiError=previousError;}
         }); }catch(Exception ex){DiagnosticLog.Error("mcp", ex, DiagnosticState());completion.TrySetException(ex);}
         return completion.Task;
     }
@@ -142,8 +144,9 @@ public partial class MainForm
             if(args.TryGetProperty("trackId",out var id) && !string.IsNullOrEmpty(id.GetString()))return tracks.Single(t=>t.Id==Guid.Parse(id.GetString()!));
             int index=args.GetProperty("trackNumber").GetInt32();if(index<1 || index>tracks.Count)throw new ArgumentOutOfRangeException("trackNumber");return tracks[index-1];
         }
-        if(motionInspectionBusy)throw new InvalidOperationException("Path inspection is running. Wait or cancel in the inspection window before other commands.");
         if(method=="get_state")return AiState();
+        if(method=="stop"){PausePlayback();return AiState();}
+        if(motionInspectionBusy)throw new InvalidOperationException("Path inspection is running. Wait or cancel before other commands.");
         if(method=="list_inspection_parts")return bridge.ListMotionInspectionParts();
         if(method=="get_inspection_reports")return InspectionReports(args);
         if(method=="set_inspection_policy"){
@@ -154,6 +157,7 @@ public partial class MainForm
         if(method=="get_video_export")return VideoStatus(args,false);
         if(method=="cancel_video_export")return VideoStatus(args,true);
         if(videoExport?.Running==true)throw new InvalidOperationException("Video export is running. Wait for completion or cancel it before editing or playing.");
+        if(method=="set_playback_options")return SetPlaybackOptions(args);
         if(method=="export_video")return StartVideoExport(args);
         if(method=="place_window")return PlaceWindow(args.GetProperty("position").GetInt32());
         if(method=="check_motion")
@@ -271,7 +275,7 @@ public partial class MainForm
         return AiState();
     }
     object AiState()=>new {
-        activePatternId=activePattern,patternName=patterns.FirstOrDefault(p=>p.Id==activePattern)?.Name,sessionId=aiEndpoint?.Session.Id,connected=bridge.Connected,playing=timer.Enabled,applyToCad=live.Checked,autoApplyOnPlay=autoApply.Checked,time=(double)time.Value,status=status.Text,
+        activePatternId=activePattern,patternName=patterns.FirstOrDefault(p=>p.Id==activePattern)?.Name,sessionId=aiEndpoint?.Session.Id,connected=bridge.Connected,playing=timer.Enabled,applyToCad=live.Checked,stopOnInterference=collision.Checked,subdivideInspection=subdivideInspection.Checked,requiredClearanceMm=requiredMotionClearanceMm,numericalMarginMm=bridge.InspectionPolicy.NumericalMarginMm,inspectionRunning=motionInspectionBusy,autoApplyOnPlay=autoApply.Checked,time=(double)time.Value,status=status.Text,
         tracks=tracks.Select((t,i)=>new {number=i+1,id=t.Id,name=t.Name,kind=t.Kind,axis=t.Axis,hidden=plot.Hidden.Contains(t),unit=Plot.IsAngle(t)?"deg":"mm",target=bridge.BoundLabel(t) ?? bridge.PendingLabel(t),points=t.Points.Select(p=>new{time=p.Time,value=p.Value}).ToArray()}).ToArray()
     };
 }

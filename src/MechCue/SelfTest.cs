@@ -21,6 +21,7 @@ public static partial class SelfTest
         TestMotionSampling();
         TestInspectionArchive();
         TestDrawingPlanning();
+        TestAssemblyPmiTransforms();
         TestDrag();
         TestTimelineEditing();
         TestOverlay();
@@ -33,6 +34,8 @@ public static partial class SelfTest
         TestChartTables();
         TestVideoExport();
         TestWorkflowExtensions();
+        TestSolidEdgeLaunch();
+        TestPlaybackSafety();
         TestWindowPlacement();
         TestWindowPlacementUi();
         var preset = MotionPreset.OutAndBack(10, 50, 2, 1);

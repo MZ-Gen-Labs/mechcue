@@ -3,6 +3,14 @@ namespace MechCue;
 // Every track is piecewise linear; include all key times before subdividing.
 public static class MotionSampling
 {
+    public static double[] KeyPlan(IEnumerable<Track> source,double start,double end,int maxSamples=5001)
+    {
+        if(!double.IsFinite(start)||!double.IsFinite(end)||start<0||end<start||maxSamples<2)throw new ArgumentException("Invalid key-only inspection interval");
+        var tracks=source.Distinct().ToArray();foreach(var track in tracks)track.Validate();
+        var plan=tracks.SelectMany(t=>t.Points.Select(p=>p.Time)).Where(t=>t>start&&t<end).Append(start).Append(end).Distinct().Order().ToArray();
+        if(plan.Length>maxSamples)throw new InvalidOperationException("Original keyframe inspection budget exceeded; no keys were discarded");
+        return plan;
+    }
     public static double[] CoarsePlan(IEnumerable<Track> source,double start,double end,double step=1,int maxSamples=5001)
     {
         if(!double.IsFinite(start)||!double.IsFinite(end)||!double.IsFinite(step)||start<0||end<start||step<=0||maxSamples is <2 or >100001)throw new ArgumentException("Invalid coarse inspection interval/budget");
@@ -49,17 +57,20 @@ public sealed partial class Bridge
         return MotionSampling.Plan(DrivenMotionTracks(),start,end,step,linearStep,angularStep,maxSamples,surfaceBased?MotionSurfaceRadiusMm(start,end):0,surfaceStep);
     }
     internal double PlaybackClearanceMm;
+    internal TimeSpan PlaybackInspectionTimeLimit=TimeSpan.FromSeconds(2);
     internal Action<System.Text.Json.JsonElement>? InspectionObserver;
-    public int ApplyCheckedPath(double fromTime,double toTime,bool surfaceBased=true)
+    public int ApplyCheckedPath(double fromTime,double toTime,bool surfaceBased=true,bool subdivide=true)
     {
-        var plan=PlanMotionSamples(Math.Min(fromTime,toTime),Math.Max(fromTime,toTime),1,5,1,5001,surfaceBased);
+        var plan=subdivide?PlanMotionSamples(Math.Min(fromTime,toTime),Math.Max(fromTime,toTime),1,5,1,5001,surfaceBased):MotionSampling.KeyPlan(DrivenMotionTracks(),Math.Min(fromTime,toTime),Math.Max(fromTime,toTime));
         if(toTime<fromTime)Array.Reverse(plan);
+        if(!subdivide)return ApplyVerifiedPath(plan,InspectionPolicy with{VerifyContinuous=false});
         if(InspectionPolicy.IncludeNested||InspectionPolicy.VerifyContinuous||InspectionPolicy.AllowedContacts.Length>0)return ApplyVerifiedPath(plan);
         var restore=CaptureVideoPose();double at=fromTime;
+        var elapsed=System.Diagnostics.Stopwatch.StartNew();
         var results=new List<System.Text.Json.JsonElement>();
         try {
             EnsureNoInterference();
-            foreach(var point in plan){at=point;var sample=InspectMotionPose(point,PlaybackClearanceMm);results.Add(sample);if(!sample.GetProperty("passed").GetBoolean())throw new InvalidOperationException("干渉・すきま不足または解析未完了。 "+sample.GetRawText());}
+            foreach(var point in plan){if(elapsed.Elapsed>=PlaybackInspectionTimeLimit)throw new InvalidOperationException("再生時の干渉検査が処理時間の上限に達しました。残りの区間は未確認です。");at=point;var sample=InspectMotionPose(point,PlaybackClearanceMm);results.Add(sample);if(!sample.GetProperty("passed").GetBoolean())throw new InvalidOperationException("干渉・すきま不足または解析未完了。 "+sample.GetRawText());}
             InspectionObserver?.Invoke(MotionInspectionSummary(plan,results,true,1,5,1,surfaceBased,5,PlaybackClearanceMm,false));return plan.Length;
         }
         catch(Exception error) {

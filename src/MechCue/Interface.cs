@@ -16,7 +16,7 @@ public partial class MainForm
         try
         {
             compact = enabled;
-            var playback = new Control[] { time, speed, live, collision, loop, autoApply };
+            var playback = new Control[] { time, speed, live, collision, loop, autoApply, subdivideInspection };
             if (enabled)
             {
                 editBounds = Bounds; editWindowState = WindowState;
@@ -26,9 +26,9 @@ public partial class MainForm
                 compactBar.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true, Name = "compactTime" });
                 compactBar.Controls.Add(time);
                 compactBar.Controls.Add(new Label { Text = "速度", AutoSize = true, Name = "compactSpeed" });
-                compactBar.Controls.Add(speed); compactBar.Controls.Add(live); compactBar.Controls.Add(collision); compactBar.Controls.Add(loop); compactBar.Controls.Add(autoApply);
+                compactBar.Controls.Add(speed); compactBar.Controls.Add(live); compactBar.Controls.Add(collision); compactBar.Controls.Add(loop); compactBar.Controls.Add(autoApply); compactBar.Controls.Add(subdivideInspection);
                 int position = compactBar.Controls.OfType<Button>().Count();
-                foreach (var control in new Control[] { compactBar.Controls["compactTime"]!, time, compactBar.Controls["compactSpeed"]!, speed, live, collision, loop, autoApply })
+                foreach (var control in new Control[] { compactBar.Controls["compactTime"]!, time, compactBar.Controls["compactSpeed"]!, speed, live, collision, loop, autoApply, subdivideInspection })
                     compactBar.Controls.SetChildIndex(control, position++);
                 time.Width = 85; speed.Width = 55;
                 MinimumSize = new(650, 400);
@@ -209,10 +209,10 @@ public partial class MainForm
             bool continuous=false;
             bridge.PlaybackClearanceMm=requiredMotionClearanceMm;
             bridge.InspectionObserver=result=>{continuous=result.GetProperty("continuousPathCertified").GetBoolean();RecordMotionInspection(result,merge:lastCheckedTime.HasValue);};
-            if(lastCheckedTime is double previous)samples=bridge.ApplyCheckedPath(previous,requestedTime);
-            else samples=bridge.ApplyCheckedPath(requestedTime,requestedTime);
+            if(lastCheckedTime is double previous)samples=bridge.ApplyCheckedPath(previous,requestedTime,subdivide:subdivideInspection.Checked);
+            else samples=bridge.ApplyCheckedPath(requestedTime,requestedTime,subdivide:subdivideInspection.Checked);
             lastCheckedTime = requestedTime;
-            string scope=continuous?"連続区間ですきまを確認":"検査点を確認";
+            string scope=!subdivideInspection.Checked?"検査姿勢のみ（区間内は未確認）":continuous?"連続区間ですきまを確認":"検査点を確認";
             status.Text=UiText.IsJapanese?$"干渉検出: {requestedTime:0.###} 秒まで、今回 {samples} 姿勢 / {scope} / 対象外 {bridge.InspectionPolicy.AllowedContacts.Length} 組":$"Checked through {requestedTime:0.###} s: {samples} poses; {(continuous?"continuous clearance verified":"sample checked")}; {bridge.InspectionPolicy.AllowedContacts.Length} excluded pairs.";
         }
         catch

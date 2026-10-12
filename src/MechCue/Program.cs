@@ -127,6 +127,7 @@ public partial class MainForm : Form
     readonly CheckBox collision = new() { Text = "干渉したら停止", AutoSize = true };
     readonly CheckBox loop = new() { Text = "繰り返し", AutoSize = true };
     readonly CheckBox autoApply = new() { Text = "自動", AutoSize = true };
+    readonly CheckBox subdivideInspection = new() { Text = "細分", AutoSize = true, Checked = true };
     readonly System.Windows.Forms.Timer timer = new() { Interval = 50 };
     readonly Stopwatch watch = new();
     double playStart;
@@ -151,7 +152,7 @@ public partial class MainForm : Form
         ConfigureSettingsMenu();
         top.Controls.Add(new Label { Text = "時刻 [s]", AutoSize = true }); top.Controls.Add(time);
         Add(top, "▶ 再生", TogglePlayback);
-        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(live); top.Controls.Add(collision); top.Controls.Add(loop); top.Controls.Add(autoApply);
+        top.Controls.Add(new Label { Text = "速度", AutoSize = true }); top.Controls.Add(speed); top.Controls.Add(live); top.Controls.Add(collision); top.Controls.Add(loop); top.Controls.Add(autoApply); top.Controls.Add(subdivideInspection);
         ConfigureModes(top);
         Add(top, "最小表示", () => SetCompact(true));
         split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 230, SplitterWidth = 8 };
@@ -233,11 +234,13 @@ public partial class MainForm : Form
             ApplyPreview(); MarkDocumentSettingsChanged();
             status.Text = "点を変更しました。下の表にも反映済みです。";
         });
-        live.CheckedChanged += (_, _) => { if (live.Checked && !loading) Guard(() => { Commit(); Drive((double)time.Value); }); UpdateConnection(); };
+        live.CheckedChanged += (_, _) => { if (live.Checked && !loading && cadReflectionPauseDepth == 0) Guard(() => { Commit(); Drive((double)time.Value); }); UpdateConnection(); };
         collision.CheckedChanged += (_, _) => { PausePlayback(); lastCheckedTime = null; };
-        timer.Tick += (_, _) => Guard(() => { var end = tracks.Max(t => t.Points[^1].Time); double t = playStart + watch.Elapsed.TotalSeconds * (double)speed.Value; bool checkedLoopEnd=t>=end&&loop.Checked&&collision.Checked; if (t >= end) { if (loop.Checked && end > 0 && !collision.Checked) t %= end; else { t = end; PausePlayback(); } } plot.FollowTime(t); time.Value = (decimal)t; if(checkedLoopEnd)status.Text=UiText.IsJapanese?"検証再生は終端で停止しました。終端から始点へのループ移動は未検証です。":"Checked playback stopped at the end; loop reset transition is unverified."; });
+        subdivideInspection.CheckedChanged += (_, _) => { PausePlayback(); lastCheckedTime = null; };
+        timer.Tick += (_, _) => PlaybackTick();
         FormClosing += (_, e) =>
         {
+            if (motionInspectionBusy) { mcpInspectionCancellation?.Cancel(); e.Cancel = true; return; }
             CancelVideoExport(); PausePlayback(); live.Checked = false;
             try { StageOnClose(); } catch (Exception ex) { if (MessageBox.Show(this, UiText.Text("設定を保存できませんでした：") + (ex.InnerException ?? ex).Message + "\n" + UiText.Text("保存せずに閉じますか？"), "MechCue", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) { e.Cancel = true; return; } }
             string? warning = bridge.Disconnect();
@@ -287,7 +290,7 @@ public partial class MainForm : Form
     {
         var b = new Button { Text = UiText.CommandLabel(label), Tag = label, Image = CommandIcons.Create(label), TextImageRelation = TextImageRelation.ImageBeforeText, AutoSize = true }; commandHints.SetToolTip(b, UiText.CommandHint(label)); b.Click += (_, _) => { DiagnosticLog.Write("button", new { label, layout = DiagnosticState() }); Guard(action); }; b.Disposed += (_, _) => b.Image?.Dispose(); parent.Controls.Add(b);
     }
-    void Guard(Action action) { try { action(); } catch (Exception ex) { PausePlayback(); live.Checked = false; Error(ex); } finally { if (!bridge.Connected) target.Items.Clear(); UpdateConnection(); } }
+    void Guard(Action action) { if (motionInspectionBusy) { status.Text="経路検査中です。停止してから編集してください。"; return; } try { action(); } catch (Exception ex) { PausePlayback(); live.Checked = false; Error(ex); } finally { if (!bridge.Connected) target.Items.Clear(); UpdateConnection(); } }
     void UpdateConnection()
     {
         string? bound = bridge.BoundLabel(Current);
@@ -296,7 +299,7 @@ public partial class MainForm : Form
         if (documentSettingsDirty && bridge.Connected) connection.Text += " / 設定変更あり：CAD保存";
         connection.ForeColor = live.Checked ? Color.DarkGreen : Color.DarkOrange;
     }
-    void Error(Exception ex) { autoApply.Checked = false; DiagnosticLog.Error("ui-error", ex, DiagnosticState()); status.Text = "停止：" + (ex.InnerException ?? ex).Message; if(aiExecuting){aiError=ex;return;} MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
+    void Error(Exception ex) { autoApply.Checked = false; DiagnosticLog.Error("ui-error", ex, DiagnosticState()); status.Text = "停止：" + (ex.InnerException ?? ex).Message; if(aiExecuting){aiError=ex;return;} if(playbackTickActive)return; MessageBox.Show(this, status.Text, UiText.Text("確認"), MessageBoxButtons.OK, MessageBoxIcon.Information); }
     void RefreshTracks(int selected, bool refreshTargets = true) { trackList.CancelReorder(); loading = true; plot.Hidden.IntersectWith(tracks); trackList.Items.Clear();
         foreach (var t in tracks) trackList.Items.Add(t.Name, !plot.Hidden.Contains(t));
         trackList.SelectedIndex = selected; loading = false; plot.Tracks = tracks; plot.UpdateViewport(); LoadTrack(refreshTargets); plot.Invalidate(); }

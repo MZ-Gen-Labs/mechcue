@@ -120,6 +120,7 @@ public sealed class DocumentSettings
     public decimal DragStep { get; set; } = 0.1m;
     public bool Loop { get; set; }
     public bool Collision { get; set; }
+    public bool SubdivideInspection { get; set; } = true;
     public bool Overlay { get; set; } = true;
     public string? DisplayMode { get; set; }
     public static DocumentSettings Parse(string json)
