@@ -41,6 +41,25 @@ public static partial class SelfTest
                 measured=Bridge.MeasureConcept(model,moved);Check(values.All(p=>Math.Abs(measured[p.Key]-p.Value)<1e-7),"Rotated concept measurement");
                 Check(Math.Abs(moved["workpiece"][2]-1)<1e-10,"Nested A/C orientation");
             }
+            // No two bodies may overlap at any combination of linear travel limits (rotary axes at 0).
+            // Touching faces (stacked bodies) are allowed.
+            var linear=model.Axes.Where(a=>a.Kind=="linear").ToList();
+            for(int mask=0;mask<1<<linear.Count;mask++) {
+                var limits=model.Values.ToDictionary(p=>p.Key,_=>0d);
+                for(int i=0;i<linear.Count;i++) limits[linear[i].Id]=(mask&(1<<i))==0?linear[i].Minimum:linear[i].Maximum;
+                var pose=model.Poses(limits);
+                double[] Box(ConceptBody b) {
+                    var m=pose[b.Id];var corners=Enumerable.Range(0,8).Select(k=>new[]{((k&1)==0?-1:1)*b.SizeMm[0]/2000,((k&2)==0?-1:1)*b.SizeMm[1]/2000,((k&4)==0?-1:1)*b.SizeMm[2]/2000})
+                        .Select(c=>Enumerable.Range(0,3).Select(r=>m[r]*c[0]+m[4+r]*c[1]+m[8+r]*c[2]+m[12+r]).ToArray()).ToList();
+                    return [..Enumerable.Range(0,3).Select(r=>corners.Min(c=>c[r])),..Enumerable.Range(0,3).Select(r=>corners.Max(c=>c[r]))];
+                }
+                var boxes=model.Bodies.ToDictionary(b=>b.Id,Box);
+                foreach(var a in model.Bodies) foreach(var b in model.Bodies.SkipWhile(x=>x!=a).Skip(1)) {
+                    var p=boxes[a.Id];var q=boxes[b.Id];
+                    Check(!Enumerable.Range(0,3).All(r=>Math.Min(p[r+3],q[r+3])-Math.Max(p[r],q[r])>1e-7),
+                        $"{kind}: {a.Id} overlaps {b.Id} at {string.Join(",",limits.Select(l=>l.Key+"="+l.Value))}");
+                }
+            }
             try { values["X"]=251; model.Poses(values); throw new Exception("Travel limit accepted"); } catch(ArgumentException) { }
             values.Remove("X"); try { model.Poses(values); throw new Exception("Missing axis accepted"); } catch(ArgumentException) { }
             string json=System.Text.Json.JsonSerializer.Serialize(model,ConceptMachine.JsonOptions);
@@ -78,6 +97,24 @@ public sealed partial class Bridge
                     }
                     for(int i=0;i<3;i++) if(Math.Abs((corners.Max(p=>p[i])-corners.Min(p=>p[i]))*1000-b.SizeMm[i])>.01 || Math.Abs(corners.Max(p=>p[i])+corners.Min(p=>p[i]))>1e-5) throw new Exception($"Native geometry mismatch {kind}/{b.Id} axis {i}: {string.Join(",",lo)} to {string.Join(",",hi)}");
                 }
+                // Every body is driven by named variables and stays centred when a size changes.
+                foreach(var b in model.Bodies) {
+                    var part=Get(CadOccurrence(document,model.Bodies.IndexOf(b)+1),"OccurrenceDocument");var variables=Get(part,"Variables");
+                    var names=ConceptVariableNames(b).Distinct().ToArray();
+                    var list=Call(variables,"Query","*",Type.Missing,Type.Missing,Type.Missing);
+                    var found=Enumerable.Range(1,Convert.ToInt32(Get(list,"Count"))).Select(i=>GetItem(list,i)).ToDictionary(v=>Convert.ToString(Call(variables,"GetName",v))!,v=>Convert.ToDouble(Get(v,"Value"))*1000);
+                    foreach(var (name,index) in names.Select(n=>(n,Array.IndexOf(ConceptVariableNames(b),n))))
+                        if(!found.TryGetValue(name,out double mm)||Math.Abs(mm-b.SizeMm[index])>.001)throw new Exception($"Concept variable {kind}/{b.Id}/{name} missing or wrong");
+                }
+                {
+                    var probe=model.Bodies.First(b=>b.Shape=="box");var part=Get(CadOccurrence(document,model.Bodies.IndexOf(probe)+1),"OccurrenceDocument");var variables=Get(part,"Variables");
+                    var resized=new ConceptBody{Id=probe.Id,Shape=probe.Shape,SizeMm=[probe.SizeMm[0]+37,probe.SizeMm[1]-23,probe.SizeMm[2]+11],GeometryMatrix=probe.GeometryMatrix};
+                    foreach(var (name,i) in new[]{("SizeX",0),("SizeY",1),("SizeZ",2)})Call(variables,"Edit",name,resized.SizeMm[i].ToString("R",System.Globalization.CultureInfo.InvariantCulture)+" mm");
+                    CadConceptVerifyBody(part,resized);
+                    foreach(var (name,i) in new[]{("SizeX",0),("SizeY",1),("SizeZ",2)})Call(variables,"Edit",name,probe.SizeMm[i].ToString("R",System.Globalization.CultureInfo.InvariantCulture)+" mm");
+                    CadConceptVerifyBody(part,probe);
+                }
+                checks.Add("PASS: "+kind+" bodies are centred, driven by named variables, and stay centred when resized");
                 var values=new Dictionary<string,double>(model.Values){["X"]=100,["Y"]=50,["Z"]=30};
                 if(kind=="mill5")values["A"]=45;if(kind is "mill4" or "mill5")values["C"]=90;
                 CadPoseConcept(expected,manifest,System.Text.Json.JsonSerializer.Serialize(values));

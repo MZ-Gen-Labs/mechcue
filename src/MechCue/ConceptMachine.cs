@@ -43,8 +43,8 @@ public sealed class ConceptMachine
         void Box(string id, string parent, double x, double y, double z, double cx, double cy, double cz) => model.Bodies.Add(new() { Id = id, Parent = parent, SizeMm = [x, y, z], CenterMm = [cx, cy, cz] });
         void Cylinder(string id, string parent, double diameter, double depth, double cx, double cy, double cz) => model.Bodies.Add(new() { Id = id, Parent = parent, Shape = "cylinder", SizeMm = [diameter, diameter, depth], CenterMm = [cx, cy, cz] });
         double w = xTravelMm + 400, d = yTravelMm + 400, h = zTravelMm + 600;
-        Box("base", "", w, d, 100, 0, 0, 50);
         if (type == "gantry") {
+            Box("base", "", w, d, 100, 0, 0, 50);
             // The bridge travels along the two Y rails; the trolley travels on the bridge.
             Axis("Y", "", "Y", yTravelMm); Axis("X", "Y", "X", xTravelMm); Axis("Z", "X", "Z", zTravelMm);
             foreach (int side in new[] { -1, 1 }) {
@@ -73,8 +73,13 @@ public sealed class ConceptMachine
             Box("workpiece", "", 100, 100, 100, 0, 0, 150);
         } else {
             Axis("Y", "", "Y", yTravelMm); Axis("X", "Y", "X", xTravelMm); Axis("Z", "", "Z", zTravelMm);
-            Box("column", "", 200, 180, h, 0, d/2-90, 100+h/2);
-            Box("saddle", "Y", 320, 260, 80, 0, 0, 140);
+            // The column stands behind the saddle's full Y travel (saddle is the deepest Y-moving body),
+            // and the base extends to carry it.
+            const double saddleDepth = 260, columnDepth = 180, columnClearance = 20;
+            double columnFront = saddleDepth / 2 + yTravelMm / 2 + columnClearance, baseFront = -d / 2, baseBack = columnFront + columnDepth;
+            Box("base", "", w, baseBack - baseFront, 100, 0, (baseFront + baseBack) / 2, 50);
+            Box("column", "", 200, columnDepth, h, 0, columnFront + columnDepth / 2, 100+h/2);
+            Box("saddle", "Y", 320, saddleDepth, 80, 0, 0, 140);
             Box("table", "X", xTravelMm+200, 220, 60, 0, 0, 210);
             Box("head", "Z", 180, 180, 220, 0, 0, h-50);
             Cylinder("spindle", "Z", 80, 100, 0, 0, h-210);
@@ -83,7 +88,8 @@ public sealed class ConceptMachine
             if (type is "mill4" or "mill5") {
                 if (type == "mill5") {
                     Axis("A", "X", "X", 220, "rotary", [0, 0, 350]);
-                    Box("trunnion", "A", 280, 200, 60, 0, 0, -30);
+                    // The trunnion top meets the rotary table bottom instead of overlapping it.
+                    Box("trunnion", "A", 280, 200, 60, 0, 0, -60);
                     Axis("C", "A", "Z", 720, "rotary");
                 } else Axis("C", "X", "Z", 720, "rotary", [0, 0, 290]);
                 Cylinder("rotary-table", "C", 200, 60, 0, 0, 0);
