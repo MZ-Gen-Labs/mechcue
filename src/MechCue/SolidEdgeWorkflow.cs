@@ -3,6 +3,13 @@ namespace MechCue;
 
 public sealed partial class Bridge
 {
+    // The name shown in Solid Edge's variable table. A driving dimension renamed with Variables.PutName
+    // keeps its object Name ("Dimension 363"), so the object property alone misses table names.
+    internal static string CadVariableName(object variables,object variable)
+    {
+        try{var name=Convert.ToString(Call(variables,"GetName",variable));if(!string.IsNullOrEmpty(name))return name;}catch(System.Reflection.TargetInvocationException){}
+        return Convert.ToString(Get(variable,"Name"))??"";
+    }
     internal static (object Occurrence,object Parent) ResolveOccurrenceKeyPath(object document,string keyPath)
     {
         var keys=keyPath.Split('/',StringSplitOptions.RemoveEmptyEntries);
@@ -51,13 +58,17 @@ public sealed partial class Bridge
         var document=CadDocument(CadApplication(),expectedDocument);
         using var parsed=JsonDocument.Parse(variablesJson);var edits=parsed.RootElement.EnumerateArray().ToArray();
         if(edits.Length is <1 or >128)throw new ArgumentException("Supply 1–128 distinct variables");
-        var list=Call(Get(document,"Variables"),"Query","*",Type.Missing,Type.Missing,Type.Missing);
+        var variables=Get(document,"Variables");var list=Call(variables,"Query","*",Type.Missing,Type.Missing,Type.Missing);
         var all=Enumerable.Range(1,Convert.ToInt32(Get(list,"Count"))).Select(i=>GetItem(list,i)).ToArray();
         var changes=new List<(object Variable,string Name,double Original,double Value)>();var names=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach(var edit in edits)
         {
             string name=edit.GetProperty("name").GetString()!;if(!names.Add(name))throw new ArgumentException("Duplicate variable: "+name);
-            var variable=all.Single(v=>string.Equals(Convert.ToString(Get(v,"Name")),name,StringComparison.OrdinalIgnoreCase));
+            // Variable-table name first; the dimension object's own name ("Dimension 363") is accepted for older callers.
+            var matches=all.Where(v=>string.Equals(CadVariableName(variables,v),name,StringComparison.OrdinalIgnoreCase)).ToArray();
+            if(matches.Length==0)matches=all.Where(v=>string.Equals(Convert.ToString(Get(v,"Name")),name,StringComparison.OrdinalIgnoreCase)).ToArray();
+            if(matches.Length!=1)throw new ArgumentException((matches.Length==0?"Variable not found: ":"Ambiguous variable name: ")+name+". Read solidedge_list_variables.");
+            var variable=matches[0];
             double value=edit.GetProperty("value").GetDouble();CadFinite(value,"value");
             int type=Convert.ToInt32(Get(variable,"UnitsType"));string unit=edit.GetProperty("unit").GetString()!;
             value=unit switch {"native"=>value,"mm" when type==1=>value/1000,"deg" when type==2=>value*Math.PI/180,_=>throw new ArgumentException("Unit incompatible with variable "+name+" (native unitsType="+type+")")};

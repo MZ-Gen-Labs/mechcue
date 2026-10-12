@@ -26,7 +26,7 @@ public sealed partial class Bridge
             var results=new List<object>();
             for(int i=1;i<=count;i++){
                 var variable=GetItem(list,i);string? error=null;string variableName="";double? value=null;int? units=null;string? formula=null;
-                try{variableName=Convert.ToString(Get(variable,"Name"))??"";value=Convert.ToDouble(Get(variable,"Value"));units=Convert.ToInt32(Get(variable,"UnitsType"));formula=Convert.ToString(Get(variable,"Formula"));}catch(Exception ex){error=(ex.InnerException ?? ex).Message;}
+                try{variableName=CadVariableName(variables,variable);value=Convert.ToDouble(Get(variable,"Value"));units=Convert.ToInt32(Get(variable,"UnitsType"));formula=Convert.ToString(Get(variable,"Formula"));}catch(Exception ex){error=(ex.InnerException ?? ex).Message;}
                 results.Add(new {name=variableName,value,unitsType=units,formula,error});
             }
             return new {fullName,valuesUse="Solid Edge internal units (metres/radians for distance/angle); unitsType is the native unit enum",variables=results};
