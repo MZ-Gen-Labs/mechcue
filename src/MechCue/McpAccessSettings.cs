@@ -44,7 +44,9 @@ public static class McpAccessSettings
         try {
             var start = new System.Diagnostics.ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden };
             start.ArgumentList.Add("--initial-mode"); start.ArgumentList.Add(LegacyMode(Environment.GetCommandLineArgs()));
-            System.Diagnostics.Process.Start(start)?.Dispose();
+            SolidEdgeLaunch.DetachStandardStreams(start);
+            using var tray = System.Diagnostics.Process.Start(start);
+            if (tray != null) { tray.StandardInput.Close(); tray.StandardOutput.Close(); tray.StandardError.Close(); }
         } catch (Exception error) { DiagnosticLog.Error("mcp-start-tray", error); }
     }
 }
