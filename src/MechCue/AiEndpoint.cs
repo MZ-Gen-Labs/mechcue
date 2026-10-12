@@ -3,10 +3,34 @@ using System.Text;
 using System.Text.Json;
 namespace MechCue;
 
-public sealed record AiSession(string Id,string Pipe,string Title,int ProcessId);
+// ProcessStartUtcTicks distinguishes a live window from a stale record whose process ID was reused (0 in records from 0.3.2-alpha.02 and earlier).
+public sealed record AiSession(string Id,string Pipe,string Title,int ProcessId,long ProcessStartUtcTicks=0);
 public sealed class AiEndpoint : IDisposable
 {
     public static string SessionDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"MechCue","Sessions");
+    // A crashed or killed window leaves its record behind, and Windows can reuse its process ID.
+    // A session is live only if its process still runs with the recorded start time, or, for
+    // older records without a start time, if its named pipe currently exists.
+    public static bool IsLive(AiSession session,ISet<string>? pipeNames=null)
+    {
+        if(session.Pipe!="MechCue-"+session.Id || !Guid.TryParseExact(session.Id,"N",out _))return false;
+        try
+        {
+            using var process=System.Diagnostics.Process.GetProcessById(session.ProcessId);
+            if(process.HasExited)return false;
+            if(session.ProcessStartUtcTicks!=0)return process.StartTime.ToUniversalTime().Ticks==session.ProcessStartUtcTicks;
+        }
+        catch(ArgumentException){return false;}
+        catch(InvalidOperationException){return false;}
+        catch(System.ComponentModel.Win32Exception){ if(session.ProcessStartUtcTicks!=0)return false; }
+        pipeNames??=PipeNames();
+        return pipeNames.Contains(session.Pipe);
+    }
+    public static HashSet<string> PipeNames()
+    {
+        try{return Directory.GetFiles(@"\\.\pipe\").Select(Path.GetFileName).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);}
+        catch(IOException){return [];}catch(UnauthorizedAccessException){return [];}
+    }
     readonly CancellationTokenSource stop=new();
     readonly Func<JsonElement,CancellationToken,Task<object>> handle;
     readonly string file;
@@ -16,7 +40,8 @@ public sealed class AiEndpoint : IDisposable
     public AiEndpoint(string title,Func<JsonElement,CancellationToken,Task<object>> handle,Func<bool>? ready=null,Func<CancellationToken,Task<bool>>? probeUi=null)
     {
         this.handle=handle;this.ready=ready;this.probeUi=probeUi;string id=Guid.NewGuid().ToString("N");
-        Session=new(id,"MechCue-"+id,title,Environment.ProcessId);
+        using var current=System.Diagnostics.Process.GetCurrentProcess();
+        Session=new(id,"MechCue-"+id,title,Environment.ProcessId,current.StartTime.ToUniversalTime().Ticks);
         Directory.CreateDirectory(SessionDirectory);file=Path.Combine(SessionDirectory,id+".json");
         File.WriteAllText(file,JsonSerializer.Serialize(Session));_ = Task.Run(Serve);
     }
