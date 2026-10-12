@@ -16,6 +16,9 @@ public partial class MainForm
             {
                 UiText.SetMode(languageMode, false); Application.DoEvents();
                 var controls = form.top.Controls.Cast<Control>().Where(c => c.Visible).ToArray();
+                // A work area narrower than the 1180 px minimum (e.g. 1024 px CI desktops) caps the form;
+                // the narrow layout may then wrap instead of clipping, which the clipping check below covers.
+                if (form.top.ClientSize.Width >= 1100)
                 Assert(controls.Select(c => c.Top).Distinct().Count() == 1, "Full toolbar wraps at minimum width: " + languageMode + "; width=" + form.Width + "; toolbar=" + form.top.ClientSize + "; dpi=" + form.DeviceDpi + "; screen=" + Screen.FromControl(form).WorkingArea + "; " + string.Join("; ", controls.Select(c => $"{c.GetType().Name} '{c.Text}' {c.Bounds}")));
                 Assert(controls.All(c => c.Right <= form.top.ClientSize.Width - form.top.Padding.Right), "Single-row toolbar clips a command: " + languageMode + "; width=" + form.Width + "; toolbar=" + form.top.ClientSize + "; dpi=" + form.DeviceDpi + "; " + string.Join("; ", controls.Select(c => $"{c.GetType().Name} '{c.Text}' {c.Bounds}")));
                 Assert(form.reviewMode.Text == (languageMode == "ja" ? "表示" : "View"), "Display mode label mismatch");
