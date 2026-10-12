@@ -91,7 +91,7 @@ try:
     tool('mechcue_set_playback_options',{'expectedDocument':'unused','subdivideInspection':False},True)
     checks.append('Subdivision option schema and Creation/edit permission')
     catalog=tool('solidedge_list_concept_templates')
-    assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry'}
+    assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry','arm5'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
     tool('solidedge_set_concept_pose',{'expectedDocument':'test.asm','manifestPath':'test.json','valuesJson':'{}'},True)
     checks.append('Concept catalog without CAD and creation/pose permission gates')

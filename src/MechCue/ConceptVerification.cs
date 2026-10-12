@@ -4,13 +4,26 @@ public static partial class SelfTest
     static void TestConceptMachines()
     {
         void Check(bool condition,string message) { if(!condition) throw new Exception(message); }
-        foreach(string kind in new[]{"mill3","mill4","mill5","gantry"}) {
+        foreach(string kind in new[]{"mill3","mill4","mill5","gantry","arm5"}) {
             var model=ConceptMachine.Create(kind,500,300,300); var home=model.Poses(model.Values);
-            var values=new Dictionary<string,double>(model.Values) { ["X"]=100,["Y"]=50,["Z"]=20 };
+            bool arm=kind=="arm5";
+            var values=arm?new Dictionary<string,double>{["J1"]=30,["J2"]=20,["J3"]=-40,["J4"]=25,["J5"]=60}:new Dictionary<string,double>(model.Values) { ["X"]=100,["Y"]=50,["Z"]=20 };
             var moved=model.Poses(values);
             var measured=Bridge.MeasureConcept(model,moved);
             Check(values.All(p=>Math.Abs(measured[p.Key]-p.Value)<1e-7),"Concept current-value measurement");
             Check(home["base"].SequenceEqual(moved["base"]),"Concept base stays fixed");
+            if(arm) {
+                Check(string.Join(",",model.Axes.Select(a=>a.Id+"<"+a.Parent+":"+a.Kind[0]+a.Direction))=="J1<:rZ,J2<J1:rY,J3<J2:rY,J4<J3:rY,J5<J4:rX","Arm joint chain");
+                Check(home["workpiece"].SequenceEqual(moved["workpiece"]) && home["table-top"].SequenceEqual(moved["table-top"]),"Table and workpiece stay fixed");
+                // J1 turns the whole arm about the vertical axis through its origin; J5 only rolls the hand.
+                var turned=model.Poses(new Dictionary<string,double>{["J1"]=90,["J2"]=0,["J3"]=0,["J4"]=0,["J5"]=0});
+                double[] o=[-.25,0];double hx=home["hand"][12]-o[0],hy=home["hand"][13]-o[1];
+                Check(Math.Abs(turned["hand"][12]-o[0]+hy)<1e-10 && Math.Abs(turned["hand"][13]-o[1]-hx)<1e-10 && Math.Abs(turned["hand"][14]-home["hand"][14])<1e-10,"J1 turns the arm about Z");
+                var rolled=model.Poses(new Dictionary<string,double>{["J1"]=0,["J2"]=0,["J3"]=0,["J4"]=0,["J5"]=90});
+                Check(rolled["wrist"].SequenceEqual(home["wrist"]) && Enumerable.Range(12,3).All(i=>Math.Abs(rolled["hand"][i]-home["hand"][i])<1e-10) && !rolled["finger-1"].SequenceEqual(home["finger-1"]),"J5 rolls only the hand");
+                var bent=model.Poses(new Dictionary<string,double>{["J1"]=0,["J2"]=0,["J3"]=90,["J4"]=0,["J5"]=0});
+                Check(bent["upper-arm"].SequenceEqual(home["upper-arm"]) && bent["hand"][14]<home["hand"][14]-.2,"J3 lowers the forearm and hand");
+            } else {
             string dependent=kind=="gantry"?"gripper":"workpiece";
             Check(Math.Abs(moved[dependent][12]-home[dependent][12]-.1)<1e-10,"Nested X motion");
             Check(Math.Abs(moved[dependent][13]-home[dependent][13]-.05)<1e-10,"Nested Y motion");
@@ -34,6 +47,7 @@ public static partial class SelfTest
                     Check(Math.Abs((pose["gripper"][14]+grip.SizeMm[2]/2000)-(pose["z-slide"][14]-slide.SizeMm[2]/2000))<1e-10,"Slide/gripper detached");
                     Check(pose["z-slide"][14]+slide.SizeMm[2]/2000>home["x-carriage"][14],"Slide withdrawn from trolley at Z limit");
                 }
+            }
             }
             if(kind=="mill5") {
                 values["A"]=90; values["C"]=90; moved=model.Poses(values);
@@ -60,8 +74,9 @@ public static partial class SelfTest
                         $"{kind}: {a.Id} overlaps {b.Id} at {string.Join(",",limits.Select(l=>l.Key+"="+l.Value))}");
                 }
             }
-            try { values["X"]=251; model.Poses(values); throw new Exception("Travel limit accepted"); } catch(ArgumentException) { }
-            values.Remove("X"); try { model.Poses(values); throw new Exception("Missing axis accepted"); } catch(ArgumentException) { }
+            string first=arm?"J1":"X";
+            try { values[first]=arm?171:251; model.Poses(values); throw new Exception("Travel limit accepted"); } catch(ArgumentException) { }
+            values.Remove(first); try { model.Poses(values); throw new Exception("Missing axis accepted"); } catch(ArgumentException) { }
             string json=System.Text.Json.JsonSerializer.Serialize(model,ConceptMachine.JsonOptions);
             var restored=System.Text.Json.JsonSerializer.Deserialize<ConceptMachine>(json,ConceptMachine.JsonOptions)!;restored.Validate();
             restored.Axes[0].Parent=restored.Axes[^1].Id;
@@ -78,7 +93,7 @@ public sealed partial class Bridge
         var application=CadApplication();object? original=null;try{original=Get(application,"ActiveDocument");}catch{}
         string templates="C:\\Siemens\\Solid Edge 2026\\Template\\ISO Metric";
         try {
-            foreach(string kind in new[]{"mill3","mill4","mill5","gantry"}) {
+            foreach(string kind in new[]{"mill3","mill4","mill5","gantry","arm5"}) {
                 string directory=Path.Combine(outputDirectory,kind);
                 CadCreateConcept(kind,directory,partTemplate:Path.Combine(templates,"iso metric part.par"),assemblyTemplate:Path.Combine(templates,"iso metric assembly.asm"));
                 var document=Get(application,"ActiveDocument");owned.Add(document);
@@ -115,7 +130,7 @@ public sealed partial class Bridge
                     CadConceptVerifyBody(part,probe);
                 }
                 checks.Add("PASS: "+kind+" bodies are centred, driven by named variables, and stay centred when resized");
-                var values=new Dictionary<string,double>(model.Values){["X"]=100,["Y"]=50,["Z"]=30};
+                var values=kind=="arm5"?new Dictionary<string,double>{["J1"]=30,["J2"]=20,["J3"]=-40,["J4"]=25,["J5"]=60}:new Dictionary<string,double>(model.Values){["X"]=100,["Y"]=50,["Z"]=30};string first=kind=="arm5"?"J1":"X";
                 if(kind=="mill5")values["A"]=45;if(kind is "mill4" or "mill5")values["C"]=90;
                 CadPoseConcept(expected,manifest,System.Text.Json.JsonSerializer.Serialize(values));
                 var wanted=model.Poses(values);
@@ -125,9 +140,9 @@ public sealed partial class Bridge
                 foreach(var a in model.Axes){var t=chartTracks.Single(t=>t.Name==a.Id);if(t.Points.Any(p=>Math.Abs(p.Value-values[a.Id])>1e-6))throw new Exception("Chart current value mismatch");}
                 chartBridge.Apply(0);
                 foreach(var b in model.Bodies)if(!ConceptSame(Matrix(CadOccurrence(document,model.Bodies.IndexOf(b)+1)),wanted[b.Id]))throw new Exception("Chart import jumped");
-                var xTrack=chartTracks.Single(t=>t.Name=="X");xTrack.Points=[new(0,100),new(4,150)];chartBridge.Apply(4);
-                var witness=model.Bodies.First(b=>b.Parent=="X");var expectedX=new Dictionary<string,double>(values){["X"]=150};
-                if(Math.Abs(Matrix(CadOccurrence(document,model.Bodies.IndexOf(witness)+1))[12]-model.Poses(expectedX)[witness.Id][12])>1e-8)throw new Exception("Chart X movement failed");
+                var xTrack=chartTracks.Single(t=>t.Name==first);xTrack.Points=[new(0,100),new(4,150)];chartBridge.Apply(4);
+                var witness=model.Bodies.First(b=>b.Parent==first);var expectedX=new Dictionary<string,double>(values){[first]=150};
+                if(!ConceptSame(Matrix(CadOccurrence(document,model.Bodies.IndexOf(witness)+1)),model.Poses(expectedX)[witness.Id]))throw new Exception("Chart "+first+" movement failed");
                 xTrack.Points=[new(0,999),new(4,999)];
                 try{chartBridge.Apply(0);throw new Exception("Chart range accepted");}catch(ArgumentException){}
                 xTrack.Points=[new(0,100),new(4,150)];
