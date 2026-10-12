@@ -16,18 +16,8 @@
 #ifndef HasMcp
   #define HasMcp "0"
 #endif
-#ifndef AddInOnly
-  #define AddInOnly "0"
-#endif
-#if AddInOnly == "1"
-  #define EditionName "MechCue タイムチャート（アドイン版）"
-  #define SetupName "MechCue-" + AppVersion + "-AddIn-Setup"
-  #define InstallMode "AddInOnly"
-#else
-  #define EditionName "MechCue タイムチャート"
-  #define SetupName "MechCue-" + AppVersion + "-Setup"
-  #define InstallMode "Full"
-#endif
+#define EditionName "MechCue タイムチャート"
+#define SetupName "MechCue-" + AppVersion + "-Setup"
 
 [Setup]
 AppId=MechCue.TimeChart
@@ -65,14 +55,18 @@ SetupLogging=yes
 Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
-#if HasMcp == "1"
 [CustomMessages]
-japanese.StandardInstall=標準（MechCue）
-english.StandardInstall=Standard (MechCue)
+japanese.StandardInstall=標準（アドインと独立版）
+english.StandardInstall=Standard (add-in and standalone)
+japanese.AddInInstall=アドインのみ
+english.AddInInstall=Add-in only
 japanese.CustomInstall=カスタム
 english.CustomInstall=Custom
-japanese.CoreComponent=MechCue（必須）
-english.CoreComponent=MechCue (required)
+japanese.CoreComponent=MechCue Solid Edgeアドイン（必須）
+english.CoreComponent=MechCue Solid Edge add-in (required)
+japanese.StandaloneComponent=独立版（Solid Edgeの外でグラフを編集）
+english.StandaloneComponent=Standalone app (edit charts outside Solid Edge)
+#if HasMcp == "1"
 japanese.McpComponent=MCPサーバー（AIからの操作）
 english.McpComponent=MCP server (AI control)
 japanese.McpGuide=MCP接続ガイド
@@ -82,14 +76,24 @@ english.McpFolder=MCP server folder
 japanese.McpControl=MCP設定（タスクトレイ）
 english.McpControl=MCP settings (system tray)
 
+#endif
+
 [Types]
 Name: "standard"; Description: "{cm:StandardInstall}"
+Name: "addin"; Description: "{cm:AddInInstall}"
 Name: "custom"; Description: "{cm:CustomInstall}"; Flags: iscustom
 
 [Components]
-Name: "core"; Description: "{cm:CoreComponent}"; Types: standard custom; Flags: fixed
+Name: "core"; Description: "{cm:CoreComponent}"; Types: standard addin custom; Flags: fixed
+Name: "standalone"; Description: "{cm:StandaloneComponent}"; Types: standard custom
+#if HasMcp == "1"
 Name: "mcp"; Description: "{cm:McpComponent}"
 #endif
+
+[InstallDelete]
+; Deselecting the standalone app on an update removes it; the add-in files stay.
+Type: files; Name: "{app}\MechCue.exe"; Components: not standalone
+Type: files; Name: "{autoprograms}\MechCue.lnk"; Components: not standalone
 
 [Files]
 Source: "{#PayloadDir}\MechCue.AddIn.comhost.dll"; DestDir: "{app}"; Flags: ignoreversion
@@ -99,9 +103,7 @@ Source: "{#PayloadDir}\MechCue.AddIn.runtimeconfig.json"; DestDir: "{app}"; Flag
 Source: "{#PayloadDir}\MechCue.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\MechCue.deps.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\MechCue.runtimeconfig.json"; DestDir: "{app}"; Flags: ignoreversion
-#if AddInOnly == "0"
-Source: "{#PayloadDir}\MechCue.exe"; DestDir: "{app}"; Flags: ignoreversion
-#endif
+Source: "{#PayloadDir}\MechCue.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: standalone
 Source: "{#ProjectRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectRoot}\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectRoot}\examples\sequence.json"; DestDir: "{app}"; DestName: "Example-Sequence.json"; Flags: onlyifdoesntexist
@@ -133,12 +135,10 @@ Root: HKLM; Subkey: "Software\Classes\CLSID\{{79B86022-7C7D-4768-A3A7-CF8EBD1F78
 Root: HKLM; Subkey: "Software\Classes\CLSID\{{79B86022-7C7D-4768-A3A7-CF8EBD1F7826}\Summary"; ValueType: string; ValueName: "411"; ValueData: "Time-displacement assembly control"
 Root: HKLM; Subkey: "Software\Classes\MechCue.TimeChartAddIn"; ValueType: none; Flags: uninsdeletekey
 Root: HKLM; Subkey: "Software\Classes\MechCue.TimeChartAddIn\CLSID"; ValueType: string; ValueName: ""; ValueData: "{code:AddInClsid}"
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\MechCue.TimeChart_is1"; ValueType: string; ValueName: "InstallMode"; ValueData: "{#InstallMode}"
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\MechCue.TimeChart_is1"; ValueType: string; ValueName: "InstallMode"; ValueData: "{code:InstallMode}"
 
 [Icons]
-#if AddInOnly == "0"
-Name: "{autoprograms}\MechCue"; Filename: "{app}\MechCue.exe"
-#endif
+Name: "{autoprograms}\MechCue"; Filename: "{app}\MechCue.exe"; Components: standalone
 #if HasMcp == "1"
 Name: "{commonstartup}\MechCue MCP"; Filename: "{app}\MCP\control\MechCue.Mcp.Control.exe"; Components: mcp
 Name: "{autoprograms}\MechCue MCP\{cm:McpControl}"; Filename: "{app}\MCP\control\MechCue.Mcp.Control.exe"; Components: mcp
@@ -153,6 +153,38 @@ Filename: "{app}\MCP\control\MechCue.Mcp.Control.exe"; Components: mcp; Flags: n
 #endif
 
 [Code]
+var StandaloneDefaultApplied: Boolean;
+
+function PreviousInstallMode: String;
+begin
+  if not RegQueryStringValue(HKLM64, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\MechCue.TimeChart_is1', 'InstallMode', Result) then Result := '';
+end;
+
+{ Earlier versions shipped a separate add-in-only setup. Keep such installations
+  add-in only on update unless the user selects the standalone app (or passes /COMPONENTS). }
+procedure ApplyStandaloneDefault;
+begin
+  if StandaloneDefaultApplied then Exit;
+  StandaloneDefaultApplied := True;
+  if (PreviousInstallMode = 'AddInOnly') and (Pos('/COMPONENTS=', Uppercase(GetCmdTail)) = 0) and (Pos('/TYPE=', Uppercase(GetCmdTail)) = 0) then
+  begin
+    Log('Previous add-in-only installation: standalone app deselected by default');
+    WizardSelectComponents('!standalone');
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  { Also runs on silent installs, before the selected components are installed. }
+  if CurPageID = wpSelectComponents then ApplyStandaloneDefault;
+  Result := True;
+end;
+
+function InstallMode(Param: String): String;
+begin
+  if WizardIsComponentSelected('standalone') then Result := 'Full' else Result := 'AddInOnly';
+end;
+
 procedure ClearMcpUpdateMarker;
 begin
   DeleteFile(ExpandConstant('{app}\MCP\.update-in-progress'));
@@ -165,6 +197,7 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
+  if CurPageID = wpSelectComponents then ApplyStandaloneDefault;
 #if HasMcp == "1"
   if (CurPageID = wpFinished) and WizardIsComponentSelected('mcp') then
     if ActiveLanguage = 'japanese' then
@@ -225,13 +258,13 @@ begin
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
-var ClassId, Server, Mode: String; Host: Variant;
+var ClassId, Server: String; Host: Variant;
 begin
   Result := '';
+  { Covers a skipped components page; no-op once applied there. }
+  ApplyStandaloneDefault;
   if RegKeyExists(HKLM64, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\MechCue.TimeChart') then
     Result := '以前のMechCueをWindowsのアプリ一覧からアンインストールしてから実行してください。'
-  else if RegQueryStringValue(HKLM64, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\MechCue.TimeChart_is1', 'InstallMode', Mode) and (Mode <> '{#InstallMode}') then
-    Result := '別の構成のMechCueを先にアンインストールしてください。'
   else if RegKeyExists(HKCU64, 'Software\Classes\CLSID\' + AddInClsid('')) then
     Result := 'ユーザー単位のMechCue登録を解除してから実行してください。'
   else if not HasDesktopRuntime then

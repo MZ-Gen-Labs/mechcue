@@ -13,7 +13,7 @@ Solid Edge付属DLL、CADモデル、個人のグラフ、診断結果をコミ�
 
 Windowsと.NET 8 SDKで`./scripts/Build.ps1 -WithAddIn -WithMcp -Version 0.3.0-alpha.01`を実行します。
 Solid Edge本体・付属DLLは不要です。出力先が存在する場合は別の`-OutputDirectory`を指定します。
-両版入りセットアップ、アドイン専用セットアップ、独立版ZIP、MCP ZIPの配布物だけが`artifacts/<version>/release`へ入り、SHA256SUMS.txtも出力します。
+セットアップ（独立版・MCPは選択式）、独立版ZIP、MCP ZIPの配布物だけが`artifacts/<version>/release`へ入り、SHA256SUMS.txtも出力します。
 
 `build.yml`はPR・main更新・手動実行で共通テスト、画面、COM定義、パッケージを検証します。
 成果物はActionsのArtifactsから取得できます。CAD駆動や管理者登録は自動確認の対象外です。

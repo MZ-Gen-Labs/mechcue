@@ -44,11 +44,11 @@ Windows x64、Solid Edge 2026、.NET 8 Desktop Runtime（x64）が必要です�
 3. グラフを選び、駆動先を確認して登録します。
 4. 「Solid Edgeへ反映」をオンにして時間カーソルを動かします。
 
-アドインのみ必要な場合は`MechCue-<version>-AddIn-Setup.exe`を選びます。独立版のEXEは含みません。
+アドインだけが必要な場合は、セットアップの種類で「アドインのみ」を選びます（0.3.2-alpha.01までは別の`AddIn-Setup.exe`でした）。
 **日時順のリリース一覧**：`Open-Release-List.cmd` を実行すると、同じバージョン内を時刻・秒まで比較して古い順に表示します。Draftを含む最新情報をGitHubから取得します。[起動・ログイン手順](docs/RELEASE_LIST.md)。
 
-両版入りは`MechCue-<version>-Setup.exe`です。独立版は配置先の`MechCue.exe`、または配布ZIPで起動します。
-構成を切り替える場合は、既存版をアンインストールしてから導入してください。
+独立版は配置先の`MechCue.exe`、または配布ZIPで起動します。
+構成はセットアップを再実行して切り替えられます。アンインストールは不要です。
 画面の「使い方」、[操作ガイド](docs/USER_GUIDE.md)、[セットアップ手順](Installer/README.md)を参照してください。
 
 [examples/sequence.json](examples/sequence.json)を「開く」で読み込むと複数動作を試せます。
@@ -81,7 +81,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 ./scripts/Build.ps1 -WithAddIn -WithMcp
 ```
 
-成果物は`artifacts/0.3.0/release`です。独立版ZIP、両版入りセットアップ、アドイン専用セットアップ、MCP ZIP、SHA256を出力します。
+成果物は`artifacts/0.3.0/release`です。独立版ZIP、セットアップ（独立版・MCPは選択式）、MCP ZIP、SHA256を出力します。
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。

@@ -56,3 +56,12 @@ API仕様: [AddParallelByDistance](https://support.industrysoftware.automation.s
 実機で判明した仕様: ネイティブHoleDataの`HoleDiameter`はねじ更新後に呼び径を返すことがある。互換性のため既存の`diameterMm`はネイティブ値のまま保持し、`effectiveBoreDiameterMm`を追加して下穴径と区別する。`threadNominalDiameterMm`は旧定義で0（未設定）の場合がある。ねじ規格の選択には`ThreadDataByDescription`を用い、同じHoleDataを再適用して深さパラメーターを保存する。新規HoleDataへの置換は保存再読込後のDepth読取を損なう挙動があり採用しなかった。円形パターンはプロファイルのCount/AngularSpacingを更新する。干渉体積レポートのCR/CRLFを正規化する。
 
 参照API: [Hole/HoleData](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgePart~Hole_members.html)、[Pattern](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgePart~Pattern_members.html)、[PartDocumentの依存関係・Undo・SaveCopyAs](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgePart~PartDocument_members.html)。実装引数はインストール済みSolid Edge 2026のPart.tlbとも照合した。
+
+## 0.3.2-alpha.02：インストーラーの統合
+
+インストーラーだけを変更した版。アプリ・MCPの機能は0.3.2-alpha.01と同じ。
+
+- アドイン専用セットアップを廃止し、`MechCue-<version>-Setup.exe`の1種類にした。独立版（`MechCue.exe`とスタートメニューのショートカット）を選択式のコンポーネントにし、種類「標準」「アドインのみ」「カスタム」から選べる。MCPサーバーは従来どおり選択式。
+- 以前のアドイン専用版を更新した場合は、独立版を選ばない状態で始める（記録済みの`InstallMode`で判定。サイレントインストールの`/COMPONENTS=`／`/TYPE=`指定が優先）。更新時に独立版を外すと`MechCue.exe`とショートカットを削除する。構成の切り替えにアンインストールは不要になった。
+- 配布物は4点（Setup、独立版ZIP、MCP ZIP、`SHA256SUMS.txt`）。
+- 検査：共通ビルドのパッケージ検査で、独立版の入力、コンポーネント定義、更新時の既定値の処理を確認する。セットアップの実際の導入・更新・切り替えは実行していない。
