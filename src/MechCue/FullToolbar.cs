@@ -16,8 +16,8 @@ public partial class MainForm
         top.SuspendLayout();
         try
         {
-            top.WrapContents = false;
             bool narrow = top.ClientSize.Width < 1100;
+            top.WrapContents = narrow;
             time.Width = narrow ? 80 : 85; speed.Width = narrow ? 50 : 55;
             foreach (Control control in top.Controls)
             {

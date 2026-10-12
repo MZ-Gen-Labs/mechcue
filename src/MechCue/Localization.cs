@@ -97,6 +97,7 @@ public partial class MainForm
         if (control == collision) control.Text = UiText.IsJapanese ? "干渉" : "Collision";
         if (control == loop) control.Text = UiText.IsJapanese ? "反復" : "Loop";
         if (control == autoApply) control.Text = UiText.IsJapanese ? "自動" : "Auto";
+        if (control == subdivideInspection) control.Text = UiText.IsJapanese ? "細分" : "Refine";
         if (control == reviewMode) control.Text = UiText.IsJapanese ? "表示" : "View";
         if (control.Tag is "menu-cad") control.Text = "CAD ▾";
         if (control.Tag is "menu-settings") control.Text = UiText.IsJapanese ? "設定 ▾" : "Settings ▾";

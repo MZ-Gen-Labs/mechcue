@@ -79,7 +79,7 @@ public sealed partial class Bridge
                     var p=d1[key];var q=d2[key];
                     if(!p.AnalysisComplete||!q.AnalysisComplete){Terminal(a,b,"unverified",null,"Native pair analysis incomplete",[key]);continue;}
                     if(!p.Clear||!q.Clear){failed.Add(key);continue;}
-                    double lower=Math.Max(p.LowerBoundMm,q.LowerBoundMm)-model!.PairTravel(p.FirstKeyPath,p.SecondKeyPath,a,b)-policy.NumericalMarginMm;
+                    double lower=MotionBoundMath.ClearanceLowerBound(p.LowerBoundMm,q.LowerBoundMm,model!.PairTravel(p.FirstKeyPath,p.SecondKeyPath,a,b),policy.NumericalMarginMm,geometry.CacheSafe);
                     if(double.IsFinite(lower)&&lower>=required){verified.Add(key);minimum=Math.Min(minimum,lower);}else refine.Add(key);
                 }
                 Terminal(a,b,"sample-violation",null,"Interference or clearance shortfall at a checked pose; other pairs continue",failed.ToArray());
@@ -119,20 +119,23 @@ public sealed partial class Bridge
         var runner=new MotionInspectionRunner(this,samples,clearance,policy??InspectionPolicy,maxSamples,stopOnInterference);var restore=CaptureVideoPose();
         try{while(!runner.Done)runner.Step(cancellation);}finally{RestoreInspectedPose(restore);}return runner.Result(true);
     }
-    internal async Task<JsonElement> CheckContinuousMotionAsync(double[] samples,double clearance,MotionInspectionPolicy policy,int maxSamples,CancellationToken cancellation,Action<int,double>? progress=null)
+    internal async Task<JsonElement> CheckContinuousMotionAsync(double[] samples,double clearance,MotionInspectionPolicy policy,int maxSamples,CancellationToken cancellation,Action<int,double>? progress=null,bool stopOnInterference=false)
     {
-        var runner=new MotionInspectionRunner(this,samples,clearance,policy,maxSamples);var restore=CaptureVideoPose();
+        var runner=new MotionInspectionRunner(this,samples,clearance,policy,maxSamples,stopOnInterference);var restore=CaptureVideoPose();
         try{while(!runner.Done){runner.Step(cancellation);progress?.Invoke(runner.CheckedCount,runner.LastTime);await Task.Delay(1);}}finally{RestoreInspectedPose(restore);}return runner.Result(true);
     }
     static void RestoreInspectedPose(Action restore){try{restore();}catch(Exception error){throw new InvalidOperationException("POSE RESTORATION FAILED: CADの姿勢復元に失敗しました。手動で姿勢を確認してください。",error);}}
-    int ApplyVerifiedPath(double[] plan)
+    int ApplyVerifiedPath(double[] plan,MotionInspectionPolicy? configuration=null)
     {
-        var runner=new MotionInspectionRunner(this,plan,PlaybackClearanceMm,InspectionPolicy,5001,true);var restore=CaptureVideoPose();
+        var policy=configuration??InspectionPolicy;
+        using var deadline=new CancellationTokenSource(PlaybackInspectionTimeLimit);
+        var runner=new MotionInspectionRunner(this,plan,PlaybackClearanceMm,policy,5001,true);var restore=CaptureVideoPose();
         try{
-            var initial=InspectMotionPairs(PlaybackClearanceMm,InspectionPolicy);if(!initial.Clear)throw new InvalidOperationException("開始姿勢で干渉・すきま不足または解析未完了です。");
-            while(!runner.Done)runner.Step();var result=runner.Result(false);
+            var initial=InspectMotionPairs(PlaybackClearanceMm,policy);if(!initial.Clear){var failures=initial.Pairs.Where(p=>!p.Clear||!p.AnalysisComplete).Take(6).Select(p=>$"{p.Part1} ↔ {p.Part2}: {p.Error??$"native status {p.NativeStatus}"}");throw new InvalidOperationException("開始姿勢で干渉・すきま不足または解析未完了です。 "+string.Join(" / ",failures));}
+            while(!runner.Done)runner.Step(deadline.Token);var result=runner.Result(false);
+            if(result.GetProperty("cancelled").GetBoolean())throw new InvalidOperationException("再生時の干渉検査が処理時間の上限に達しました。未確認として停止しました。経路検査で詳細を確認してください。");
             if(!result.GetProperty("allSamplesClear").GetBoolean()||!result.GetProperty("samplingComplete").GetBoolean())throw new InvalidOperationException("経路上に干渉・すきま不足または解析未完了があります。");
-            if(InspectionPolicy.VerifyContinuous&&plan[0]!=plan[^1]&&!result.GetProperty("continuousPathCertified").GetBoolean())throw new InvalidOperationException("連続区間を確認できません。経路検査画面の未確認理由を確認してください。");
+            if(policy.VerifyContinuous&&plan[0]!=plan[^1]&&!result.GetProperty("continuousPathCertified").GetBoolean())throw new InvalidOperationException("連続区間を確認できません。経路検査画面の未確認理由を確認してください。");
             runner.ApplyEndPose(plan[^1]);InspectionObserver?.Invoke(result);return runner.CheckedCount;
         }
         catch(Exception error){try{restore();}catch(Exception rollback){throw new InvalidOperationException("経路検査の姿勢復元に失敗: "+rollback.Message,error);}InspectionObserver?.Invoke(runner.Result(true));throw new InvalidOperationException("経路検査で停止し、区間開始姿勢へ戻しました。 "+(error.InnerException??error).Message,error);}

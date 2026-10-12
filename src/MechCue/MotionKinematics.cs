@@ -1,6 +1,14 @@
 namespace MechCue;
 public static class MotionBoundMath
 {
+    internal static double ClearanceLowerBound(double first,double second,double relativeTravel,double margin,bool geometryStable)
+    {
+        // Native-clear touching solids with identical relative pose remain clear.
+        // Subdivision cannot improve their zero distance. Do not subtract a
+        // motion uncertainty margin when saved geometry and zero travel prove
+        // that this exact inspected pair is unchanged throughout the interval.
+        return Math.Max(first,second)-relativeTravel-(geometryStable&&relativeTravel==0?0:margin);
+    }
     public static double Variation(Track track,double a,double b)
     {
         if(b<a)(a,b)=(b,a);var times=track.Points.Select(p=>p.Time).Where(t=>t>a&&t<b).Append(a).Append(b).Distinct().Order().ToArray();

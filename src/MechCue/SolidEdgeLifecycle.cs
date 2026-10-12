@@ -44,8 +44,10 @@ public sealed partial class Bridge
         int exeEnd=command.IndexOf(".exe",StringComparison.OrdinalIgnoreCase);
         string executable=command.StartsWith('"')?command.Split('"')[1]:exeEnd>=0?command[..(exeEnd+4)]:command;
         if(!File.Exists(executable))throw new FileNotFoundException("Registered executable not found; registration repair required",executable);
-        using var process=Process.Start(new ProcessStartInfo(executable){UseShellExecute=true})??throw new InvalidOperationException("Solid Edge launch failed");
-        return new {state="launched",processId=process.Id,message="Poll application state; licensing/startup may require user interaction."};
+        var launch=SolidEdgeLaunch.Prepare(executable);
+        DiagnosticLog.Write("solid-edge-launch",new {executable,workingDirectory=launch.Start.WorkingDirectory,licenseEnvironmentSources=launch.Sources});
+        using var process=Process.Start(launch.Start)??throw new InvalidOperationException("Solid Edge launch failed");
+        return new {state="launched",processId=process.Id,licenseEnvironmentSources=launch.Sources,message="Poll application state; licensing/startup may require user interaction."};
     }
     public static object CadExitApplication(int expectedProcessId)
     {

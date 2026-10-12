@@ -5,7 +5,7 @@ public partial class MainForm
     (int Tracks, int Settings, int Points) panelSizes;
     bool tracksHidden, settingsHidden, pointsHidden;
     public bool IsPlaying => timer.Enabled;
-    void PausePlayback() { timer.Stop(); plot.FollowPlayback = false; RefreshPlayback(); }
+    void PausePlayback() { timer.Stop(); plot.FollowPlayback = false; mcpInspectionCancellation?.Cancel(); RefreshPlayback(); }
     void TogglePlayback() { if (timer.Enabled) PausePlayback(); else StartPlayback(); }
     void RefreshPlayback()
     {
@@ -65,6 +65,7 @@ public partial class MainForm
         commandHints.SetToolTip(collision, HostCommands.Hint(HostAction.Collision));
         commandHints.SetToolTip(loop, UiText.IsJapanese ? "最後まで再生したら先頭から繰り返します。" : "Repeat from the beginning after reaching the end.");
         commandHints.SetToolTip(autoApply, UiText.IsJapanese ? "再生時に反映を自動でオンにします。エラー時は自動をオフにします。次回起動時はオフです。" : "Enable Apply when starting playback. Disabled after an error and on next launch.");
+        commandHints.SetToolTip(subdivideInspection, UiText.IsJapanese ? "ON: 再生・時刻移動の干渉検査を細分化します。OFF: 元のキーフレームと移動先の姿勢だけを検査し、その間は未確認です。キーフレームは変更しません。" : "ON: subdivide interference checks during playback/seeking. OFF: inspect original keys and requested poses only; intervals remain unverified. Keyframes are unchanged.");
         commandHints.SetToolTip(overlay, UiText.IsJapanese ? "選択のみ／選択＋チェック／全機構。編集対象はチェックを外しても表示します。" : "Selected only / Selected + checked / All tracks. The edit target stays visible even when unchecked.");
         commandHints.SetToolTip(aiAccess, HostCommands.Hint(HostAction.Ai));
         IEnumerable<ToolStripMenuItem> Items(ToolStripItemCollection items) => items.OfType<ToolStripMenuItem>().SelectMany(i => new[] { i }.Concat(Items(i.DropDownItems)));

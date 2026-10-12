@@ -13,13 +13,18 @@ public sealed partial class Bridge
     }
     public static object CadReopen(string expectedDocument)
     {
-        var document = CadDocument(CadApplication(), expectedDocument, write: false);
+        var application = CadApplication();
+        var document = CadDocument(application, expectedDocument, write: false);
         if (!Path.IsPathFullyQualified(expectedDocument) || !File.Exists(expectedDocument)) throw new InvalidOperationException("Reopen requires a saved file.");
         if (Convert.ToBoolean(Get(document, "Dirty"))) throw new InvalidOperationException("Save the document first; reopen never discards dirty changes.");
         string? before = CadExtension(document) == ".asm" ? DocumentStorage.Read(document) : null;
         Call(document, "Close", false);
-        CadOpen(expectedDocument);
-        var reopened = CadDocument(CadApplication(), expectedDocument, write: false);
+        // Closing the target can activate an unrelated dirty document. A reopen
+        // does not replace or close that document, so the generic switch guard
+        // in CadOpen must not block recovery after we have closed our target.
+        var opened = Call(Get(application, "Documents"), "Open", expectedDocument);
+        CadActivateDocument(opened);
+        var reopened = CadDocument(application, expectedDocument, write: false);
         string? after = CadExtension(reopened) == ".asm" ? DocumentStorage.Read(reopened) : null;
         if (before != after) throw new InvalidOperationException("Reopened, but embedded settings differ. Inspect document before editing.");
         return new { document = CadInfo(reopened), embeddedSettingsPreserved = true,
