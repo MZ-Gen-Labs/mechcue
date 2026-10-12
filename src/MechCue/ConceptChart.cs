@@ -26,7 +26,20 @@ public sealed partial class Bridge
     internal static Dictionary<string,double> MeasureConcept(ConceptMachine model,Dictionary<string,double[]> actual) {
         var values=new Dictionary<string,double>();var parents=new Dictionary<string,double[]>{[""]=CadTransform(0,0,0,0,0,0)};
         foreach(var a in model.Axes){
-            var witness=model.Bodies.FirstOrDefault(b=>b.Parent==a.Id)??throw new InvalidOperationException("Axis has no measurement body: "+a.Id);
+            var witness=model.Bodies.FirstOrDefault(b=>b.Parent==a.Id);
+            if(witness==null){
+                // A linear axis carrying only further linear axes along other directions (e.g. arm5 WX->WY->WZ)
+                // is measured from a descendant body: its direction's component comes from this axis alone.
+                List<ConceptAxis>? Path(ConceptBody b){var path=new List<ConceptAxis>();for(var id=b.Parent;id!="";){var axis=model.Axes.Single(x=>x.Id==id);path.Add(axis);if(id==a.Id)return path;id=axis.Parent;}return null;}
+                var (body,path)=model.Bodies.Select(b=>(b,Path(b))).FirstOrDefault(p=>p.Item2!=null);
+                if(body==null||a.Kind!="linear"||path!.Any(x=>x.Kind!="linear")||path.Select(x=>x.Direction).Distinct().Count()!=path.Count)throw new InvalidOperationException("Axis has no measurement body: "+a.Id);
+                var offset=ConceptMachine.Multiply(ConceptMachine.Multiply(ConceptMachine.Multiply(InverseRigid(parents[a.Parent]),actual[body.Id]),InverseRigid(body.GeometryMatrix)),CadTransform(-body.CenterMm[0],-body.CenterMm[1],-body.CenterMm[2],0,0,0));
+                int k=a.Direction=="X"?0:a.Direction=="Y"?1:2;
+                double measured=offset[12+k]*1000-path.Sum(x=>x.OriginMm[k]);
+                if(Math.Abs(measured-a.Minimum)<1e-6)measured=a.Minimum;if(Math.Abs(measured-a.Maximum)<1e-6)measured=a.Maximum;if(Math.Abs(measured)<1e-7)measured=0;values[a.Id]=measured;
+                double[] xyz=(double[])a.OriginMm.Clone();xyz[k]+=measured;parents[a.Id]=ConceptMachine.Multiply(parents[a.Parent],CadTransform(xyz[0],xyz[1],xyz[2],0,0,0));
+                continue;
+            }
             var local=ConceptMachine.Multiply(ConceptMachine.Multiply(ConceptMachine.Multiply(InverseRigid(parents[a.Parent]),actual[witness.Id]),InverseRigid(witness.GeometryMatrix)),CadTransform(-witness.CenterMm[0],-witness.CenterMm[1],-witness.CenterMm[2],0,0,0));
             int n=a.Direction=="X"?0:a.Direction=="Y"?1:2;
             double value=a.Kind=="linear"?local[12+n]*1000-a.OriginMm[n]:Math.Atan2(local[((n+1)%3)*4+(n+2)%3],local[((n+1)%3)*4+(n+1)%3])*180/Math.PI;
