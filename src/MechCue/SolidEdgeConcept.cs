@@ -36,7 +36,8 @@ public sealed partial class Bridge
                 CadNew("part",partTemplate); workingPart=Get(application,"ActiveDocument"); string expected=CadName(workingPart);
                 if(Convert.ToInt32(Get(Get(workingPart,"Models"),"Count"))!=0) throw new InvalidOperationException("Use an empty part template for concept generation.");
                 body.GeometryMatrix=ConceptGeometry(workingPart);
-                CadExtrude(expected,body.Shape=="box"?"rectangle":"circle",body.SizeMm[0],body.SizeMm[1],body.SizeMm[0]/2,body.SizeMm[2],xMm:body.Shape=="box"?-body.SizeMm[0]/2:0,yMm:body.Shape=="box"?-body.SizeMm[1]/2:0,direction:"symmetric",featureName:body.Id);
+                if(Convert.ToInt32(Get(workingPart,"ModelingMode"))!=2) throw new InvalidOperationException("Use an Ordered part template for concept generation.");
+                CadConceptBody(workingPart,body);
                 body.File=body.Id+".par"; CadSave(expected,Path.Combine(outputDirectory,body.File));
                 Call(workingPart,"Close",false); workingPart=null;
             }
