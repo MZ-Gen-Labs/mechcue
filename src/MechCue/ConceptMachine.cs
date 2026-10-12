@@ -37,8 +37,8 @@ public sealed class ConceptMachine
             if (!double.IsFinite(length) || length < 10 || length > 5000) throw new ArgumentException("Axis travel must be between 10 and 5000 mm.");
         if (type is not ("mill3" or "mill4" or "mill5" or "gantry" or "arm5")) throw new ArgumentException("type must be mill3, mill4, mill5, gantry or arm5.");
         var model = new ConceptMachine { Type = type };
-        void Axis(string id, string parent, string direction, double travel, string kind = "linear", double[]? origin = null) {
-            model.Axes.Add(new() { Id = id, Parent = parent, Direction = direction, Kind = kind, Minimum = -travel / 2, Maximum = travel / 2, OriginMm = origin ?? [0, 0, 0] }); model.Values[id] = 0;
+        void Axis(string id, string parent, string direction, double travel, string kind = "linear", double[]? origin = null, double? minimum = null, double? maximum = null) {
+            model.Axes.Add(new() { Id = id, Parent = parent, Direction = direction, Kind = kind, Minimum = minimum ?? -travel / 2, Maximum = maximum ?? travel / 2, OriginMm = origin ?? [0, 0, 0] }); model.Values[id] = 0;
         }
         void Box(string id, string parent, double x, double y, double z, double cx, double cy, double cz) => model.Bodies.Add(new() { Id = id, Parent = parent, SizeMm = [x, y, z], CenterMm = [cx, cy, cz] });
         void Cylinder(string id, string parent, double diameter, double depth, double cx, double cy, double cz) => model.Bodies.Add(new() { Id = id, Parent = parent, Shape = "cylinder", SizeMm = [diameter, diameter, depth], CenterMm = [cx, cy, cz] });
@@ -64,7 +64,12 @@ public sealed class ConceptMachine
             Box("hand", "J5", 40, 100, 60, 20, 0, 0);
             Box("finger-1", "J5", 60, 15, 30, 70, 40, 0); // 65 mm between fingers grips the 60 mm workpiece with clearance
             Box("finger-2", "J5", 60, 15, 30, 70, -40, 0);
-            Box("workpiece", "", 60, 60, 60, 250, 0, 770);
+            // The workpiece has its own world-aligned X/Y/Z carrier axes (0 = resting at its table spot),
+            // so a chart can carry it with the hand without re-parenting bodies.
+            Axis("WX", "", "X", 0, minimum: -700, maximum: 200);
+            Axis("WY", "WX", "Y", 0, minimum: -300, maximum: 300);
+            Axis("WZ", "WY", "Z", 0, minimum: 0, maximum: 500);
+            Box("workpiece", "WZ", 60, 60, 60, 250, 0, 770);
         } else if (type == "gantry") {
             Box("base", "", w, d, 100, 0, 0, 50);
             // The bridge travels along the two Y rails; the trolley travels on the bridge.

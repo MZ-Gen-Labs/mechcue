@@ -7,21 +7,23 @@ public static partial class SelfTest
         foreach(string kind in new[]{"mill3","mill4","mill5","gantry","arm5"}) {
             var model=ConceptMachine.Create(kind,500,300,300); var home=model.Poses(model.Values);
             bool arm=kind=="arm5";
-            var values=arm?new Dictionary<string,double>{["J1"]=30,["J2"]=20,["J3"]=-40,["J4"]=25,["J5"]=60}:new Dictionary<string,double>(model.Values) { ["X"]=100,["Y"]=50,["Z"]=20 };
+            var values=arm?new Dictionary<string,double>{["J1"]=30,["J2"]=20,["J3"]=-40,["J4"]=25,["J5"]=60,["WX"]=0,["WY"]=0,["WZ"]=0}:new Dictionary<string,double>(model.Values) { ["X"]=100,["Y"]=50,["Z"]=20 };
             var moved=model.Poses(values);
             var measured=Bridge.MeasureConcept(model,moved);
             Check(values.All(p=>Math.Abs(measured[p.Key]-p.Value)<1e-7),"Concept current-value measurement");
             Check(home["base"].SequenceEqual(moved["base"]),"Concept base stays fixed");
             if(arm) {
-                Check(string.Join(",",model.Axes.Select(a=>a.Id+"<"+a.Parent+":"+a.Kind[0]+a.Direction))=="J1<:rZ,J2<J1:rY,J3<J2:rY,J4<J3:rY,J5<J4:rX","Arm joint chain");
+                Check(string.Join(",",model.Axes.Select(a=>a.Id+"<"+a.Parent+":"+a.Kind[0]+a.Direction))=="J1<:rZ,J2<J1:rY,J3<J2:rY,J4<J3:rY,J5<J4:rX,WX<:lX,WY<WX:lY,WZ<WY:lZ","Arm joint and workpiece carrier chain");
+                var carried=model.Poses(new Dictionary<string,double>{["J1"]=0,["J2"]=0,["J3"]=0,["J4"]=0,["J5"]=0,["WX"]=-50,["WY"]=20,["WZ"]=100});
+                Check(Math.Abs(carried["workpiece"][12]-home["workpiece"][12]+.05)<1e-10 && Math.Abs(carried["workpiece"][13]-home["workpiece"][13]-.02)<1e-10 && Math.Abs(carried["workpiece"][14]-home["workpiece"][14]-.1)<1e-10 && carried["hand"].SequenceEqual(home["hand"]),"Workpiece carrier axes move only the workpiece");
                 Check(home["workpiece"].SequenceEqual(moved["workpiece"]) && home["table-top"].SequenceEqual(moved["table-top"]),"Table and workpiece stay fixed");
                 // J1 turns the whole arm about the vertical axis through its origin; J5 only rolls the hand.
-                var turned=model.Poses(new Dictionary<string,double>{["J1"]=90,["J2"]=0,["J3"]=0,["J4"]=0,["J5"]=0});
+                var turned=model.Poses(new Dictionary<string,double>{["J1"]=90,["J2"]=0,["J3"]=0,["J4"]=0,["J5"]=0,["WX"]=0,["WY"]=0,["WZ"]=0});
                 double[] o=[-.25,0];double hx=home["hand"][12]-o[0],hy=home["hand"][13]-o[1];
                 Check(Math.Abs(turned["hand"][12]-o[0]+hy)<1e-10 && Math.Abs(turned["hand"][13]-o[1]-hx)<1e-10 && Math.Abs(turned["hand"][14]-home["hand"][14])<1e-10,"J1 turns the arm about Z");
-                var rolled=model.Poses(new Dictionary<string,double>{["J1"]=0,["J2"]=0,["J3"]=0,["J4"]=0,["J5"]=90});
+                var rolled=model.Poses(new Dictionary<string,double>{["J1"]=0,["J2"]=0,["J3"]=0,["J4"]=0,["J5"]=90,["WX"]=0,["WY"]=0,["WZ"]=0});
                 Check(rolled["wrist"].SequenceEqual(home["wrist"]) && Enumerable.Range(12,3).All(i=>Math.Abs(rolled["hand"][i]-home["hand"][i])<1e-10) && !rolled["finger-1"].SequenceEqual(home["finger-1"]),"J5 rolls only the hand");
-                var bent=model.Poses(new Dictionary<string,double>{["J1"]=0,["J2"]=0,["J3"]=90,["J4"]=0,["J5"]=0});
+                var bent=model.Poses(new Dictionary<string,double>{["J1"]=0,["J2"]=0,["J3"]=90,["J4"]=0,["J5"]=0,["WX"]=0,["WY"]=0,["WZ"]=0});
                 Check(bent["upper-arm"].SequenceEqual(home["upper-arm"]) && bent["hand"][14]<home["hand"][14]-.2,"J3 lowers the forearm and hand");
             } else {
             string dependent=kind=="gantry"?"gripper":"workpiece";
@@ -57,7 +59,9 @@ public static partial class SelfTest
             }
             // No two bodies may overlap at any combination of linear travel limits (rotary axes at 0).
             // Touching faces (stacked bodies) are allowed.
-            var linear=model.Axes.Where(a=>a.Kind=="linear").ToList();
+            // arm5 workpiece carrier axes can place the payload anywhere; collisions there are path-specific
+            // (checked by path inspection), so they stay at their resting value here.
+            var linear=model.Axes.Where(a=>a.Kind=="linear"&&!(arm&&a.Id.StartsWith("W"))).ToList();
             for(int mask=0;mask<1<<linear.Count;mask++) {
                 var limits=model.Values.ToDictionary(p=>p.Key,_=>0d);
                 for(int i=0;i<linear.Count;i++) limits[linear[i].Id]=(mask&(1<<i))==0?linear[i].Minimum:linear[i].Maximum;
@@ -130,7 +134,7 @@ public sealed partial class Bridge
                     CadConceptVerifyBody(part,probe);
                 }
                 checks.Add("PASS: "+kind+" bodies are centred, driven by named variables, and stay centred when resized");
-                var values=kind=="arm5"?new Dictionary<string,double>{["J1"]=30,["J2"]=20,["J3"]=-40,["J4"]=25,["J5"]=60}:new Dictionary<string,double>(model.Values){["X"]=100,["Y"]=50,["Z"]=30};string first=kind=="arm5"?"J1":"X";
+                var values=kind=="arm5"?new Dictionary<string,double>{["J1"]=30,["J2"]=20,["J3"]=-40,["J4"]=25,["J5"]=60,["WX"]=-40,["WY"]=30,["WZ"]=50}:new Dictionary<string,double>(model.Values){["X"]=100,["Y"]=50,["Z"]=30};string first=kind=="arm5"?"J1":"X";
                 if(kind=="mill5")values["A"]=45;if(kind is "mill4" or "mill5")values["C"]=90;
                 CadPoseConcept(expected,manifest,System.Text.Json.JsonSerializer.Serialize(values));
                 var wanted=model.Poses(values);
