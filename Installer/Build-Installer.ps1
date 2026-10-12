@@ -2,8 +2,7 @@ param(
     [string]$PayloadDirectory,
     [string]$McpDirectory,
     [string]$OutputDirectory,
-    [string]$Version = '0.3.2-alpha.01',
-    [switch]$AddInOnly,
+    [string]$Version = '0.3.2-alpha.02',
     [string]$CompilerPath = $env:INNO_SETUP_COMPILER
 )
 $ErrorActionPreference = 'Stop'
@@ -21,8 +20,8 @@ if (!$CompilerPath) {
     $CompilerPath = $taskCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 }
 if (!$CompilerPath -or !(Test-Path -LiteralPath $CompilerPath)) { throw 'Install Inno Setup or set INNO_SETUP_COMPILER to ISCC.exe' }
-$taskFiles = @('MechCue.AddIn.comhost.dll','MechCue.AddIn.dll','MechCue.AddIn.deps.json','MechCue.AddIn.runtimeconfig.json','MechCue.dll','MechCue.runtimeconfig.json','MechCue.deps.json')
-if (!$AddInOnly) { $taskFiles += 'MechCue.exe' }
+# The standalone EXE is an optional installer component (selected by the standard type).
+$taskFiles = @('MechCue.AddIn.comhost.dll','MechCue.AddIn.dll','MechCue.AddIn.deps.json','MechCue.AddIn.runtimeconfig.json','MechCue.dll','MechCue.runtimeconfig.json','MechCue.deps.json','MechCue.exe')
 foreach ($taskFile in $taskFiles) { if (!(Test-Path -LiteralPath (Join-Path $taskPayload $taskFile))) { throw "Missing payload: $taskFile" } }
 $taskMcpFiles = @()
 $taskMcpArguments = @('/DHasMcp=0')
@@ -35,13 +34,12 @@ if ($McpDirectory) {
     $taskMcpArguments = @('/DHasMcp=1',"/DMcpDir=$taskMcp")
 }
 New-Item -ItemType Directory -Path $taskOutput -Force | Out-Null
-$taskBase = if ($AddInOnly) { 'MechCue-AddIn-Setup' } else { 'MechCue-Setup' }
-$taskMode = if ($AddInOnly) { 1 } else { 0 }
-& $CompilerPath /Qp @taskMcpArguments "/DAppVersion=$Version" "/DBinaryVersion=$taskBinaryVersion" "/DPayloadDir=$taskPayload" "/DOutputFolder=$taskOutput" "/DProjectRoot=$taskRoot" "/DAddInOnly=$taskMode" "/F$taskBase" (Join-Path $PSScriptRoot 'MechCue.iss')
+$taskBase = 'MechCue-Setup'
+& $CompilerPath /Qp @taskMcpArguments "/DAppVersion=$Version" "/DBinaryVersion=$taskBinaryVersion" "/DPayloadDir=$taskPayload" "/DOutputFolder=$taskOutput" "/DProjectRoot=$taskRoot" "/F$taskBase" (Join-Path $PSScriptRoot 'MechCue.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
 $taskSetup = Join-Path $taskOutput ($taskBase + '.exe')
 $taskRecords = foreach ($taskFile in $taskFiles) { @{ Name = $taskFile; SHA256 = (Get-FileHash -LiteralPath (Join-Path $taskPayload $taskFile) -Algorithm SHA256).Hash.ToLowerInvariant() } }
 $taskMcpRecords = foreach ($taskFile in $taskMcpFiles) { @{ Name = $taskFile.FullName.Substring($taskMcp.Length + 1); SHA256 = (Get-FileHash -LiteralPath $taskFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant() } }
 if ($McpDirectory) { $taskMcpRecords = @($taskMcpRecords) + @{ Name = 'MCP-Guide.html'; SHA256 = (Get-FileHash -LiteralPath (Join-Path $taskRoot 'Installer/MCP-Guide.html') -Algorithm SHA256).Hash.ToLowerInvariant() } }
-@{ Format = 'Inno Setup'; Version = $Version; AddInOnly = [bool]$AddInOnly; Payload = @($taskRecords); McpIncluded = [bool]$McpDirectory; McpPayload = @($taskMcpRecords); SetupSHA256 = (Get-FileHash -LiteralPath $taskSetup -Algorithm SHA256).Hash.ToLowerInvariant(); Signed = ((Get-AuthenticodeSignature -LiteralPath $taskSetup).Status -eq 'Valid') } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath ($taskSetup + '.manifest.json') -Encoding UTF8
+@{ Format = 'Inno Setup'; Version = $Version; StandaloneComponent = $true; Payload = @($taskRecords); McpIncluded = [bool]$McpDirectory; McpPayload = @($taskMcpRecords); SetupSHA256 = (Get-FileHash -LiteralPath $taskSetup -Algorithm SHA256).Hash.ToLowerInvariant(); Signed = ((Get-AuthenticodeSignature -LiteralPath $taskSetup).Status -eq 'Valid') } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath ($taskSetup + '.manifest.json') -Encoding UTF8
 Write-Output $taskSetup
