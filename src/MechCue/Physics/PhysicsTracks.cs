@@ -68,8 +68,6 @@ public static class PhysicsTracks
         return (setup, joints);
     }
 
-    public static RigidBodyResult Run(SavedConcept concept, RigidBodySetup setup, Dictionary<string, List<JointPoint>> joints) => ConceptRigidBodySimulator.Run(concept.Model, setup, joints);
-
     /// <summary>Writes a result into the physics tracks. Values outside an axis range are clamped and reported.</summary>
     public static List<string> Apply(SavedConcept concept, RigidBodyResult result, IReadOnlyDictionary<Guid, Track> byId, string hash)
     {

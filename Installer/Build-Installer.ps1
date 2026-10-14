@@ -2,7 +2,7 @@ param(
     [string]$PayloadDirectory,
     [string]$McpDirectory,
     [string]$OutputDirectory,
-    [string]$Version = '0.3.3-alpha.02',
+    [string]$Version = '0.3.3-alpha.03',
     [string]$CompilerPath = $env:INNO_SETUP_COMPILER
 )
 $ErrorActionPreference = 'Stop'
@@ -21,7 +21,7 @@ if (!$CompilerPath) {
 }
 if (!$CompilerPath -or !(Test-Path -LiteralPath $CompilerPath)) { throw 'Install Inno Setup or set INNO_SETUP_COMPILER to ISCC.exe' }
 # The standalone EXE is an optional installer component (selected by the standard type).
-$taskFiles = @('MechCue.AddIn.comhost.dll','MechCue.AddIn.dll','MechCue.AddIn.deps.json','MechCue.AddIn.runtimeconfig.json','MechCue.dll','MechCue.runtimeconfig.json','MechCue.deps.json','MechCue.exe','BepuPhysics.dll','BepuUtilities.dll')
+$taskFiles = @('MechCue.AddIn.comhost.dll','MechCue.AddIn.dll','MechCue.AddIn.deps.json','MechCue.AddIn.runtimeconfig.json','MechCue.dll','MechCue.runtimeconfig.json','MechCue.deps.json','MechCue.exe','BepuPhysics.dll','BepuUtilities.dll','MechCue.Physics.exe','MechCue.Physics.dll','MechCue.Physics.deps.json','MechCue.Physics.runtimeconfig.json')
 foreach ($taskFile in $taskFiles) { if (!(Test-Path -LiteralPath (Join-Path $taskPayload $taskFile))) { throw "Missing payload: $taskFile" } }
 $taskMcpFiles = @()
 $taskMcpArguments = @('/DHasMcp=0')

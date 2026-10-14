@@ -1,6 +1,6 @@
 # 0.3.3-alpha.01 開発状況
 
-0.3.2正式版から分岐した開発系列の記録。
+0.3.2正式版から分岐した開発系列の記録。未対応の課題は[未対応の課題](OPEN_ISSUES.md)にまとめている。
 
 ## 剛体物理でワークを動かす
 
@@ -26,3 +26,14 @@
 - **保存**：物理トラックのフラグ、物理の設定、再計算に使った入力の指紋（`ComputedHash`）をアセンブリに保存する。開き直しても、入力が変わっていなければ「最新」のまま。動作パターンごとに結果を持ち、切り替えると、そのパターンの入力に対して最新かどうかを判定する。
 - **物理エンジンの置き場所**：エンジン（`IRigidBodyEngine`とBepuPhysics 2の実装）を、MCPではなくMechCue本体（`src/MechCue/Physics`）へ移した。アドイン版・独立版の両方が`BepuPhysics.dll`と`BepuUtilities.dll`を読み込む。これまでMechCue本体はNuGet依存がなかったため、`NuGet.Config`にnuget.orgを加え、`packages.lock.json`で版を固定し、ビルドは`RestoreLockedMode`で行う。インストーラーとポータブルZIPに2つのDLLを含める。
 - 既存の`arm5`のグラフと、物理トラックのない概略モデルは変わらない。
+
+## 物理計算を別プロセスへ（0.3.3-alpha.03）
+
+alpha.02では、物理エンジン（BepuPhysics）をMechCue本体に入れたため、アドイン版ではSolid Edgeのプロセスの中で動いていた。BepuPhysicsは独自のメモリプール（`NativeMemory`・`AlignedAlloc`、`UnverifiableCode`）を使うので、万一の不具合がSolid Edgeごと落とす可能性がある。そこで計算を別プロセスにした。
+
+- **計算用プログラム `MechCue.Physics.exe`**（`Physics/`）：物理エンジン（`IRigidBodyEngine`、`BepuEngine`）とシミュレーターを持つ。`--simulate` で標準入力から要求（モデル・設定・関節キーフレームのJSON）を読み、標準出力へ結果を返す。`--self-test` でエンジンの試験と、プロセス境界の試験（往復、入力エラー、異常終了、時間切れ、見つからない場合）を行う。
+- **MechCue本体（アドイン版・独立版）**：指紋・物理トラックの印・結果の書き込みと、計算用プログラムの呼び出し（`PhysicsProcess`）だけを持ち、**BepuPhysicsを読み込まない**。計算用プログラムは`MechCue.dll`と同じフォルダーから探す（開発時は環境変数`MECHCUE_PHYSICS_EXE`で指定できる）。異常終了・時間切れ（既定120秒）・見つからない場合は、例外として扱い、画面には「物理の計算に失敗しました」と表示するだけで、MechCueとSolid Edgeは動き続ける。入力の書き込みは別スレッドで行い、応答しない計算用プログラムでも時間切れで必ず打ち切る。
+- **MCP**：計算用プロジェクトをライブラリとして参照し、MCPのプロセスの中で計算する（Solid Edgeとは別プロセス）。
+- **依存**：MechCue本体は、再び外部パッケージを持たない（ルートの`NuGet.Config`はパッケージソースなし、本体の`packages.lock.json`は削除）。BepuPhysicsは計算用プロジェクトだけが参照し、`Physics/packages.lock.json`で版を固定して、ビルドは`--locked-mode`で復元する。インストーラーとポータブルZIPには、計算用プログラム（`MechCue.Physics.exe`ほか）と`BepuPhysics.dll`・`BepuUtilities.dll`を同梱する。
+- **性能**：13秒のピック＆プレースで、1回あたり約0.43秒（うち起動は約0.18秒）。結果はalpha.02と同一（持ち上げ4.36秒、静止9.64秒、WXの末尾−350.51 mm）。
+

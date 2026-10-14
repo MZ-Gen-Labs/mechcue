@@ -103,6 +103,10 @@ Source: "{#PayloadDir}\MechCue.AddIn.runtimeconfig.json"; DestDir: "{app}"; Flag
 Source: "{#PayloadDir}\MechCue.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\BepuPhysics.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\BepuUtilities.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\MechCue.Physics.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\MechCue.Physics.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\MechCue.Physics.deps.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\MechCue.Physics.runtimeconfig.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\MechCue.deps.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\MechCue.runtimeconfig.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\MechCue.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: standalone
