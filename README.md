@@ -86,6 +86,7 @@ Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLL�
 再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
 ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
 [公開・リリース手順](docs/RELEASING.md)を参照してください。
+開発で見つけた不具合の原因・回避策・検証の方法は[開発のノウハウ集](docs/KNOWHOW.md)にまとめています。
 
 | フォルダー | 内容 |
 |---|---|
