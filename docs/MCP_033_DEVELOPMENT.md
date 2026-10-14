@@ -38,9 +38,9 @@ alpha.02では、物理エンジン（BepuPhysics）をMechCue本体に入れた
 - **性能**：13秒のピック＆プレースで、1回あたり約0.43秒（うち起動は約0.18秒）。結果はalpha.02と同一（持ち上げ4.36秒、静止9.64秒、WXの末尾−350.51 mm）。
 
 
-## 課題の対応（0.3.3-alpha.04に向けて、未リリース）
+## 課題の対応（0.3.3-alpha.03に含める）
 
-[未対応の課題](OPEN_ISSUES.md)の「優先度：高」と「構造の整理」のうち、コードと文書で対応できるものを片付けた。ブランチ`codex/0.3.3-alpha.04`（alpha.03のコミットの上）。
+[未対応の課題](OPEN_ISSUES.md)の「優先度：高」と「構造の整理」のうち、コードと文書で対応できるものを片付けた。当初は`codex/0.3.3-alpha.04`で作業したが、利用者の指示によりalpha.03に含めてリリースする。
 
 - **概略モデルの移行で物理の設定が失われる**：`BuildConceptMigration`が`SavedConcept.Physics`（自動、設定、指紋）も移すようにした。トラックのキーフレームと動作パターンのIDは移行で変わらないので、指紋はそのまま有効。`TestPhysicsTracks`に移行の試験を加えた。
 - **物理トラックの画面テスト**：`VerifyPhysicsUi`（`--smoke-test`）。計算は`physicsRunner`を差し替えた代役で行い、計算用プログラムは使わない。物理トラックの読み取り専用（ドラッグ・表・名前・MCP）、「要再計算」「計算中…」「最新」の表示、手動の再計算ボタン（入力は指令トラックだけ）、約0.7秒の待ち時間の後の自動再計算、計算中に編集した場合に結果を捨てて計算し直すこと、自動オフで再計算しないこと、を確かめる。
@@ -49,4 +49,5 @@ alpha.02では、物理エンジン（BepuPhysics）をMechCue本体に入れた
 - **画面とCADの境界**：画面側の4ファイルが直接読んでいた文書の`FullName`を、`Bridge.DocumentPath`経由にした。
 - **AIコマンドの振り分け**：`HandleAi`を、コマンド名→（実行の条件、処理）の表にした。条件は「常に」「動画出力中も可（経路検査中は不可）」「待機中のみ」の3つで、判定の順序とエラーメッセージは従来どおり。MCPが送るコマンド名がすべて表にあることを確認した（`ping`・`start_operation`・`get_operation`は通信路側で処理）。
 - **詰め込まれたコードの整形**：`SolidEdgeDrawing.cs`と`SolidEdgeFeatureEditing.cs`の200文字を超える行をなくした。改行と字下げだけで、空白を除いた本文が変わらないことを確かめた。
+- **古い幾何学的な物理計算の廃止**：`solidedge_simulate_concept_physics`と`ConceptPhysics.cs`・そのテストを削除した。剛体物理と共有する`JointPoint`・`PhysicsEvent`は`src/MechCue/Physics/PhysicsPoints.cs`へ移した。MCPは117から116ツールになった。`arm5`でワークの動きを計算する手段はなくなり、`arm5p`を使う。
 - **検証**：`scripts/Build.ps1 -WithAddIn -WithMcp`（自己検査、画面検査、計算用プログラムの試験、MCPの各検査、COM、インストーラー）がすべて成功。Solid Edge実機での確認はしていない。

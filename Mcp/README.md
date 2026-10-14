@@ -296,6 +296,6 @@ Solid Edge起動・状態・安全な終了、アドイン経由のMechCue接続
 - 腕・指のキーフレームや物理の設定を変えると、約0.7秒後に自動で再計算します。状態は`mechcue_get_state`の`physics`（`available`・`auto`・`stale`・`busy`・`setup`）で確認できます。自動をオフにするには`mechcue_set_physics(auto=false)`、すぐに計算するには`mechcue_recompute_physics`を使います。
 - 物理の設定・計算結果・指紋はアセンブリに保存され、`mechcue_migrate_concept_settings`で詳細アセンブリへ移行しても保持されます。
 - 計算は別プロセスの`MechCue.Physics.exe`で行うため、計算が異常終了してもMechCueとSolid Edgeは止まりません。
-- 旧ツール`solidedge_simulate_concept_physics`は、`arm5`向けの幾何学的な計算（摩擦・転倒なし）です。
+- 旧ツール`solidedge_simulate_concept_physics`（`arm5`向けの幾何学的な計算、摩擦・転倒なし）は0.3.3-alpha.03で廃止しました。`arm5p`と`solidedge_simulate_concept_rigid_body`を使ってください。
 
 衝突形状は構想モデルの箱と円柱だけで、摩擦・反発は近似です。CADの実形状での接触解析ではありません。
