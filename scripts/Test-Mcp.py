@@ -45,7 +45,7 @@ try:
     result=request('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'MechCue integration test','version':'1'}})
     assert 'tools' in result['capabilities'];assert 'solidedge_close_document' in result['instructions'];checks.append('MCP initialization and saved temporary-document cleanup instructions')
     server.stdin.write(json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'})+'\n');server.stdin.flush()
-    tools=request('tools/list',{})['tools'];assert len(tools)==113,len(tools)
+    tools=request('tools/list',{})['tools'];assert len(tools)==115,len(tools)
     for name in ['mechcue_list_inspection_parts','mechcue_get_inspection_reports']:assert next(t for t in tools if t['name']==name)['annotations']['readOnlyHint']
     assert next(t for t in tools if t['name']=='mechcue_get_state')['annotations']['readOnlyHint']
     for name in ['mechcue_get_video_export','solidedge_list_planes','solidedge_list_features','solidedge_list_concept_templates','solidedge_get_concept_machine','solidedge_plan_drawing','solidedge_list_drawing_views','solidedge_list_pmi','solidedge_get_automation_settings','solidedge_list_simulation_faces','solidedge_list_simulation_studies','solidedge_list_simulation_materials','solidedge_get_simulation_results']:
@@ -91,7 +91,7 @@ try:
     tool('mechcue_set_playback_options',{'expectedDocument':'unused','subdivideInspection':False},True)
     checks.append('Subdivision option schema and Creation/edit permission')
     catalog=tool('solidedge_list_concept_templates')
-    assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry','arm5'}
+    assert {t['type'] for t in catalog['templates']}=={'mill3','mill4','mill5','gantry','arm5','arm5p'}
     tool('solidedge_create_concept_machine',{'type':'mill3','outputDirectory':'unused'},True)
     tool('solidedge_set_concept_pose',{'expectedDocument':'test.asm','manifestPath':'test.json','valuesJson':'{}'},True)
     checks.append('Concept catalog without CAD and creation/pose permission gates')
