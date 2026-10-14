@@ -23,11 +23,55 @@ public sealed partial class Bridge
         double[] r=[m[0],m[4],m[8],0,m[1],m[5],m[9],0,m[2],m[6],m[10],0,0,0,0,1];
         for(int i=0;i<3;i++)r[12+i]=-(r[i]*m[12]+r[4+i]*m[13]+r[8+i]*m[14]);return r;
     }
+    // A body carried by linear X/Y/Z axes followed by yaw (Z), pitch (Y) and roll (X) rotary axes about its own centre
+    // (arm5p workpiece). Only the last axis has a body, so the whole chain is read from that body's pose at once.
+    static bool MeasureFreeBodyChain(ConceptMachine model,ConceptAxis start,Dictionary<string,double[]> actual,Dictionary<string,double[]> parents,Dictionary<string,double> values) {
+        foreach(var body in model.Bodies){
+            var chain=new List<ConceptAxis>();for(var id=body.Parent;id!="";){var axis=model.Axes.Single(x=>x.Id==id);chain.Insert(0,axis);id=axis.Parent;}
+            if(chain.Count==0||chain[0].Id!=start.Id)continue;
+            int linear=chain.TakeWhile(x=>x.Kind=="linear").Count();int rotary=chain.Count-linear;
+            if(linear==0||rotary==0||chain.Skip(linear).Any(x=>x.Kind!="rotary")||chain.Take(linear).Select(x=>x.Direction).Distinct().Count()!=linear)return false;
+            if(!chain.Skip(linear).Select(x=>x.Direction).SequenceEqual("ZYX".Take(rotary).Select(c=>c.ToString())))return false;
+            if(chain.Skip(linear+1).Any(x=>x.OriginMm.Any(v=>v!=0)))return false;
+            if(model.Bodies.Any(b=>b!=body&&chain.Any(x=>x.Id==b.Parent)))return false;
+            var local=ConceptMachine.Multiply(ConceptMachine.Multiply(ConceptMachine.Multiply(InverseRigid(parents[start.Parent]),actual[body.Id]),InverseRigid(body.GeometryMatrix)),CadTransform(-body.CenterMm[0],-body.CenterMm[1],-body.CenterMm[2],0,0,0));
+            double[] angles=[0,0,0]; // yaw, pitch, roll
+            double R(int row,int col)=>local[col*4+row];
+            if(rotary>=1){
+                double pitch=rotary>=2?Math.Atan2(-R(2,0),Math.Sqrt(R(2,1)*R(2,1)+R(2,2)*R(2,2))):0;
+                double yaw=Math.Atan2(R(1,0),R(0,0)),roll=rotary==3?Math.Atan2(R(2,1),R(2,2)):0;
+                if(rotary==3&&Math.Cos(pitch)<1e-9){roll=0;yaw=Math.Atan2(-R(0,1),R(1,1));}
+                angles=[yaw*180/Math.PI,pitch*180/Math.PI,roll*180/Math.PI];
+            }
+            double[] total=[0,0,0];foreach(var axis in chain)for(int k=0;k<3;k++)total[k]+=axis.OriginMm[k];
+            var frame=parents[start.Parent];
+            for(int i=0;i<chain.Count;i++){
+                var axis=chain[i];int k=axis.Direction=="X"?0:axis.Direction=="Y"?1:2;double v;
+                if(axis.Kind=="linear")v=local[12+k]*1000-total[k];else v=angles[axis.Direction=="Z"?0:axis.Direction=="Y"?1:2];
+                if(Math.Abs(v-axis.Minimum)<1e-6)v=axis.Minimum;if(Math.Abs(v-axis.Maximum)<1e-6)v=axis.Maximum;if(Math.Abs(v)<1e-7)v=0;
+                values[axis.Id]=v;
+                double[] xyz=(double[])axis.OriginMm.Clone(),r=new double[3];if(axis.Kind=="linear")xyz[k]+=v;else r[k]=v;
+                frame=ConceptMachine.Multiply(frame,CadTransform(xyz[0],xyz[1],xyz[2],r[0],r[1],r[2]));parents[axis.Id]=frame;
+            }
+            return true;
+        }
+        return false;
+    }
+    /// <summary>Axis values (mm / degrees) that put a free body (linear X/Y/Z axes, then yaw/pitch/roll) at an occurrence pose (4x4 column-major, metres). Angles are principal values; unwrap them over time yourself.</summary>
+    public static Dictionary<string,double> MeasureFreeBody(ConceptMachine model,string bodyId,double[] occurrencePose) {
+        var body=model.Bodies.Single(b=>b.Id==bodyId);var first=body.Parent;
+        for(var id=body.Parent;id!="";id=model.Axes.Single(x=>x.Id==id).Parent)first=id;
+        var values=new Dictionary<string,double>();var parents=new Dictionary<string,double[]>{[""]=CadTransform(0,0,0,0,0,0)};
+        if(first==""||!MeasureFreeBodyChain(model,model.Axes.Single(x=>x.Id==first),new Dictionary<string,double[]>{[bodyId]=occurrencePose},parents,values))throw new ArgumentException("Body is not carried by a free-body axis chain: "+bodyId);
+        return values;
+    }
     internal static Dictionary<string,double> MeasureConcept(ConceptMachine model,Dictionary<string,double[]> actual) {
         var values=new Dictionary<string,double>();var parents=new Dictionary<string,double[]>{[""]=CadTransform(0,0,0,0,0,0)};
         foreach(var a in model.Axes){
+            if(values.ContainsKey(a.Id))continue; // solved together with the rest of its free-body chain
             var witness=model.Bodies.FirstOrDefault(b=>b.Parent==a.Id);
             if(witness==null){
+                if(MeasureFreeBodyChain(model,a,actual,parents,values))continue;
                 // A linear axis carrying only further linear axes along other directions (e.g. arm5 WX->WY->WZ)
                 // is measured from a descendant body: its direction's component comes from this axis alone.
                 List<ConceptAxis>? Path(ConceptBody b){var path=new List<ConceptAxis>();for(var id=b.Parent;id!="";){var axis=model.Axes.Single(x=>x.Id==id);path.Add(axis);if(id==a.Id)return path;id=axis.Parent;}return null;}

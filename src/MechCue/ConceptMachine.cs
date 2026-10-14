@@ -35,7 +35,7 @@ public sealed class ConceptMachine
     {
         foreach (double length in new[] { xTravelMm, yTravelMm, zTravelMm })
             if (!double.IsFinite(length) || length < 10 || length > 5000) throw new ArgumentException("Axis travel must be between 10 and 5000 mm.");
-        if (type is not ("mill3" or "mill4" or "mill5" or "gantry" or "arm5")) throw new ArgumentException("type must be mill3, mill4, mill5, gantry or arm5.");
+        if (type is not ("mill3" or "mill4" or "mill5" or "gantry" or "arm5" or "arm5p")) throw new ArgumentException("type must be mill3, mill4, mill5, gantry, arm5 or arm5p.");
         var model = new ConceptMachine { Type = type };
         void Axis(string id, string parent, string direction, double travel, string kind = "linear", double[]? origin = null, double? minimum = null, double? maximum = null) {
             model.Axes.Add(new() { Id = id, Parent = parent, Direction = direction, Kind = kind, Minimum = minimum ?? -travel / 2, Maximum = maximum ?? travel / 2, OriginMm = origin ?? [0, 0, 0] }); model.Values[id] = 0;
@@ -43,7 +43,8 @@ public sealed class ConceptMachine
         void Box(string id, string parent, double x, double y, double z, double cx, double cy, double cz) => model.Bodies.Add(new() { Id = id, Parent = parent, SizeMm = [x, y, z], CenterMm = [cx, cy, cz] });
         void Cylinder(string id, string parent, double diameter, double depth, double cx, double cy, double cz) => model.Bodies.Add(new() { Id = id, Parent = parent, Shape = "cylinder", SizeMm = [diameter, diameter, depth], CenterMm = [cx, cy, cz] });
         double w = xTravelMm + 400, d = yTravelMm + 400, h = zTravelMm + 600;
-        if (type == "arm5") {
+        if (type is "arm5" or "arm5p") {
+            bool physics = type == "arm5p";
             // Table-mounted five-axis arm (travel arguments do not apply). Joint frames follow the parent
             // link: J1 turret about Z, J2 shoulder / J3 elbow / J4 wrist pitch about Y, J5 wrist roll about X.
             // Adjacent links sit side by side in Y, so pitch rotations never sweep a link through its neighbour.
@@ -62,14 +63,33 @@ public sealed class ConceptMachine
             Box("wrist", "J4", 160, 60, 60, 50, 65, 0);
             Axis("J5", "J4", "X", 360, "rotary", [130, 65, 0]);
             Box("hand", "J5", 40, 100, 60, 20, 0, 0);
-            Box("finger-1", "J5", 60, 15, 30, 70, 40, 0); // 65 mm between fingers grips the 60 mm workpiece with clearance
-            Box("finger-2", "J5", 60, 15, 30, 70, -40, 0);
+            if (physics) {
+                // arm5p: the fingers slide on their own axes so a physics run can close them on the workpiece.
+                // F1 closes with negative values and F2 with positive ones (each travels along the hand's Y axis).
+                Axis("F1", "J5", "Y", 40, minimum: -20, maximum: 20); Axis("F2", "J5", "Y", 40, minimum: -20, maximum: 20);
+                Box("finger-1", "F1", 60, 15, 30, 70, 40, 0); Box("finger-2", "F2", 60, 15, 30, 70, -40, 0);
+            } else {
+                Box("finger-1", "J5", 60, 15, 30, 70, 40, 0); // 65 mm between fingers grips the 60 mm workpiece with clearance
+                Box("finger-2", "J5", 60, 15, 30, 70, -40, 0);
+            }
             // The workpiece has its own world-aligned X/Y/Z carrier axes (0 = resting at its table spot),
             // so a chart can carry it with the hand without re-parenting bodies.
-            Axis("WX", "", "X", 0, minimum: -700, maximum: 200);
-            Axis("WY", "WX", "Y", 0, minimum: -300, maximum: 300);
-            Axis("WZ", "WY", "Z", 0, minimum: 0, maximum: 500);
-            Box("workpiece", "WZ", 60, 60, 60, 250, 0, 770);
+            if (physics) {
+                // arm5p: a free body. World X/Y/Z translation, then yaw (Z), pitch (Y) and roll (X) about the workpiece centre,
+                // so a physics run can place it anywhere, including tilted or fallen over (0 = resting on the table).
+                Axis("WX", "", "X", 0, minimum: -1500, maximum: 1500);
+                Axis("WY", "WX", "Y", 0, minimum: -1500, maximum: 1500);
+                Axis("WZ", "WY", "Z", 0, minimum: -1000, maximum: 1000);
+                Axis("WRZ", "WZ", "Z", 0, "rotary", [250, 0, 770], -720, 720); // yaw/roll accept more than one turn so tumbling stays continuous
+                Axis("WRY", "WRZ", "Y", 0, "rotary", null, -180, 180);
+                Axis("WRX", "WRY", "X", 0, "rotary", null, -720, 720);
+                Box("workpiece", "WRX", 60, 60, 60, 0, 0, 0);
+            } else {
+                Axis("WX", "", "X", 0, minimum: -700, maximum: 200);
+                Axis("WY", "WX", "Y", 0, minimum: -300, maximum: 300);
+                Axis("WZ", "WY", "Z", 0, minimum: 0, maximum: 500);
+                Box("workpiece", "WZ", 60, 60, 60, 250, 0, 770);
+            }
         } else if (type == "gantry") {
             Box("base", "", w, d, 100, 0, 0, 50);
             // The bridge travels along the two Y rails; the trolley travels on the bridge.

@@ -21,6 +21,10 @@ The optional MechCue MCP package uses the official C# MCP SDK (Apache-2.0):
 https://github.com/modelcontextprotocol/csharp-sdk
 Copyright Model Context Protocol a Series of LF Projects, LLC.
 
+The MCP physics tools use BepuPhysics v2 (Apache-2.0), a pure C# rigid-body engine:
+https://github.com/bepu/bepuphysics2
+Copyright Ross Nordby and contributors. It is used by the separate MCP process only.
+
 Its Microsoft .NET support packages use the MIT license. Dependency versions
 and hashes are pinned in Mcp/packages.lock.json. The MCP distribution includes
 ThirdPartyNotices with full license texts, package metadata and supplied notices.

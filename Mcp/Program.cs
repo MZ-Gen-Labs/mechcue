@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
+if(args.Contains("--physics-self-test")){Environment.ExitCode=MechCue.Physics.PhysicsSelfTest.Run();return;}
 if(McpUpdate.Updating()) return;
 McpAccessSettings.StartTray();
 var builder=Host.CreateApplicationBuilder(args.Where(a=>a is not ("--allow-solidedge" or "--allow-solidedge-write")).ToArray());
