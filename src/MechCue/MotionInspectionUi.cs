@@ -12,7 +12,7 @@ public partial class MainForm
     double requiredMotionClearanceMm;
     internal Action<Form,Button,Button>? InspectionDialogTestHook;
     string InspectionFingerprint()=>Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(tracks.Select(t=>new{t.Id,t.Name,t.Kind,t.Axis,t.Points})))));
-    string InspectionDocument()=>bridge.Connected?Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null))??"":"";
+    string InspectionDocument()=>bridge.Connected?bridge.DocumentPath:"";
     void RecordMotionInspection(JsonElement result,Guid? patternId=null,string? patternName=null,bool merge=false)
     {
         if(!inspectionArchiveCleanupConfigured){inspectionArchiveCleanupConfigured=true;Disposed+=(_,_)=>{foreach(var record in motionReports)MotionInspectionSeries.DeleteOwnedArchives(record.Result);motionReports.Clear();};}

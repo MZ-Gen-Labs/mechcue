@@ -1,6 +1,6 @@
 # 0.3.3-alpha.01 開発状況
 
-0.3.2正式版から分岐した開発系列の記録。
+0.3.2正式版から分岐した開発系列の記録。未対応の課題は[未対応の課題](OPEN_ISSUES.md)にまとめている。
 
 ## 剛体物理でワークを動かす
 
@@ -26,3 +26,28 @@
 - **保存**：物理トラックのフラグ、物理の設定、再計算に使った入力の指紋（`ComputedHash`）をアセンブリに保存する。開き直しても、入力が変わっていなければ「最新」のまま。動作パターンごとに結果を持ち、切り替えると、そのパターンの入力に対して最新かどうかを判定する。
 - **物理エンジンの置き場所**：エンジン（`IRigidBodyEngine`とBepuPhysics 2の実装）を、MCPではなくMechCue本体（`src/MechCue/Physics`）へ移した。アドイン版・独立版の両方が`BepuPhysics.dll`と`BepuUtilities.dll`を読み込む。これまでMechCue本体はNuGet依存がなかったため、`NuGet.Config`にnuget.orgを加え、`packages.lock.json`で版を固定し、ビルドは`RestoreLockedMode`で行う。インストーラーとポータブルZIPに2つのDLLを含める。
 - 既存の`arm5`のグラフと、物理トラックのない概略モデルは変わらない。
+
+## 物理計算を別プロセスへ（0.3.3-alpha.03）
+
+alpha.02では、物理エンジン（BepuPhysics）をMechCue本体に入れたため、アドイン版ではSolid Edgeのプロセスの中で動いていた。BepuPhysicsは独自のメモリプール（`NativeMemory`・`AlignedAlloc`、`UnverifiableCode`）を使うので、万一の不具合がSolid Edgeごと落とす可能性がある。そこで計算を別プロセスにした。
+
+- **計算用プログラム `MechCue.Physics.exe`**（`Physics/`）：物理エンジン（`IRigidBodyEngine`、`BepuEngine`）とシミュレーターを持つ。`--simulate` で標準入力から要求（モデル・設定・関節キーフレームのJSON）を読み、標準出力へ結果を返す。`--self-test` でエンジンの試験と、プロセス境界の試験（往復、入力エラー、異常終了、時間切れ、見つからない場合）を行う。
+- **MechCue本体（アドイン版・独立版）**：指紋・物理トラックの印・結果の書き込みと、計算用プログラムの呼び出し（`PhysicsProcess`）だけを持ち、**BepuPhysicsを読み込まない**。計算用プログラムは`MechCue.dll`と同じフォルダーから探す（開発時は環境変数`MECHCUE_PHYSICS_EXE`で指定できる）。異常終了・時間切れ（既定120秒）・見つからない場合は、例外として扱い、画面には「物理の計算に失敗しました」と表示するだけで、MechCueとSolid Edgeは動き続ける。入力の書き込みは別スレッドで行い、応答しない計算用プログラムでも時間切れで必ず打ち切る。
+- **MCP**：計算用プロジェクトをライブラリとして参照し、MCPのプロセスの中で計算する（Solid Edgeとは別プロセス）。
+- **依存**：MechCue本体は、再び外部パッケージを持たない（ルートの`NuGet.Config`はパッケージソースなし、本体の`packages.lock.json`は削除）。BepuPhysicsは計算用プロジェクトだけが参照し、`Physics/packages.lock.json`で版を固定して、ビルドは`--locked-mode`で復元する。インストーラーとポータブルZIPには、計算用プログラム（`MechCue.Physics.exe`ほか）と`BepuPhysics.dll`・`BepuUtilities.dll`を同梱する。
+- **性能**：13秒のピック＆プレースで、1回あたり約0.43秒（うち起動は約0.18秒）。結果はalpha.02と同一（持ち上げ4.36秒、静止9.64秒、WXの末尾−350.51 mm）。
+
+
+## 課題の対応（0.3.3-alpha.03に含める）
+
+[未対応の課題](OPEN_ISSUES.md)の「優先度：高」と「構造の整理」のうち、コードと文書で対応できるものを片付けた。当初は`codex/0.3.3-alpha.04`で作業したが、利用者の指示によりalpha.03に含めてリリースする。
+
+- **概略モデルの移行で物理の設定が失われる**：`BuildConceptMigration`が`SavedConcept.Physics`（自動、設定、指紋）も移すようにした。トラックのキーフレームと動作パターンのIDは移行で変わらないので、指紋はそのまま有効。`TestPhysicsTracks`に移行の試験を加えた。
+- **物理トラックの画面テスト**：`VerifyPhysicsUi`（`--smoke-test`）。計算は`physicsRunner`を差し替えた代役で行い、計算用プログラムは使わない。物理トラックの読み取り専用（ドラッグ・表・名前・MCP）、「要再計算」「計算中…」「最新」の表示、手動の再計算ボタン（入力は指令トラックだけ）、約0.7秒の待ち時間の後の自動再計算、計算中に編集した場合に結果を捨てて計算し直すこと、自動オフで再計算しないこと、を確かめる。
+- **ドキュメント**：`README.md`と`Mcp/README.md`に`arm5p`・物理トラック・3つのMCPツールを書き、`docs/releases/0.3.3.md`の下書きを作った。
+- **構想モデルの種類ごとの定義**：`ConceptTemplates`（`src/MechCue/ConceptTemplates.cs`）に、種類ごとの組み立て処理と、`solidedge_list_concept_templates`の説明文をまとめた。`arm5`と`arm5p`は共通の腕（`ArmToHand`）の上に、それぞれの指とワークを足す。全種類・4通りの移動量で、生成したモデルのJSONと一覧の出力が変更前と完全に一致することを確認した。
+- **画面とCADの境界**：画面側の4ファイルが直接読んでいた文書の`FullName`を、`Bridge.DocumentPath`経由にした。
+- **AIコマンドの振り分け**：`HandleAi`を、コマンド名→（実行の条件、処理）の表にした。条件は「常に」「動画出力中も可（経路検査中は不可）」「待機中のみ」の3つで、判定の順序とエラーメッセージは従来どおり。MCPが送るコマンド名がすべて表にあることを確認した（`ping`・`start_operation`・`get_operation`は通信路側で処理）。
+- **詰め込まれたコードの整形**：`SolidEdgeDrawing.cs`と`SolidEdgeFeatureEditing.cs`の200文字を超える行をなくした。改行と字下げだけで、空白を除いた本文が変わらないことを確かめた。
+- **古い幾何学的な物理計算の廃止**：`solidedge_simulate_concept_physics`と`ConceptPhysics.cs`・そのテストを削除した。剛体物理と共有する`JointPoint`・`PhysicsEvent`は`src/MechCue/Physics/PhysicsPoints.cs`へ移した。MCPは117から116ツールになった。`arm5`でワークの動きを計算する手段はなくなり、`arm5p`を使う。
+- **検証**：`scripts/Build.ps1 -WithAddIn -WithMcp`（自己検査、画面検査、計算用プログラムの試験、MCPの各検査、COM、インストーラー）がすべて成功。Solid Edge実機での確認はしていない。

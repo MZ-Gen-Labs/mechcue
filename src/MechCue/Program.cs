@@ -86,7 +86,7 @@ static class Program
         ApplicationConfiguration.Initialize();
         if (args.Contains("--smoke-test"))
         {
-            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface(); form.VerifyMotionPatterns(); form.VerifyConceptWorkflowFixes(); form.VerifyTimelineInterface(); form.VerifyToolbarAndReorder(); form.VerifyMotionInspectionUi();
+            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface(); form.VerifyMotionPatterns(); form.VerifyConceptWorkflowFixes(); form.VerifyPhysicsUi(); form.VerifyTimelineInterface(); form.VerifyToolbarAndReorder(); form.VerifyMotionInspectionUi();
             using var image = new Bitmap(form.Width, form.Height); form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size));
             image.Save(Path.Combine(AppContext.BaseDirectory, "preview.png")); form.Close(); return;
         }

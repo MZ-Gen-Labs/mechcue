@@ -128,7 +128,7 @@ public partial class MainForm
     void ImportConceptAxes(string path="", string unboundTracks="preserve") {
         if (unboundTracks is not ("preserve" or "hide")) throw new ArgumentException("unboundTracks must be preserve or hide.");
         if(!bridge.Connected)ConnectDocument();PausePlayback();live.Checked=false;Commit();
-        if(path==""){string dir=Path.GetDirectoryName(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)))!;path=Path.Combine(dir,"mechcue-concept.json");if(!File.Exists(path)){using var dialog=new OpenFileDialog{Filter="Concept JSON|*.json"};if(dialog.ShowDialog(this)!=DialogResult.OK)return;path=dialog.FileName;}}
+        if(path==""){string dir=Path.GetDirectoryName(bridge.DocumentPath)!;path=Path.Combine(dir,"mechcue-concept.json");if(!File.Exists(path)){using var dialog=new OpenFileDialog{Filter="Concept JSON|*.json"};if(dialog.ShowDialog(this)!=DialogResult.OK)return;path=dialog.FileName;}}
         var added=bridge.ImportConcept(path,tracks);foreach(var t in added)if(!tracks.Contains(t))tracks.Add(t);
         if (unboundTracks == "hide") foreach (var t in tracks)
             if (!bridge.IsConcept(t) && bridge.BoundLabel(t) == null && bridge.PendingLabel(t) == null) plot.Hidden.Add(t);

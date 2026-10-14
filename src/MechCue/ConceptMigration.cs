@@ -46,7 +46,9 @@ public sealed partial class Bridge
             foreach (var points in settings.Patterns.Select(p => p.Points[track.Id]).Append(track.Points))
                 if (points.Any(p => p.Value < axis.Minimum || p.Value > axis.Maximum)) throw new InvalidOperationException("Source keyframes exceed axis limits.");
         }
-        settings.Concept = new SavedConcept { Model = model, Baseline = new(original.Baseline), Tracks = new(original.Tracks) };
+        // Physics settings (auto, setup, fingerprint) travel with the concept; the fingerprint stays valid because track
+        // keyframes and pattern IDs are preserved.
+        settings.Concept = new SavedConcept { Model = model, Baseline = new(original.Baseline), Tracks = new(original.Tracks), Physics = original.Physics };
         if (hideUnboundTracks) foreach (var track in settings.Tracks)
             if (!original.Tracks.Values.Contains(track.Track.Id)) track.Hidden = true;
         return DocumentSettings.Parse(settings.Json());

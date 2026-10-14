@@ -18,7 +18,9 @@ public static partial class SelfTest
         string hash = PhysicsTracks.Hash(concept, byId, pattern);
         var (setup, joints) = PhysicsTracks.Inputs(concept, byId);
         Check(!joints.ContainsKey("WX") && joints.ContainsKey("J1") && joints.ContainsKey("F1") && setup.EndTime == 2, "only commanded tracks are inputs");
-        var result = PhysicsTracks.Run(concept, setup, joints);
+        // The engine runs in MechCue.Physics.exe (tested there); here a resting result stands in for it.
+        var result = new RigidBodyResult { Engine = "test" };
+        foreach (var axis in PhysicsTracks.FreeBodyAxes(model)!) result.Axes[axis] = [new() { Time = 0, Value = 0 }, new() { Time = 2, Value = 0.1 }];
         PhysicsTracks.Apply(concept, result, byId, hash);
         Check(concept.Physics!.ComputedHash == hash && tracks.Single(t => t.Name == "WZ").Points.All(p => Math.Abs(p.Value) < 0.5), "a resting workpiece stays at zero");
         Check(PhysicsTracks.Hash(concept, byId, pattern) == hash, "writing physics tracks does not change the fingerprint");
@@ -31,6 +33,11 @@ public static partial class SelfTest
         var settings = new DocumentSettings { Concept = concept, Tracks = tracks.Select(t => new SavedTrack { Track = t }).ToList(), Version = 2 };
         var back = System.Text.Json.JsonSerializer.Deserialize<DocumentSettings>(settings.Json())!;
         Check(back.Tracks.Count(t => t.Track.Derived) == 6 && back.Concept!.Physics!.Setup.WorkpieceFriction == 0.9 && back.Concept.Physics.ComputedHash == hash, "derived flag and physics settings round-trip");
-        if (PhysicsSelfTest.Run() != 0) throw new Exception("Physics engine self-test failed");
+        // Moving the concept settings to the detailed assembly keeps the physics settings and the derived flag.
+        foreach (var track in tracks) track.Points = [new(0, model.Values[track.Name]), new(2, model.Values[track.Name])];
+        concept.Physics.Auto = false;
+        var migrated = Bridge.BuildConceptMigration(settings.Json(), ConceptMachine.Create("arm5p", 500, 300, 300), false);
+        Check(migrated.Concept!.Physics is { Auto: false, ComputedHash: not null } p && p.Setup.WorkpieceFriction == 0.9 && p.ComputedHash == concept.Physics.ComputedHash
+            && migrated.Tracks.Count(t => t.Track.Derived) == 6, "migration keeps physics settings and physics tracks");
     }
 }
