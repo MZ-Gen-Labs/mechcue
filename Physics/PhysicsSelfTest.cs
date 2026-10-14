@@ -26,7 +26,8 @@ public static class PhysicsSelfTest
         var none = new Dictionary<string, List<JointPoint>>();
         var rest = ConceptRigidBodySimulator.Run(model, new RigidBodySetup { EndTime = 1.5 }, none, create);
         Check(rest.FinalState == "resting" && rest.Axes.Values.All(a => a.All(p => Math.Abs(p.Value) < 0.5)), "arm5p workpiece rests on the table: " + string.Join(",", rest.Axes.Select(a => a.Key + "=" + a.Value[^1].Value)));
-        Console.WriteLine($"concept rest: ok ({rest.Engine})");
+        Check(rest.Axes["WZ"][^1].Value > 0, "with the default skin the resting workpiece does not sink into the table: WZ=" + rest.Axes["WZ"][^1].Value);
+        Console.WriteLine($"concept rest: ok ({rest.Engine}, WZ {rest.Axes["WZ"][^1].Value:+0.0000;-0.0000} mm)");
         // Gravity tilted 45° toward +X: the workpiece slides off the table edge (700 mm in front of... beyond X=+500) and falls to the floor/limits.
         var slide = ConceptRigidBodySimulator.Run(model, new RigidBodySetup { EndTime = 3, Gravity = [1, 0, -1], SupportFriction = 0.2, WorkpieceFriction = 0.2 }, none, create);
         Check(slide.Axes["WX"][^1].Value > 100, "a workpiece on a steep slope slides: WX=" + slide.Axes["WX"][^1].Value);
@@ -52,6 +53,14 @@ public static class PhysicsSelfTest
                 e.AddDynamic("cube", Cube, new(0, 0, 0.03, 0, 0, 0, 1), new(0.5), 0.5);
                 Run(e, 2); Check(Math.Abs(Z(e, "cube") - 0.03) < 0.0001, "a cube resting on the floor stays still and sinks less than 0.1 mm: z=" + Z(e, "cube"));
                 Console.WriteLine($"rest: ok (sinks {1000 * (0.03 - Z(e, "cube")):0.000} mm)");
+            }
+            using (var e = World(create)) {
+                // With a 0.05 mm skin the resting cube stays clear of the floor: the CAD parts would not overlap.
+                e.SetContact(120, 2, 0.00005);
+                e.AddDynamic("cube", Cube, new(0, 0, 0.03, 0, 0, 0, 1), new(0.5), 0.5);
+                Run(e, 2); double gap = Z(e, "cube") - 0.03;
+                Check(gap > 0.00001 && gap < 0.00005, $"a 0.05 mm skin keeps a resting cube 0.01..0.05 mm above the floor: gap {1000 * gap:0.000} mm");
+                Console.WriteLine($"skin: ok (rests {1000 * gap:0.000} mm above the floor)");
             }
             using (var e = World(create)) {
                 e.AddDynamic("cube", Cube, new(0, 0, 0.13, 0, 0, 0, 1), new(0.5), 0.5);

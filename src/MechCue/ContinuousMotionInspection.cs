@@ -74,17 +74,21 @@ public sealed partial class Bridge
                 var d1=first.Pairs.ToDictionary(p=>MotionInspectionPolicy.PairKey(p.FirstKeyPath,p.SecondKeyPath));
                 var d2=second.Pairs.ToDictionary(p=>MotionInspectionPolicy.PairKey(p.FirstKeyPath,p.SecondKeyPath));
                 if(!d1.Keys.ToHashSet().SetEquals(pairKeys)||!d2.Keys.ToHashSet().SetEquals(pairKeys))throw new InvalidOperationException("Inspected part identities changed during verification");
-                var failed=new List<string>();var verified=new List<string>();var refine=new List<string>();double minimum=double.PositiveInfinity;
+                var failed=new List<string>();var verified=new List<string>();var refine=new List<string>();var sliding=new List<string>();double minimum=double.PositiveInfinity,mid=a+(b-a)/2;
                 foreach(string key in keys){
                     var p=d1[key];var q=d2[key];
                     if(!p.AnalysisComplete||!q.AnalysisComplete){Terminal(a,b,"unverified",null,"Native pair analysis incomplete",[key]);continue;}
                     if(!p.Clear||!q.Clear){failed.Add(key);continue;}
                     double lower=MotionBoundMath.ClearanceLowerBound(p.LowerBoundMm,q.LowerBoundMm,model!.PairTravel(p.FirstKeyPath,p.SecondKeyPath,a,b),policy.NumericalMarginMm,geometry.CacheSafe);
-                    if(double.IsFinite(lower)&&lower>=required){verified.Add(key);minimum=Math.Min(minimum,lower);}else refine.Add(key);
+                    if(double.IsFinite(lower)&&lower>=required){verified.Add(key);minimum=Math.Min(minimum,lower);}
+                    else if(MotionBoundMath.SlidingContact(p.LowerBoundMm,q.LowerBoundMm,required,policy.NumericalMarginMm,
+                        model.PairTravel(p.FirstKeyPath,p.SecondKeyPath,a,mid),model.PairTravel(p.FirstKeyPath,p.SecondKeyPath,mid,b)))sliding.Add(key);
+                    else refine.Add(key);
                 }
                 Terminal(a,b,"sample-violation",null,"Interference or clearance shortfall at a checked pose; other pairs continue",failed.ToArray());
                 Terminal(a,b,"verified-clear",double.IsFinite(minimum)?minimum:null,null,verified.ToArray());
-                if(refine.Count==0)return;double mid=a+(b-a)/2;
+                Terminal(a,b,"unverified",null,"Sliding contact: in contact at both checked poses while moving, so subdivision cannot prove clearance; register it as an allowed contact",sliding.ToArray());
+                if(refine.Count==0)return;
                 if(depth>=policy.MaxRefinementDepth||mid==a||mid==b){Terminal(a,b,"unverified",null,"Refinement depth or time precision limit reached",refine.ToArray());return;}
                 pending.Push((mid,b,depth+1,refine.ToArray()));pending.Push((a,mid,depth+1,refine.ToArray()));
             }catch(Exception error){complete=false;stopped=true;stopReason=(error.InnerException??error).Message;fixedPairs?.Values.Clear();}

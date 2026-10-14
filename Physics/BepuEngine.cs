@@ -12,7 +12,8 @@ namespace MechCue.Physics;
 /// <summary>
 /// <see cref="IRigidBodyEngine"/> on BepuPhysics v2 (Apache-2.0, pure C#). Use 2.5.0-beta or newer: 2.4.0 limits the friction
 /// of a multi-point contact by one point's share of the normal force (a box on its face gets a quarter of its friction).
-/// Friction is a Coulomb coefficient per material pair (geometric mean). Contacts are springs (<see cref="SetContact"/>);
+/// Friction is a Coulomb coefficient per material pair (geometric mean). Contacts are springs (<see cref="SetContact"/>) with a skin:
+/// every contact is reported deeper by the skin, so bodies come to rest that far apart and a spring's sag stays inside it;
 /// Bepu has no restitution, so impacts are made to bounce here: after a step in which a contact stopped a body that
 /// approached faster than <see cref="BounceThreshold"/>, an impulse at the contact gives it e times the approach speed.
 /// </summary>
@@ -28,7 +29,7 @@ public sealed class BepuEngine : IRigidBodyEngine
     {
         public readonly List<PhysicsMaterial> Bodies = [], Statics = [];
         /// <summary>Contact spring frequency (Hz) and the fastest speed (m/s) at which overlapping bodies are pushed apart.</summary>
-        public float ContactHz = 120, MaximumRecoveryVelocity = 2;
+        public float ContactHz = 120, MaximumRecoveryVelocity = 2, Skin;
         /// <summary>Body pairs that never collide (a slider and its carrier).</summary>
         public readonly HashSet<(int, int)> NoContact = [];
         public readonly List<Impact> Impacts = [];
@@ -53,6 +54,8 @@ public sealed class BepuEngine : IRigidBodyEngine
             pairMaterial.FrictionCoefficient = (float)Math.Sqrt(a.Friction * b.Friction);
             pairMaterial.MaximumRecoveryVelocity = materials.MaximumRecoveryVelocity;
             pairMaterial.SpringSettings = new SpringSettings(materials.ContactHz, 1);
+            // The skin works on any shape (boxes, cylinders, hulls, meshes): it shifts the contact, not the geometry.
+            if (materials.Skin > 0) for (int i = 0; i < manifold.Count; i++) TManifold.GetDepthReference(ref manifold, i) += materials.Skin;
             if (manifold.Count > 0 && (materials.Bouncy(pair.A) || materials.Bouncy(pair.B))) {
                 // Contact offsets are from A's position and the normal points from B to A.
                 var simulation = materials.Simulation!;
@@ -99,7 +102,7 @@ public sealed class BepuEngine : IRigidBodyEngine
     public string Name => "BepuPhysics 2";
     public BepuEngine() { simulation = Simulation.Create(pool, new NarrowPhase(materials), new PoseIntegrator(gravity), new SolveDescription(8, 4)); }
     public void SetGravity(double x, double y, double z) => gravity.Value = new((float)x, (float)y, (float)z);
-    public void SetContact(double frequencyHz, double maximumRecoveryVelocity) { materials.ContactHz = (float)frequencyHz; materials.MaximumRecoveryVelocity = (float)maximumRecoveryVelocity; }
+    public void SetContact(double frequencyHz, double maximumRecoveryVelocity, double skin = 0) { materials.ContactHz = (float)frequencyHz; materials.MaximumRecoveryVelocity = (float)maximumRecoveryVelocity; materials.Skin = (float)skin; }
 
     static Quaternion Q(RigidPose p) => new((float)p.Qx, (float)p.Qy, (float)p.Qz, (float)p.Qw);
     TypedIndex AddShape(PhysicsShape s, out Quaternion shapeRotation, out Func<float, BodyInertia> inertia)

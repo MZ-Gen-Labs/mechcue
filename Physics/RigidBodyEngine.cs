@@ -42,8 +42,9 @@ public interface IRigidBodyEngine : IDisposable
 {
     string Name { get; }
     void SetGravity(double x, double y, double z);
-    /// <summary>Contact stiffness as a spring frequency (Hz; higher = less sinking, needs a finer time step) and the fastest speed (m/s) at which overlapping bodies are pushed apart.</summary>
-    void SetContact(double frequencyHz, double maximumRecoveryVelocity);
+    /// <summary>Contact stiffness as a spring frequency (Hz; higher = less sinking, needs a finer time step), the fastest speed (m/s) at which overlapping bodies
+    /// are pushed apart, and a skin (metres): bodies rest this far apart, so a spring's sag does not make the CAD parts overlap.</summary>
+    void SetContact(double frequencyHz, double maximumRecoveryVelocity, double skin = 0);
     void AddStatic(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material);
     /// <summary>A body moved by prescribed poses (arm links, fingers); it pushes dynamic bodies but is never pushed.</summary>
     void AddKinematic(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material);

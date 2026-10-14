@@ -16,6 +16,9 @@ public sealed class RigidBodySetup
     /// <summary>Contact stiffness as a spring frequency (Hz). A resting body sinks about g/(2π·f)²: 0.28 mm at 30 Hz, 0.02 mm at 120 Hz.
     /// At most twice <see cref="PhysicsHz"/> (the solver runs four substeps per physics step).</summary>
     public double ContactHz { get; set; } = 120;
+    /// <summary>Contact skin (mm): bodies come to rest this far apart, so the contact spring's sag (about 0.02 mm at 120 Hz) does not make
+    /// the CAD parts overlap (Solid Edge reports any overlap as interference). 0..5 mm; keep it above the sag.</summary>
+    public double ContactSkinMm { get; set; } = 0.05;
     /// <summary>Close the fingers with a limited force (N per finger) instead of moving them exactly to the chart values. Null = position-driven
     /// (the squeeze then comes from how far the chart closes the fingers into the workpiece). With a force, the finger axes' values are targets:
     /// a finger stops at the workpiece and presses with at most this force.</summary>

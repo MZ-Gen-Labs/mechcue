@@ -6,6 +6,9 @@ public static partial class SelfTest
 {
     static void TestPlaybackSafety()
     {
+        // Sliding contacts are not bisected: touching at both ends while moving in both halves; separating or stopping still refines.
+        if(!MotionBoundMath.SlidingContact(0,0,0,.01,.5,.5)||MotionBoundMath.SlidingContact(0,.02,0,.01,.5,.5)||MotionBoundMath.SlidingContact(0,0,0,.01,.5,0)||MotionBoundMath.SlidingContact(0,0,1,.01,0,.5))
+            throw new Exception("Sliding contact detection");
         if(MotionBoundMath.ClearanceLowerBound(0,0,0,.01,true)!=0 || MotionBoundMath.ClearanceLowerBound(0,0,.1,.01,true)>=0 || MotionBoundMath.ClearanceLowerBound(0,0,0,.01,false)>=0)
             throw new Exception("Only unchanged saved native-clear pairs may retain a zero clearance bound");
         var doc = new FakeCollisionDocument { ForcedStatus = 1 };

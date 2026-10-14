@@ -33,6 +33,7 @@ public static class ConceptRigidBodySimulator
         if (!(setup.PreSettleSeconds >= 0 && setup.PreSettleSeconds <= 10)) throw new ArgumentException("PreSettleSeconds must be 0..10.");
         if (!(setup.Restitution >= 0 && setup.Restitution <= 1)) throw new ArgumentException("Restitution must be 0..1.");
         if (!(setup.ContactHz >= 10 && setup.ContactHz <= Math.Min(1000, 2 * setup.PhysicsHz))) throw new ArgumentException($"ContactHz must be 10..{Math.Min(1000, 2 * setup.PhysicsHz):0} (at most twice PhysicsHz).");
+        if (!(setup.ContactSkinMm >= 0 && setup.ContactSkinMm <= 5)) throw new ArgumentException("ContactSkinMm must be 0..5.");
         if (setup.GripForceN is double grip && !(grip > 0 && grip <= 10000)) throw new ArgumentException("GripForceN must be in (0, 10000] N, or null for position-driven fingers.");
         // Force-driven fingers: the bodies on the grip axes slide on the body that carries those axes (the hand).
         var gripAxes = setup.GripForceN == null ? [] : model.Axes.Where(a => setup.GripAxes.Contains(a.Id)).ToList();
@@ -68,7 +69,7 @@ public static class ConceptRigidBodySimulator
         result.Engine = engine.Name;
         double gl = Math.Sqrt(setup.Gravity.Sum(v => v * v));
         engine.SetGravity(setup.Gravity[0] / gl * setup.GravityMps2, setup.Gravity[1] / gl * setup.GravityMps2, setup.Gravity[2] / gl * setup.GravityMps2);
-        engine.SetContact(setup.ContactHz, 2);
+        engine.SetContact(setup.ContactHz, 2, setup.ContactSkinMm / 1000);
         var start = BodyFrames(0); var kinematic = new List<string>();
         foreach (var b in model.Bodies.Where(b => !fingerAxis.ContainsKey(b.Id))) {
             double mu = setup.Friction.TryGetValue(b.Id, out var f) ? f : b.Id == work.Id ? setup.WorkpieceFriction : b.Parent == "" ? setup.SupportFriction : setup.ArmFriction;
