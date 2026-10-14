@@ -33,5 +33,11 @@ public static partial class SelfTest
         var settings = new DocumentSettings { Concept = concept, Tracks = tracks.Select(t => new SavedTrack { Track = t }).ToList(), Version = 2 };
         var back = System.Text.Json.JsonSerializer.Deserialize<DocumentSettings>(settings.Json())!;
         Check(back.Tracks.Count(t => t.Track.Derived) == 6 && back.Concept!.Physics!.Setup.WorkpieceFriction == 0.9 && back.Concept.Physics.ComputedHash == hash, "derived flag and physics settings round-trip");
+        // Moving the concept settings to the detailed assembly keeps the physics settings and the derived flag.
+        foreach (var track in tracks) track.Points = [new(0, model.Values[track.Name]), new(2, model.Values[track.Name])];
+        concept.Physics.Auto = false;
+        var migrated = Bridge.BuildConceptMigration(settings.Json(), ConceptMachine.Create("arm5p", 500, 300, 300), false);
+        Check(migrated.Concept!.Physics is { Auto: false, ComputedHash: not null } p && p.Setup.WorkpieceFriction == 0.9 && p.ComputedHash == concept.Physics.ComputedHash
+            && migrated.Tracks.Count(t => t.Track.Derived) == 6, "migration keeps physics settings and physics tracks");
     }
 }

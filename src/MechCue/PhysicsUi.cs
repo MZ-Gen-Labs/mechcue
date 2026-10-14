@@ -13,6 +13,8 @@ public partial class MainForm
     readonly Button physicsButton = new() { AutoSize = true, Height = 27, Visible = false };
     readonly CheckBox physicsAuto = new() { AutoSize = true, Visible = false };
     readonly Label physicsStatus = new() { AutoSize = true, Visible = false, Margin = new Padding(6, 6, 0, 0) };
+    /// <summary>The engine call; the UI tests replace it so they do not need the physics calculator.</summary>
+    internal Func<ConceptMachine, RigidBodySetup, Dictionary<string, List<JointPoint>>, RigidBodyResult> physicsRunner = (m, s, j) => PhysicsProcess.Run(m, s, j);
     int physicsGeneration;
     bool physicsBusy, updatingPhysicsControls;
 
@@ -77,7 +79,7 @@ public partial class MainForm
         string hash = PhysicsHashNow(c); if (hash == c.Physics?.ComputedHash) return;
         var (setup, joints) = PhysicsTracks.Inputs(c, TrackMap());
         int generation = ++physicsGeneration; physicsBusy = true; RefreshPhysicsControls(); RigidBodyResult? result = null; Exception? failure = null;
-        try { var model = c.Model; result = await Task.Run(() => PhysicsProcess.Run(model, setup, joints)); } catch (Exception ex) { failure = ex; }
+        try { var model = c.Model; result = await Task.Run(() => physicsRunner(model, setup, joints)); } catch (Exception ex) { failure = ex; }
         physicsBusy = false;
         if (IsDisposed) return;
         if (failure != null) { status.Text = PatternText("物理の計算に失敗しました：", "Physics failed: ") + failure.Message; RefreshPhysicsControls(); return; }
@@ -91,7 +93,7 @@ public partial class MainForm
         var c = PhysicsConcept() ?? throw new InvalidOperationException(PatternText("この概略モデルには物理トラックがありません（arm5pが対象です）。", "This concept has no physics tracks (arm5p only)."));
         physicsTimer.Stop(); physicsGeneration++;
         string hash = PhysicsHashNow(c); var (setup, joints) = PhysicsTracks.Inputs(c, TrackMap());
-        var result = PhysicsProcess.Run(c.Model, setup, joints);
+        var result = physicsRunner(c.Model, setup, joints);
         return ApplyPhysics(c, result, hash);
     }
 
