@@ -298,4 +298,4 @@ Solid Edge起動・状態・安全な終了、アドイン経由のMechCue接続
 - 計算は別プロセスの`MechCue.Physics.exe`で行うため、計算が異常終了してもMechCueとSolid Edgeは止まりません。
 - 旧ツール`solidedge_simulate_concept_physics`（`arm5`向けの幾何学的な計算、摩擦・転倒なし）は0.3.3-alpha.03で廃止しました。`arm5p`と`solidedge_simulate_concept_rigid_body`を使ってください。
 
-衝突形状は構想モデルの箱と円柱だけで、摩擦・反発は近似です。CADの実形状での接触解析ではありません。
+0.3.3-alpha.04から、接触の硬さ（`contactHz`、既定120 Hz、静止時の沈み込み約0.02 mm）、力で閉じる指（`gripForceN`）、反発係数どおりの跳ね返り（`restitution`）を`physicsJson`／`setupJson`で指定できます。衝突形状は構想モデルの箱と円柱だけで、CADの実形状での接触解析ではありません。

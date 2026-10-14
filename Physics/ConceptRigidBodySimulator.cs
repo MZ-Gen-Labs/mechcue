@@ -31,6 +31,16 @@ public static class ConceptRigidBodySimulator
         if (!(setup.OutputStepSeconds >= 0.005 && setup.OutputStepSeconds <= 1)) throw new ArgumentException("OutputStepSeconds must be 0.005..1.");
         if (!(setup.PhysicsHz >= 30 && setup.PhysicsHz <= 2000)) throw new ArgumentException("PhysicsHz must be 30..2000.");
         if (!(setup.PreSettleSeconds >= 0 && setup.PreSettleSeconds <= 10)) throw new ArgumentException("PreSettleSeconds must be 0..10.");
+        if (!(setup.Restitution >= 0 && setup.Restitution <= 1)) throw new ArgumentException("Restitution must be 0..1.");
+        if (!(setup.ContactHz >= 10 && setup.ContactHz <= Math.Min(1000, 2 * setup.PhysicsHz))) throw new ArgumentException($"ContactHz must be 10..{Math.Min(1000, 2 * setup.PhysicsHz):0} (at most twice PhysicsHz).");
+        if (setup.GripForceN is double grip && !(grip > 0 && grip <= 10000)) throw new ArgumentException("GripForceN must be in (0, 10000] N, or null for position-driven fingers.");
+        // Force-driven fingers: the bodies on the grip axes slide on the body that carries those axes (the hand).
+        var gripAxes = setup.GripForceN == null ? [] : model.Axes.Where(a => setup.GripAxes.Contains(a.Id)).ToList();
+        foreach (var axis in gripAxes) if (axis.Kind != "linear") throw new ArgumentException("Grip axis must be linear: " + axis.Id);
+        if (setup.GripForceN != null && gripAxes.Count == 0) throw new ArgumentException("GripForceN needs finger axes (GripAxes) in the model: " + string.Join(", ", setup.GripAxes));
+        var fingerAxis = model.Bodies.Where(b => gripAxes.Any(a => a.Id == b.Parent)).ToDictionary(b => b.Id, b => gripAxes.Single(a => a.Id == b.Parent));
+        var carrierOf = fingerAxis.ToDictionary(p => p.Key, p => model.Bodies.FirstOrDefault(b => b.Parent == p.Value.Parent && b.Parent != "")?.Id
+            ?? throw new ArgumentException($"No body moves with the finger axis {p.Value.Id}'s parent to carry the finger {p.Key}."));
         foreach (var key in joints.Keys) if (!model.Axes.Any(a => a.Id == key) || freeAxes.Contains(key)) throw new ArgumentException("Trajectory for an unknown or workpiece axis: " + key);
         foreach (var points in joints.Values)
             if (points.Count == 0 || points.Any(p => !double.IsFinite(p.Time) || !double.IsFinite(p.Value) || p.Time < 0) || points.Zip(points.Skip(1)).Any(p => p.Second.Time <= p.First.Time)) throw new ArgumentException("Trajectories need strictly increasing nonnegative times.");
@@ -58,8 +68,9 @@ public static class ConceptRigidBodySimulator
         result.Engine = engine.Name;
         double gl = Math.Sqrt(setup.Gravity.Sum(v => v * v));
         engine.SetGravity(setup.Gravity[0] / gl * setup.GravityMps2, setup.Gravity[1] / gl * setup.GravityMps2, setup.Gravity[2] / gl * setup.GravityMps2);
+        engine.SetContact(setup.ContactHz, 2);
         var start = BodyFrames(0); var kinematic = new List<string>();
-        foreach (var b in model.Bodies) {
+        foreach (var b in model.Bodies.Where(b => !fingerAxis.ContainsKey(b.Id))) {
             double mu = setup.Friction.TryGetValue(b.Id, out var f) ? f : b.Id == work.Id ? setup.WorkpieceFriction : b.Parent == "" ? setup.SupportFriction : setup.ArmFriction;
             var material = new PhysicsMaterial(mu, b.Id == work.Id ? setup.Restitution : 0);
             var pose = RigidPose.FromMatrix(start[b.Id]);
@@ -67,12 +78,30 @@ public static class ConceptRigidBodySimulator
             else if (b.Parent == "") engine.AddStatic(b.Id, ShapeOf(b), pose, material);
             else { engine.AddKinematic(b.Id, ShapeOf(b), pose, material); kinematic.Add(b.Id); }
         }
+        double AxisValue(ConceptAxis a, double t) => joints.TryGetValue(a.Id, out var p) ? Lerp(p, t) : model.Values[a.Id];
+        var startAxes = model.AxisPoses(model.Axes.ToDictionary(a => a.Id, a => AxisValue(a, 0)));
+        foreach (var (id, axis) in fingerAxis) {
+            // The finger's slide direction in the world: the axis direction in its parent frame (column of the rotation).
+            var m = startAxes[axis.Parent]; int n = axis.Direction == "X" ? 0 : axis.Direction == "Y" ? 1 : 2;
+            var b = model.Bodies.Single(x => x.Id == id);
+            double mu = setup.Friction.TryGetValue(id, out var f) ? f : setup.ArmFriction;
+            // Finger mass like the workpiece's: the contact springs are mass-scaled, so a light finger would sink into the workpiece under force.
+            engine.AddSlider(id, ShapeOf(b), RigidPose.FromMatrix(start[id]), new PhysicsMaterial(mu), setup.WorkpieceMassKg, carrierOf[id], (m[n * 4], m[n * 4 + 1], m[n * 4 + 2]), setup.GripForceN!.Value);
+        }
+        var lag = fingerAxis.Keys.ToDictionary(id => id, _ => (Max: 0.0, Since: -1.0));
         if (setup.FloorZMm is double floorZ) engine.AddStatic("floor-plane", new(PhysicsShapeKind.Box, 40, 40, 0.2), RigidPose.Identity with { Z = floorZ / 1000 - 0.1 }, new(setup.SupportFriction));
         void Step(double timeAfterStep)
         {
             var frames = BodyFrames(timeAfterStep);
             foreach (var id in kinematic) engine.SetKinematicTarget(id, RigidPose.FromMatrix(frames[id]));
+            foreach (var (id, axis) in fingerAxis) engine.SetSliderTarget(id, (AxisValue(axis, timeAfterStep) - AxisValue(axis, 0)) / 1000);
             engine.Step(dt);
+            foreach (var id in fingerAxis.Keys) {
+                // How far a force-driven finger is from its chart position (it stops at the workpiece).
+                var p = engine.GetPose(id); var goal = frames[id];
+                double gap = 1000 * Math.Sqrt(Math.Pow(p.X - goal[12], 2) + Math.Pow(p.Y - goal[13], 2) + Math.Pow(p.Z - goal[14], 2));
+                var (max, since) = lag[id]; lag[id] = (Math.Max(max, gap), since < 0 && gap > 2 ? timeAfterStep : since);
+            }
         }
         for (int i = 0, n = (int)Math.Round(setup.PreSettleSeconds / dt); i < n; i++) Step(0);
 
@@ -106,6 +135,8 @@ public static class ConceptRigidBodySimulator
             samples.Add((t, Record(t)));
         }
         result.MaxTiltDegrees = maxTilt; result.Samples = samples.Count;
+        foreach (var (id, (max, since)) in lag) if (max > 2)
+            result.Events.Add(new() { Time = Math.Max(0, since), Type = "finger-stopped", Detail = $"{id} stopped up to {max:0.#} mm short of its chart position (it presses with at most {setup.GripForceN:0.#} N); the CAD playback shows the chart position" });
         var final = engine.GetPose(work.Id);
         if (final.Z < home.Z - 0.4) result.Warnings.Add("The workpiece ended more than 400 mm below its start (it fell off the table).");
         double finalTilt = Math.Acos(Math.Clamp(final.ToMatrix()[10], -1, 1)) * 180 / Math.PI;
