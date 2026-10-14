@@ -7,6 +7,8 @@ public class Track
     public string Name { get; set; } = "軸";
     public string Kind { get; set; } = "距離拘束";
     public string Axis { get; set; } = "X";
+    /// <summary>A result computed from other tracks (the workpiece's physics axes): shown apart, read-only, recomputed on change.</summary>
+    public bool Derived { get; set; }
     public List<KeyPoint> Points { get; set; } = [new(0, 0), new(2, 100), new(4, 0)];
     public void MovePoint(int index, double time, double value, double end)
     {

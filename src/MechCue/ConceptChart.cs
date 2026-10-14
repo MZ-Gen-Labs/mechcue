@@ -1,10 +1,11 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 namespace MechCue;
 public sealed class SavedConcept
 {
     public ConceptMachine Model { get; set; } = new();
     public Dictionary<string,Guid> Tracks { get; set; } = [];
     public Dictionary<string,double> Baseline { get; set; } = [];
+    public MechCue.Physics.ConceptPhysicsSettings? Physics { get; set; }
 }
 public sealed partial class Bridge
 {
@@ -131,6 +132,6 @@ public partial class MainForm
         var added=bridge.ImportConcept(path,tracks);foreach(var t in added)if(!tracks.Contains(t))tracks.Add(t);
         if (unboundTracks == "hide") foreach (var t in tracks)
             if (!bridge.IsConcept(t) && bridge.BoundLabel(t) == null && bridge.PendingLabel(t) == null) plot.Hidden.Add(t);
-        ClearEditHistory();RefreshTracks(tracks.IndexOf(added[0]));MarkDocumentSettingsChanged();status.Text="概略軸を取り込みました。現在値で初期化し、反映はオフです。";
+        MarkPhysicsTracks();ClearEditHistory();RefreshTracks(tracks.IndexOf(added[0]));MarkDocumentSettingsChanged();status.Text="概略軸を取り込みました。現在値で初期化し、反映はオフです。";
     }
 }

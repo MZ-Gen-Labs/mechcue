@@ -220,6 +220,7 @@ public partial class MainForm
             }
             return AiState();
         }
+        if(method is "set_physics" or "recompute_physics")return HandlePhysics(args,method);
         if(method=="import_concept"){if(!bridge.Connected)throw new InvalidOperationException("Connect MechCue to the concept assembly before importing axes.");ImportConceptAxes(args.GetProperty("manifestPath").GetString()!,args.TryGetProperty("unboundTracks",out var unbound)?unbound.GetString()!:"preserve");return AiState();}
         if(method=="save_document"){
             var expected=args.GetProperty("expectedDocument").GetString();
@@ -276,7 +277,7 @@ public partial class MainForm
             case "resample":
                 double end=Number("endTime"),step=Number("step");
                 if(!double.IsFinite(end)||!double.IsFinite(step)||end<=0||end>100000||step<=0||step>end||Math.Ceiling(end/step)>10000 || (Math.Ceiling(end/step)+1)*tracks.Count>100000)throw new ArgumentException("Invalid range; at most 10001 time points per track and 100000 total points");
-                foreach(var t in tracks)
+                foreach(var t in tracks.Where(t=>!t.Derived))
                 {
                     t.Validate();int segment=0;
                     double At(double position)
@@ -292,6 +293,7 @@ public partial class MainForm
                 }break;
             default:throw new InvalidOperationException("Unknown MechCue command: "+method);
         }
+        if(changes.Keys.FirstOrDefault(t=>t.Derived) is {} derivedTrack)throw new InvalidOperationException($"Track {derivedTrack.Name} is a physics result and cannot be edited; edit the arm and finger keyframes (mechcue_set_physics / mechcue_recompute_physics control the computation).");
         foreach(var points in changes.Values){new Track{Points=points}.Validate();if(points[^1].Time>100000)throw new ArgumentOutOfRangeException("time");}
         foreach(var change in changes)bridge.ValidateConceptPoints(change.Key,change.Value);
         RecordHistory(changes.Keys.Select(t=>(t,t.Points.ToList())).ToList());
@@ -300,7 +302,7 @@ public partial class MainForm
         return AiState();
     }
     object AiState()=>new {
-        activePatternId=activePattern,patternName=patterns.FirstOrDefault(p=>p.Id==activePattern)?.Name,sessionId=aiEndpoint?.Session.Id,connected=bridge.Connected,playing=timer.Enabled,applyToCad=live.Checked,stopOnInterference=collision.Checked,subdivideInspection=subdivideInspection.Checked,requiredClearanceMm=requiredMotionClearanceMm,numericalMarginMm=bridge.InspectionPolicy.NumericalMarginMm,inspectionRunning=motionInspectionBusy,autoApplyOnPlay=autoApply.Checked,time=(double)time.Value,status=status.Text,
-        tracks=tracks.Select((t,i)=>new {number=i+1,id=t.Id,name=t.Name,kind=t.Kind,axis=t.Axis,hidden=plot.Hidden.Contains(t),unit=Plot.IsAngle(t)?"deg":"mm",target=bridge.BoundLabel(t) ?? bridge.PendingLabel(t),points=t.Points.Select(p=>new{time=p.Time,value=p.Value}).ToArray()}).ToArray()
+        activePatternId=activePattern,patternName=patterns.FirstOrDefault(p=>p.Id==activePattern)?.Name,sessionId=aiEndpoint?.Session.Id,physics=PhysicsState(),connected=bridge.Connected,playing=timer.Enabled,applyToCad=live.Checked,stopOnInterference=collision.Checked,subdivideInspection=subdivideInspection.Checked,requiredClearanceMm=requiredMotionClearanceMm,numericalMarginMm=bridge.InspectionPolicy.NumericalMarginMm,inspectionRunning=motionInspectionBusy,autoApplyOnPlay=autoApply.Checked,time=(double)time.Value,status=status.Text,
+        tracks=tracks.Select((t,i)=>new {number=i+1,id=t.Id,name=t.Name,kind=t.Kind,axis=t.Axis,hidden=plot.Hidden.Contains(t),unit=Plot.IsAngle(t)?"deg":"mm",target=bridge.BoundLabel(t) ?? bridge.PendingLabel(t),derived=t.Derived,points=t.Points.Select(p=>new{time=p.Time,value=p.Value}).ToArray()}).ToArray()
     };
 }

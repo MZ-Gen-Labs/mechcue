@@ -2,15 +2,6 @@
   "version": 1,
   "dependencies": {
     "net8.0-windows7.0": {
-      "BepuPhysics": {
-        "type": "Direct",
-        "requested": "[2.5.0-beta.33, )",
-        "resolved": "2.5.0-beta.33",
-        "contentHash": "KYcIpghxBW7xQ5P8EJTcOIRaiufh6xFvYvKu8p/aGRe6QCGZYES39UQwF4KHdWYCBJ17bh0jsUAKhzGxqEgNDg==",
-        "dependencies": {
-          "BepuUtilities": "2.5.0-beta.33"
-        }
-      },
       "Microsoft.Extensions.Hosting": {
         "type": "Direct",
         "requested": "[10.0.10, )",
@@ -50,6 +41,14 @@
           "Microsoft.Extensions.Caching.Abstractions": "10.0.10",
           "Microsoft.Extensions.Hosting.Abstractions": "10.0.10",
           "ModelContextProtocol.Core": "[2.2.0]"
+        }
+      },
+      "BepuPhysics": {
+        "type": "Transitive",
+        "resolved": "2.5.0-beta.33",
+        "contentHash": "KYcIpghxBW7xQ5P8EJTcOIRaiufh6xFvYvKu8p/aGRe6QCGZYES39UQwF4KHdWYCBJ17bh0jsUAKhzGxqEgNDg==",
+        "dependencies": {
+          "BepuUtilities": "2.5.0-beta.33"
         }
       },
       "BepuUtilities": {
@@ -374,7 +373,10 @@
         }
       },
       "mechcue": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "BepuPhysics": "[2.5.0-beta.33, )"
+        }
       }
     }
   }

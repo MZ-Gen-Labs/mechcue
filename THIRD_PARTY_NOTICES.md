@@ -23,7 +23,7 @@ Copyright Model Context Protocol a Series of LF Projects, LLC.
 
 The MCP physics tools use BepuPhysics v2 (Apache-2.0), a pure C# rigid-body engine:
 https://github.com/bepu/bepuphysics2
-Copyright Ross Nordby and contributors. It is used by the separate MCP process only.
+Copyright Ross Nordby and contributors. It is also used inside the MechCue add-in and the standalone app, for the physics tracks of the arm5p chart (BepuPhysics.dll and BepuUtilities.dll are installed beside MechCue.dll).
 
 Its Microsoft .NET support packages use the MIT license. Dependency versions
 and hashes are pinned in Mcp/packages.lock.json. The MCP distribution includes
