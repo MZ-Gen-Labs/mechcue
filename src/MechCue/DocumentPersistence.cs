@@ -189,6 +189,7 @@ public partial class MainForm
         documentSettingsDirty = true;
         try { bridge.MarkSettingsDirty(); }
         catch (Exception ex) { System.Diagnostics.Trace.WriteLine(ex); }
+        SchedulePhysics();
     }
     void ConnectDocument()
     {
@@ -205,7 +206,7 @@ public partial class MainForm
             if (hostedDocumentWindow) ShutdownFromHost();
         }, () => { if (hostedDocumentWindow && !IsDisposed) ShutdownFromHost(); });
         documentReady = true; documentSettingsDirty = false;
-        PopulateTargets();
+        PopulateTargets(); MarkPhysicsTracks(); SchedulePhysics();
         if (json == null) status.Text = "接続：" + title + " / CAD保存で設定をアセンブリ内に保存できます。";
     }
     void RestoreDocumentSettings(DocumentSettings settings)

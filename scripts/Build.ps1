@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.3.3-alpha.01',
+    [string]$Version = '0.3.3-alpha.02',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -13,7 +13,7 @@ $taskRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskOutput = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $taskRoot "artifacts\$Version" }
 if (Test-Path -LiteralPath $taskOutput) { throw "Use a new output directory to avoid packaging stale files: $taskOutput" }
 $taskStandalone = Join-Path $taskOutput 'standalone'
-& dotnet publish (Join-Path $taskRoot 'MechCue.csproj') -c Release --self-contained false -p:PlatformTarget=x64 "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskStandalone
+& dotnet publish (Join-Path $taskRoot 'MechCue.csproj') -c Release --self-contained false -p:PlatformTarget=x64 -p:RestoreLockedMode=true "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskStandalone
 if ($LASTEXITCODE -ne 0) { throw 'Standalone build failed' }
 foreach ($taskCheck in @('--self-test','--smoke-test')) {
     $taskCheckLog = Join-Path $taskStandalone ($taskCheck.TrimStart('-') + '-stdout.txt')

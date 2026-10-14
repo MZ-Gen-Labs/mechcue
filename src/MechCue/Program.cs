@@ -223,6 +223,7 @@ public partial class MainForm : Form
         plot.EditStarting = index =>
         {
             bool ready = false;
+            if (tracks[index].Derived) { status.Text = PatternText("物理トラックは編集できません。腕・指のキーフレームを編集してください（物理の結果は自動で計算されます）。", "Physics tracks are computed and cannot be edited; edit the arm and finger keyframes instead."); return false; }
             Guard(() => { PausePlayback(); Commit(); trackList.SelectedIndex = index; pendingPlotEdit = [(Current, Current.Points.ToList())]; ready = true; });
             return ready;
         };
@@ -310,7 +311,7 @@ public partial class MainForm : Form
             foreach (var label in legend.Controls.OfType<Label>().ToArray()) label.Dispose();
             foreach (int n in plot.ShownIndices) {
                 int index = n;
-                var label = new Label { AutoSize = true, Text = $"━ {tracks[n].Name} [{(Plot.IsAngle(tracks[n]) ? "°" : "mm")}]", ForeColor = Plot.TrackColor(n), Margin = new Padding(8, 6, 8, 0), Cursor = Cursors.Hand };
+                var label = new Label { AutoSize = true, Text = $"{(tracks[n].Derived ? "┅" : "━")} {tracks[n].Name}{(tracks[n].Derived ? PatternText("（物理）", " (physics)") : "")} [{(Plot.IsAngle(tracks[n]) ? "°" : "mm")}]", ForeColor = Plot.TrackColor(n), Margin = new Padding(8, 6, 8, 0), Cursor = Cursors.Hand };
                 label.Click += (_, _) => trackList.SelectedIndex = index; legend.Controls.Add(label);
             }
         } finally { legend.ResumeLayout(true); }
@@ -319,9 +320,9 @@ public partial class MainForm : Form
     void LoadTrack(bool refreshTargets)
     {
         if (loading) return;
-        loading = true; var t = Current; name.Text = t.Name; kind.SelectedItem = t.Kind; axis.SelectedItem = t.Axis;
+        loading = true; var t = Current; name.Text = t.Name; grid.ReadOnly = t.Derived; name.ReadOnly = t.Derived; kind.SelectedItem = t.Kind; axis.SelectedItem = t.Axis;
         grid.Rows.Clear(); foreach (var p in t.Points) grid.Rows.Add(p.Time, p.Value);
-        loading = false; UpdateAxisHelp(); kind.Enabled = !bridge.IsConcept(Current); if(bridge.IsConcept(Current)) axis.Enabled=false; plot.Selected = trackList.SelectedIndex; RefreshLegend(); plot.UpdateViewport(); if (refreshTargets) Guard(PopulateTargets);
+        loading = false; RefreshPhysicsControls(); UpdateAxisHelp(); kind.Enabled = !bridge.IsConcept(Current); if(bridge.IsConcept(Current)) axis.Enabled=false; plot.Selected = trackList.SelectedIndex; RefreshLegend(); plot.UpdateViewport(); if (refreshTargets) Guard(PopulateTargets);
     }
     void PopulateTargets()
     {
@@ -625,12 +626,12 @@ partial class Plot : Control
             float Y(double y) => scale.Y(y);
             if (!Overlay)
             {
-                g.DrawString($"{t.Name}   {t.At(Time):0.###} {(IsAngle(t) ? "°" : "mm")}", Font, Brushes.DimGray, 65, top - 23);
+                g.DrawString($"{t.Name}{(t.Derived ? (UiText.IsJapanese ? "（物理）" : " (physics)") : "")}   {t.At(Time):0.###} {(IsAngle(t) ? "°" : "mm")}", Font, Brushes.DimGray, 65, top - 23);
                 Grid(scale);
                 g.DrawString($"{scale.Max:0.###}", Font, Brushes.Gray, 3, top);
                 g.DrawString($"{scale.Min:0.###}", Font, Brushes.Gray, 3, bottom - 12);
             }
-            using var pen = new Pen(TrackColor(n), n == Selected ? 3.5f : 1.5f);
+            using var pen = new Pen(TrackColor(n), n == Selected ? 3.5f : 1.5f) { DashStyle = t.Derived ? System.Drawing.Drawing2D.DashStyle.Dash : System.Drawing.Drawing2D.DashStyle.Solid };
             var clip = g.Save(); g.SetClip(new RectangleF(65, top, Math.Max(1, Width - 65 - scale.RightMargin), Math.Max(1, bottom - top)));
             // Keep one sample on each side so segments crossing the viewport
             // boundary render correctly, without drawing the entire dense chart.
@@ -645,7 +646,7 @@ partial class Plot : Control
                 int first = originalGroup == null ? dragPoint : groupFirst, last = originalGroup == null ? dragPoint + 1 : groupLast;
                 g.DrawLines(selectedPen, t.Points.Skip(first).Take(last - first + 1).Select(p => new PointF(X(p.Time), Y(p.Value))).ToArray());
             }
-            if (!Overlay || n == Selected)
+            if ((!Overlay || n == Selected) && !t.Derived)
                 foreach (var p in t.Points.Where(p => p.Time >= ViewStart && p.Time <= ViewEnd)) { g.FillEllipse(Brushes.White, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); g.DrawEllipse(pen, X(p.Time) - 6, Y(p.Value) - 6, 12, 12); }
             if (dragTrack == n && dragPoint >= 0)
             {

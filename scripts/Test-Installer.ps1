@@ -4,7 +4,7 @@ $taskSetup = Get-Item -LiteralPath $Path
 $taskManifest = Get-Content -LiteralPath ($taskSetup.FullName + '.manifest.json') -Raw | ConvertFrom-Json
 if ($taskManifest.Format -ne 'Inno Setup') { throw 'Unexpected installer format' }
 if ((Get-FileHash -LiteralPath $taskSetup.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $taskManifest.SetupSHA256) { throw 'Setup checksum differs from build record' }
-$taskRequired = @('MechCue.AddIn.comhost.dll','MechCue.AddIn.dll','MechCue.AddIn.deps.json','MechCue.AddIn.runtimeconfig.json','MechCue.dll','MechCue.runtimeconfig.json','MechCue.deps.json')
+$taskRequired = @('MechCue.AddIn.comhost.dll','MechCue.AddIn.dll','MechCue.AddIn.deps.json','MechCue.AddIn.runtimeconfig.json','MechCue.dll','MechCue.runtimeconfig.json','MechCue.deps.json','BepuPhysics.dll','BepuUtilities.dll')
 foreach ($taskName in $taskRequired) { if ($taskName -notin $taskManifest.Payload.Name) { throw "Missing compiler input: $taskName" } }
 if (!$taskManifest.StandaloneComponent -or 'MechCue.exe' -notin $taskManifest.Payload.Name) { throw 'Setup lacks the optional standalone component' }
 $taskScript = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Installer\MechCue.iss') -Raw) + (Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Installer\AddInOnlyDetection.iss') -Raw)
