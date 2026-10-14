@@ -2,7 +2,7 @@
 
 0.3.3-alpha.01〜03（剛体物理・物理トラック・計算の別プロセス化）の開発で残った課題の一覧。対応したら、ここから消すか「対応済み」に移し、[開発記録](MCP_033_DEVELOPMENT.md)に経緯を書く。
 
-最終更新：2026-10-15（0.3.3-alpha.03の実装時点）
+最終更新：2026-10-15（0.3.3-alpha.04に向けた課題の対応後）
 
 ## 作業の再開（2026-10-15時点の状態）
 
@@ -10,30 +10,25 @@
 
 - **リリース済み（Draft・Prerelease、公開しない）**：`v0.3.3-alpha.01`（`3e5300b`）、`v0.3.3-alpha.02`（`3d22449`）。どちらも4点の配布物とSHA256を確認済み。0.3.3-alpha.02はインストール後にアドイン版で確認済み。
 - **作業中**：ブランチ`codex/0.3.3-alpha.03`（`main`の`3d22449`から分岐、送信済み・PRは未作成）。内容は「物理計算を別プロセスへ」と、この課題一覧。ローカルの全体ビルド（`scripts/Build.ps1 -WithAddIn -WithMcp -Version 0.3.3-alpha.03`）、計算用プログラムの試験、MCPの各試験、独立版での実機確認（計算用プログラム経由の再計算、MechCue.exeにBepuPhysicsが読み込まれないこと）は済み。
-- **次の手順**：PR作成 → PRのCI → リベースマージ → `main`のCI → タグ`v0.3.3-alpha.03` → リリース用ワークフロー → 4点のSHA256確認 → 日本語のリリース本文（Draft・Prereleaseのまま）→ インストール後、アドイン版で物理の再計算（計算用プログラム経由）を確認。
+- **課題の対応（未リリース）**：ブランチ`codex/0.3.3-alpha.04`（`codex/0.3.3-alpha.03`の上、ローカルのみ・未送信）。優先度：高のうち3件と、構造の整理の2・4〜7を対応した（[開発記録](MCP_033_DEVELOPMENT.md)の「課題の対応」）。全体ビルドの検査は成功、実機での確認はしていない。版の既定値は0.3.3-alpha.03のまま。
+- **次の手順**：alpha.03のPR作成 → PRのCI → リベースマージ → `main`のCI → タグ`v0.3.3-alpha.03` → リリース用ワークフロー → 4点のSHA256確認 → 日本語のリリース本文（Draft・Prereleaseのまま）→ インストール後、アドイン版で物理の再計算（計算用プログラム経由）を確認。
 - **確認の手がかり**：計算用プログラムは`MechCue.Physics.exe --self-test`、本体は`MechCue.exe --self-test`。実機確認用の`arm5p`アセンブリは`output/Arm5pPhysics_20261014/model/concept.asm`（パターン「摩擦把持と落下（Bepu）」、`output/`はコミット対象外）。経路検査は、この課題一覧の「経路検査の許容接触」にある11組を許容接触にして実行すると`clear`になる。
 
 ## 優先度：高
 
 | 課題 | 内容 | 関係するファイル |
 |---|---|---|
-| 物理トラックの画面テスト | 自動再計算の待ち時間（約0.7秒）、物理トラックの読み取り専用（ドラッグ・表・名前）、「物理：要再計算」の表示、手動の再計算ボタンに、自動テストがない。現在はロジック（指紋・印・保存）のテストと、手動・実機の確認だけ。 | `src/MechCue/PhysicsUi.cs`、`src/MechCue/Physics/PhysicsTracksTests.cs` |
-| ドキュメントの抜け | トップの`README.md`と`Mcp/README.md`に、`arm5p`・物理トラック・`solidedge_simulate_concept_rigid_body`・`mechcue_set_physics`・`mechcue_recompute_physics`の記載がない。正式版の前に`docs/releases/0.3.3.md`も必要。 | `README.md`、`Mcp/README.md`、`docs/releases/` |
-| 概略モデルの移行で物理の設定が失われる | 構想モデルから詳細アセンブリへ設定を移す処理が、`SavedConcept.Physics`（自動のオン・オフ、質量・摩擦などの設定、指紋）をコピーしない。物理トラックの印はトラックと一緒に移る。 | `src/MechCue/ConceptMigration.cs:49` |
 | アドイン版での別プロセス計算の確認 | 0.3.3-alpha.03では、アドイン版がSolid Edgeの中から`MechCue.Physics.exe`を起動する。独立版では確認済みだが、アドイン版はインストール後に確認が必要。 | `src/MechCue/Physics/PhysicsProcess.cs` |
+
+対応済み（`codex/0.3.3-alpha.04`）：物理トラックの画面テスト（`src/MechCue/PhysicsUiTests.cs`）、ドキュメントの抜け（`README.md`、`Mcp/README.md`、`docs/releases/0.3.3.md`の下書き）、概略モデルの移行で物理の設定が失われる不具合。
 
 ## 構造の整理
 
-構造の再確認（2026-10-15）で決めた優先順位のうち、未着手のもの。1の「物理計算の置き場所」は0.3.3-alpha.03で対応した（[開発記録](MCP_033_DEVELOPMENT.md)の「物理計算を別プロセスへ」）。
+構造の再確認（2026-10-15）で決めた優先順位のうち、未着手のもの。1は0.3.3-alpha.03で、2・4〜7は`codex/0.3.3-alpha.04`で対応した（[開発記録](MCP_033_DEVELOPMENT.md)）。
 
 | 順 | 課題 | 内容 |
 |---|---|---|
-| 2 | 物理トラックの画面テスト | 上の「優先度：高」と同じ。 |
-| 3 | 古い幾何学的な物理計算の整理 | `solidedge_simulate_concept_physics`（`arm5`用、摩擦・転倒なし）が、剛体物理とは別に残っている。使っているのはこのMCPツールとそのテストだけ。廃止するか、剛体物理へ統合する。（`src/MechCue/ConceptPhysics.cs`） |
-| 4 | 構想モデルの種類ごとの定義 | `ConceptMachine.Create`が`if (type ...)`の分岐で全種類を作り、`arm5p`は`arm5`の分岐の中に条件で足してある。次のロボット形式を足す前に、種類ごとの定義に分ける。（`src/MechCue/ConceptMachine.cs`） |
-| 5 | 画面とCADの境界 | 画面側の4ファイルが、`Bridge`を通さずにSolid EdgeのCOMを直接リフレクションで呼んでいる。（`AiEndpoint.cs`、`ConceptChart.cs`、`MotionInspectionUi.cs`、`PlaybackSafety.cs`） |
-| 6 | AIコマンドの振り分け | `HandleAi`（約143行）が、文字列のコマンド名を`if`と`switch`で振り分けている。コマンドごとの表などに分ける。（`src/MechCue/AiEndpoint.cs`） |
-| 7 | 詰め込まれたコードの整形 | 図面・形状編集の処理に、1行200文字を超えるコードが多い（`SolidEdgeDrawing.cs`に46行、`SolidEdgeFeatureEditing.cs`に38行、最長824文字）。MCPの`Description`の長い行は、AI向けの説明文なので対象外。 |
+| 3 | 古い幾何学的な物理計算の整理 | `solidedge_simulate_concept_physics`（`arm5`用、摩擦・転倒なし）が、剛体物理とは別に残っている。使っているのはこのMCPツールとそのテストだけ。廃止するか、剛体物理へ統合する。剛体物理は指の軸がある`arm5p`が前提なので、廃止すると`arm5`でワークの動きを計算する手段がなくなる。（`src/MechCue/ConceptPhysics.cs`） |
 
 ## 物理機能
 
