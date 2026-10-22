@@ -79,6 +79,7 @@ Dated development records and release notes describe their original versions and
 | MechCue 0.3.0-alpha.05 | [日本語](releases/0.3.0-alpha.05.md) | [English](releases/0.3.0-alpha.05.en.md) |
 | MechCue 0.3.0 | [日本語](releases/0.3.0.md) | [English](releases/0.3.0.en.md) |
 | MechCue 0.3.2 | [日本語](releases/0.3.2.md) | [English](releases/0.3.2.en.md) |
+| MechCue 0.3.3-alpha.05 | [日本語](releases/0.3.3-alpha.05.md) | [English](releases/0.3.3-alpha.05.en.md) |
 | MechCue 0.3.3 — draft | [日本語](releases/0.3.3.md) | [English](releases/0.3.3.en.md) |
 
 ## Maintaining translations

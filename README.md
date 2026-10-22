@@ -9,6 +9,8 @@ MechCue is a time-chart editor for Solid Edge 2026. Drag points and segments to 
 
 The released 0.3.2 series provides MCP control of Solid Edge, concept models built from dimensioned sketches (machine tools, Cartesian transfer systems and five-axis robot arms), drawings, 3D PMI and Simulation integration for single parts. It is intended for concept studies and motion checks.
 
+Latest development release: **0.3.3-alpha.05** (draft prerelease). See [changes and validation](docs/releases/0.3.3-alpha.05.en.md).
+
 ## Features
 
 - Overlay the selected track, selected and checked tracks, or all tracks, with separate distance and angle axes.
