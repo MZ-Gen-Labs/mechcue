@@ -3,7 +3,7 @@
 <!-- mechcue-docs-language -->
 [日本語](OPEN_ISSUES.md) | [English](OPEN_ISSUES.en.md) | [Documentation](INDEX.en.md)
 
-This is the project's dated work record, not a live query of GitHub release state. Header last updated 2026-10-15 during alpha.03 preparation; later entries include alpha.04 results. Move resolved items out of this list and record context in [development](MCP_033_DEVELOPMENT.en.md).
+This is the project's dated work record, not a live query of GitHub release state. Header last updated 2026-10-15 during alpha.03 preparation; later entries include alpha.04 results and 2026-10-23 development changes. Move resolved items out of this list and record context in [development](MCP_033_DEVELOPMENT.en.md).
 
 ## Resume context from 2026-10-15
 
@@ -23,8 +23,7 @@ No high-priority item remains in this record. Alpha.03 resolved installed add-in
 |---|---|
 | Beta engine | Recorded dependency is BepuPhysics 2.5.0-beta.33 (published 2026-10-11; latest at the record's 2026-10-15 check). Consider stable migration when appropriate and rerun calculator self-tests. Process isolation does not establish result accuracy |
 | Contact-skin native check | Default `contactSkinMm=.05` compensates .02 mm penetration, leaving roughly .03 mm gap. Installed path checking without excluding table/workpiece remained unverified |
-| Force-driven finger display | Physics fingers stop against the object, but CAD playback still draws commanded graph positions. Align commands to the surface or add actual-position output in future |
-| Collision geometry | Only concept boxes/cylinders; see real-assembly work below |
+| Collision geometry | In addition to boxes/cylinders, development code supports planar convex polyhedra from real assemblies. Curved, concave and compound shapes remain unsupported |
 | Engine selection | `IRigidBodyEngine` exists, but calculator implementation is fixed to Bepu; no user setting |
 | Allowed contacts | Eleven pairs used in alpha.02 path verification were not saved into the assembly |
 
@@ -32,4 +31,8 @@ Alpha.04 resolved the 2.4.0 multipoint-friction diagnosis, contact stiffness/pen
 
 ## Deferred request
 
-Arm5p implements the initial concept request for physical bodies/gripping/workpiece/gravity. Arbitrary real assemblies still need mesh/convex/compound collision conversion, face-based selection and mass/inertia from Solid Edge properties. Solid Edge Motion/DDM investigation was removed as unnecessary on 2026-10-15; development proceeds with rigid-body BepuPhysics.
+Development-code resolution on 2026-10-23 (installed checks are separate): actual force-stopped finger positions are output/saved apart from commands, applied in CAD playback/path inspection and overlaid as dashed graphs. Physics results and `physics.report` expose events/warnings and save them in CAD settings. Engine contact, app self-tests and mock-CAD UI tests cover this.
+
+Initial real-assembly support now captures top-level planar convex polyhedra, one free workpiece with fixed surroundings, CAD density/volume mass, uniform-density shape inertia and chart integration. Curved/concave/compound shapes, nesting, face-based gripping, captured mechanism movement and direct CAD inertia-tensor input remain unsupported. See [instructions and validation](CONVEX_PHYSICS.en.md).
+
+Solid Edge Motion/DDM investigation was removed as unnecessary on 2026-10-15; development proceeds with rigid-body BepuPhysics.

@@ -292,12 +292,16 @@ Solid Edge起動・状態・安全な終了、アドイン経由のMechCue接続
 
 ## 0.3.3 剛体物理（開発中）
 
+開発変更：`solidedge_capture_convex_physics` で実アセンブリの平面凸多面体を取り込めます。1個の自由ワークと固定した周囲部品、CAD材質からの質量取得、チャートでの計算・保存に対応します。曲面・凹形状・入れ子と、機構・グリッパーの動作推定は対象外です。[操作と検証](../docs/CONVEX_PHYSICS.md)。
+
 構想モデル`arm5p`（`solidedge_create_concept_machine`の`type="arm5p"`）は、`arm5`に指のスライド軸`F1`・`F2`（`F1`は負、`F2`は正の値で閉じる）と、ワークの自由物体軸`WX`・`WY`・`WZ`・`WRZ`・`WRY`・`WRX`を加えたものです。
 
 - `solidedge_simulate_concept_rigid_body(manifestPath, jointsJson, physicsJson)`：腕と指の関節キーフレームから、ワークの6軸のキーフレームを剛体物理（BepuPhysics）で計算します。Solid EdgeにもMechCue画面にも接続しません。`physicsJson`で重力方向・質量・摩擦・床の高さなどを指定できます。結果の`axisKeyframes`は確認用で、タイムチャートでは次の物理トラックが自動で計算します。
 - **物理トラック**：`arm5p`を取り込んだタイムチャートでは、ワークの6軸が物理の結果として扱われます（`mechcue_get_state`の各トラックの`derived=true`）。`mechcue_set_keyframe(s)`などで直接編集すると拒否されます。腕・指のキーフレームを編集してください。
 - 腕・指のキーフレームや物理の設定を変えると、約0.7秒後に自動で再計算します。状態は`mechcue_get_state`の`physics`（`available`・`auto`・`stale`・`busy`・`setup`）で確認できます。自動をオフにするには`mechcue_set_physics(auto=false)`、すぐに計算するには`mechcue_recompute_physics`を使います。
 - 物理の設定・計算結果・指紋はアセンブリに保存され、`mechcue_migrate_concept_settings`で詳細アセンブリへ移行しても保持されます。
+- 力で閉じる指は、編集する指令値と計算後の実位置を別に保持します。CAD再生・経路検査は実位置を使い、グラフには実位置を破線で重ねます。再計算の入力は元の指令値です。`physics.fingerAxisKeyframes`で実位置を取得できます。
+- 「物理の結果」から持ち上げ・静止・転倒・指の停止イベントと警告を確認できます。`physics.report`にも同じ結果を返し、CAD保存時に保持します。入力変更後の前回結果は「要再計算」と表示します。単独計算の`solidedge_simulate_concept_rigid_body`は`fingerAxisKeyframes`を追加で返します。
 - 計算は別プロセスの`MechCue.Physics.exe`で行うため、計算が異常終了してもMechCueとSolid Edgeは止まりません。
 - 旧ツール`solidedge_simulate_concept_physics`（`arm5`向けの幾何学的な計算、摩擦・転倒なし）は0.3.3-alpha.03で廃止しました。`arm5p`と`solidedge_simulate_concept_rigid_body`を使ってください。
 

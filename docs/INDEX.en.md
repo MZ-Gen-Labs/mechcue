@@ -46,6 +46,7 @@ Dated development records and release notes describe their original versions and
 | README | [日本語](../AddIn/Resources/README.ja.md) | [English](../AddIn/Resources/README.md) |
 | Contributing | [日本語](../CONTRIBUTING.md) | [English](../CONTRIBUTING.en.md) |
 | Coarse concept charts and compact inspection results — 2026-10-03 | [日本語](COARSE_MOTION_INSPECTION_IMPLEMENTATION_20261003.md) | [English](COARSE_MOTION_INSPECTION_IMPLEMENTATION_20261003.en.md) |
+| Physics for convex polyhedra from real assemblies | [日本語](CONVEX_PHYSICS.md) | [English](CONVEX_PHYSICS.en.md) |
 | Detailed-design MCP improvements — 2026-10-03 | [日本語](DETAIL_MCP_IMPROVEMENTS_20261003.md) | [English](DETAIL_MCP_IMPROVEMENTS_20261003.en.md) |
 | Mechanism editor design notes | [日本語](INTERFACE.md) | [English](INTERFACE.en.md) |
 | Development know-how | [日本語](KNOWHOW.md) | [English](KNOWHOW.en.md) |

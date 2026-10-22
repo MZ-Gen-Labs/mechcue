@@ -84,7 +84,7 @@ public sealed class BepuEngine : IRigidBodyEngine
         public void IntegrateVelocity(Vector<int> bodyIndices, Vector3Wide position, QuaternionWide orientation, BodyInertiaWide localInertia, Vector<int> integrationMask, int workerIndex, Vector<float> dt, ref BodyVelocityWide velocity)
             => velocity.Linear += gravityWide * dt;
     }
-    sealed record Entry(int Handle, bool IsStatic, Quaternion ShapeRotation, bool Kinematic);
+    sealed record Entry(int Handle, bool IsStatic, Quaternion ShapeRotation, bool Kinematic, Vector3 ShapeCenter);
     /// <summary>A force-limited slider: the drive constraint whose target is updated, and its description.</summary>
     sealed class Slider(ConstraintHandle drive, LinearAxisServo description) { public readonly ConstraintHandle Drive = drive; public LinearAxisServo Description = description; }
 
@@ -105,34 +105,41 @@ public sealed class BepuEngine : IRigidBodyEngine
     public void SetContact(double frequencyHz, double maximumRecoveryVelocity, double skin = 0) { materials.ContactHz = (float)frequencyHz; materials.MaximumRecoveryVelocity = (float)maximumRecoveryVelocity; materials.Skin = (float)skin; }
 
     static Quaternion Q(RigidPose p) => new((float)p.Qx, (float)p.Qy, (float)p.Qz, (float)p.Qw);
-    TypedIndex AddShape(PhysicsShape s, out Quaternion shapeRotation, out Func<float, BodyInertia> inertia)
+    TypedIndex AddShape(PhysicsShape s, out Quaternion shapeRotation, out Func<float, BodyInertia> inertia, out Vector3 center)
     {
+        center = Vector3.Zero;
+        if (s.Kind == PhysicsShapeKind.ConvexHull) {
+            ConvexGeometry.ValidateVertices(s.Vertices);
+            var vertices = s.Vertices!.Select(p => new Vector3((float)p[0], (float)p[1], (float)p[2])).ToArray();
+            var hull = new ConvexHull(vertices.AsSpan(), pool, out center);
+            shapeRotation = Quaternion.Identity; inertia = m => hull.ComputeInertia(m); return simulation.Shapes.Add(hull);
+        }
         if (s.Kind == PhysicsShapeKind.Box) { var b = new Box((float)s.SizeX, (float)s.SizeY, (float)s.SizeZ); shapeRotation = Quaternion.Identity; inertia = m => b.ComputeInertia(m); return simulation.Shapes.Add(b); }
         var c = new Cylinder((float)(s.SizeX / 2), (float)s.SizeZ); shapeRotation = CylinderToZ; inertia = m => c.ComputeInertia(m); return simulation.Shapes.Add(c);
     }
-    static BepuPose ToBepu(RigidPose p, Quaternion shapeRotation) => new(new Vector3((float)p.X, (float)p.Y, (float)p.Z), Quaternion.Normalize(Quaternion.Concatenate(shapeRotation, Q(p))));
+    static BepuPose ToBepu(RigidPose p, Quaternion shapeRotation, Vector3 center) => new(new Vector3((float)p.X, (float)p.Y, (float)p.Z) + Vector3.Transform(center, Q(p)), Quaternion.Normalize(Quaternion.Concatenate(shapeRotation, Q(p))));
     static void Put(List<PhysicsMaterial> list, int index, PhysicsMaterial m) { while (list.Count <= index) list.Add(m); list[index] = m; }
     void Check(string id) { if (entries.ContainsKey(id)) throw new ArgumentException("Duplicate body id: " + id); }
     BodyReference Body(string id) => simulation.Bodies.GetBodyReference(new BodyHandle(entries[id].Handle));
 
     public void AddStatic(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material)
     {
-        Check(id); var index = AddShape(shape, out var rot, out _); var p = ToBepu(pose, rot);
+        Check(id); var index = AddShape(shape, out var rot, out _, out var center); var p = ToBepu(pose, rot, center);
         var handle = simulation.Statics.Add(new StaticDescription(p.Position, p.Orientation, index));
-        Put(materials.Statics, handle.Value, material); entries[id] = new(handle.Value, true, rot, false);
+        Put(materials.Statics, handle.Value, material); entries[id] = new(handle.Value, true, rot, false, center);
     }
     public void AddKinematic(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material)
     {
-        Check(id); var index = AddShape(shape, out var rot, out _);
-        var handle = simulation.Bodies.Add(BodyDescription.CreateKinematic(ToBepu(pose, rot), new CollidableDescription(index, 0.05f), new BodyActivityDescription(-1)));
-        Put(materials.Bodies, handle.Value, material); entries[id] = new(handle.Value, false, rot, true);
+        Check(id); var index = AddShape(shape, out var rot, out _, out var center);
+        var handle = simulation.Bodies.Add(BodyDescription.CreateKinematic(ToBepu(pose, rot, center), new CollidableDescription(index, 0.05f), new BodyActivityDescription(-1)));
+        Put(materials.Bodies, handle.Value, material); entries[id] = new(handle.Value, false, rot, true, center);
     }
     public void AddDynamic(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material, double massKg)
     {
         Check(id); if (!(massKg > 0)) throw new ArgumentException("Dynamic bodies need a positive mass.");
-        var index = AddShape(shape, out var rot, out var inertia);
-        var handle = simulation.Bodies.Add(BodyDescription.CreateDynamic(ToBepu(pose, rot), inertia((float)massKg), new CollidableDescription(index, 0.05f), new BodyActivityDescription(-1)));
-        Put(materials.Bodies, handle.Value, material); entries[id] = new(handle.Value, false, rot, false);
+        var index = AddShape(shape, out var rot, out var inertia, out var center);
+        var handle = simulation.Bodies.Add(BodyDescription.CreateDynamic(ToBepu(pose, rot, center), inertia((float)massKg), new CollidableDescription(index, 0.05f), new BodyActivityDescription(-1)));
+        Put(materials.Bodies, handle.Value, material); entries[id] = new(handle.Value, false, rot, false, center);
     }
     public void AddSlider(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material, double massKg, string carrierId, (double X, double Y, double Z) axis, double maxForceN)
     {
@@ -166,7 +173,7 @@ public sealed class BepuEngine : IRigidBodyEngine
     public void Step(double dt)
     {
         foreach (var (id, target) in pending) {
-            var e = entries[id]; var body = simulation.Bodies.GetBodyReference(new BodyHandle(e.Handle)); var goal = ToBepu(target, e.ShapeRotation);
+            var e = entries[id]; var body = simulation.Bodies.GetBodyReference(new BodyHandle(e.Handle)); var goal = ToBepu(target, e.ShapeRotation, e.ShapeCenter);
             body.Velocity.Linear = (goal.Position - body.Pose.Position) / (float)dt;
             // World-frame rotation taking the current orientation to the goal, spread over the step.
             var dq = Quaternion.Normalize(goal.Orientation * Quaternion.Inverse(body.Pose.Orientation));
@@ -224,7 +231,8 @@ public sealed class BepuEngine : IRigidBodyEngine
     static RigidPose Back(BepuPose p, Entry e)
     {
         var q = Quaternion.Normalize(Quaternion.Concatenate(Quaternion.Inverse(e.ShapeRotation), p.Orientation));
-        return new(p.Position.X, p.Position.Y, p.Position.Z, q.X, q.Y, q.Z, q.W);
+        var origin = p.Position - Vector3.Transform(e.ShapeCenter, q);
+        return new(origin.X, origin.Y, origin.Z, q.X, q.Y, q.Z, q.W);
     }
     public (double X, double Y, double Z) GetLinearVelocity(string id)
     {

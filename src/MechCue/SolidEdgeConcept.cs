@@ -65,6 +65,7 @@ public sealed partial class Bridge
         var model=JsonSerializer.Deserialize<ConceptMachine>(File.ReadAllText(manifestPath),ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid concept manifest."); model.Validate();
         string directory=Path.GetDirectoryName(manifestPath)!;
         string Local(string file,params string[] extensions) {
+            if(model.Type == "convex-assembly" && Path.IsPathFullyQualified(file)) return CadPath(file, extensions);
             if(Path.GetFileName(file)!=file || string.IsNullOrEmpty(file)) throw new ArgumentException("Manifest references must be local file names.");
             return CadPath(Path.Combine(directory,file),extensions);
         }

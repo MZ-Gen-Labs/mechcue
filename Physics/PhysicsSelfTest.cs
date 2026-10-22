@@ -40,6 +40,26 @@ public static class PhysicsSelfTest
         var force = ConceptRigidBodySimulator.Run(model, new RigidBodySetup { EndTime = 1, GripForceN = 20 }, none, create);
         Check(force.FinalState == "resting" && force.Axes.Values.All(a => a.All(p => Math.Abs(p.Value) < 0.5)) && force.Events.All(x => x.Type != "finger-stopped"), "arm5p with force-driven fingers rests: " + string.Join(",", force.Events.Select(x => x.Type)));
         Console.WriteLine("concept grip force at rest: ok");
+        Check(force.FingerAxes.Keys.Order().SequenceEqual(new[] { "F1", "F2" }) && force.FingerAxes.Values.All(points => points.Count >= 2 && points.All(p => Math.Abs(p.Value) < 0.5)), "force-driven fingers return actual axis travel at rest");
+        // Projection must remove a translated/rotated parent frame and the finger's centre offset.
+        var rotated = new Dictionary<string, List<JointPoint>> {
+            ["J1"] = [new() { Time = 0, Value = 35 }, new() { Time = 1, Value = 35 }],
+            ["F1"] = [new() { Time = 0, Value = -2 }, new() { Time = 1, Value = -2 }],
+            ["F2"] = [new() { Time = 0, Value = 2 }, new() { Time = 1, Value = 2 }]
+        };
+        var rotatedResult = ConceptRigidBodySimulator.Run(model, new RigidBodySetup { EndTime = 1, GripForceN = 20 }, rotated, create);
+        Check(rotatedResult.FingerAxes["F1"].All(p => Math.Abs(p.Value + 2) < 0.5) && rotatedResult.FingerAxes["F2"].All(p => Math.Abs(p.Value - 2) < 0.5), "actual finger travel is measured in the rotated hand frame");
+        Check(rest.FingerAxes.Count == 0, "position-driven fingers use commands without an actual override");
+        var contactModel = ConceptMachine.Create("arm5p", 500, 300, 300);
+        var hand = contactModel.AxisPoses(contactModel.Values)["J5"];
+        contactModel.Axes.Single(a => a.Id == "WRZ").OriginMm = [hand[12] * 1000 + 70, hand[13] * 1000, hand[14] * 1000];
+        var closing = new Dictionary<string, List<JointPoint>> {
+            ["F1"] = [new() { Time = 0, Value = 0 }, new() { Time = 0.5, Value = -10 }, new() { Time = 1, Value = -10 }],
+            ["F2"] = [new() { Time = 0, Value = 0 }, new() { Time = 0.5, Value = 10 }, new() { Time = 1, Value = 10 }]
+        };
+        var contact = ConceptRigidBodySimulator.Run(contactModel, new RigidBodySetup { EndTime = 1, GripForceN = 20, FloorZMm = hand[14] * 1000 - 30 }, closing, create);
+        Check(contact.Events.Any(e => e.Type == "finger-stopped") && contact.FingerAxes["F1"][^1].Value > -7 && contact.FingerAxes["F2"][^1].Value < 7, "contact stops the fingers before their commanded targets and returns actual travel");
+        Console.WriteLine($"concept finger contact: actual F1={contact.FingerAxes["F1"][^1].Value:0.000}, F2={contact.FingerAxes["F2"][^1].Value:0.000} mm (commands -10/+10)");
         // Out-of-range input is rejected rather than simulated.
         bool rejected = false; try { ConceptRigidBodySimulator.Run(ConceptMachine.Create("arm5", 500, 300, 300), new RigidBodySetup { EndTime = 1 }, none, create); } catch (ArgumentException) { rejected = true; }
         Check(rejected, "arm5 (no free-body workpiece axes) is rejected");
@@ -49,6 +69,17 @@ public static class PhysicsSelfTest
     {
         create ??= () => new BepuEngine();
         try {
+            using (var e = World(create)) {
+                double[][] corners = Enumerable.Range(0, 8).Select(i => new[] { .1 + ((i&1)==0?-.03:.03), (i&2)==0?-.03:.03, (i&4)==0?-.03:.03 }).ToArray();
+                e.AddDynamic("hull", new(PhysicsShapeKind.ConvexHull,0,0,0,corners), new(-.1,0,.03,0,0,0,1), new(), .5);
+                Check(Math.Abs(e.GetPose("hull").X + .1) < 1e-6, "hull recentering preserves the caller's origin");
+                Run(e,1);
+                Check(Math.Abs(Z(e,"hull")-.03)<.001, "an off-centre convex hull rests with its original geometry on the floor");
+                e.AddKinematic("moving-hull",new(PhysicsShapeKind.ConvexHull,0,0,0,corners),new(1,0,1,0,0,0,1),new());
+                e.SetKinematicTarget("moving-hull",new(2,0,1,0,0,0,1)); e.Step(Dt);
+                Check(Math.Abs(e.GetPose("moving-hull").X-2)<1e-5,"kinematic hull target preserves the caller's origin");
+                Console.WriteLine("convex hull centroid and contact: ok");
+            }
             using (var e = World(create)) {
                 e.AddDynamic("cube", Cube, new(0, 0, 0.03, 0, 0, 0, 1), new(0.5), 0.5);
                 Run(e, 2); Check(Math.Abs(Z(e, "cube") - 0.03) < 0.0001, "a cube resting on the floor stays still and sinks less than 0.1 mm: z=" + Z(e, "cube"));

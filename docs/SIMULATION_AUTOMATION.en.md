@@ -40,7 +40,9 @@ Some license/external-solver dialogs may ignore DisplayAlerts. It does not promi
 
 ## Validity and errors
 
-Existing studies/conditions are not removed. Repeating creation adds more; use Solid Edge UI to edit/delete existing conditions in this initial feature. No automatic save occurs.
+Creation tools do not change existing conditions. Development code adds `solidedge_edit_simulation_condition` and `solidedge_delete_simulation_condition`. Supply `category=load/constraint`, the listed `conditionNumber` and its exact unique `expectedName`. Editable fields are `name`, `suppressed`, load `value` (N for force, MPa for pressure), and normalized force `directionJson=[x,y,z]`. Fixed constraints support name/suppression only. Reassign faces or change load type by explicitly removing/adding a condition. Edits are read back and failed edits attempt restoration; relist after deletion because numbers change. Close Results first. Neither tool solves or saves automatically.
+
+`scripts/Test-SimulationConditionsNative.py --mcp <development-MechCue.Mcp.exe> --output <fresh-folder>` verifies these edits, name guards and selected-condition deletion on a new part. It does not launch the solver and saves/closes only the test document.
 
 MechCue compares geometry/material/conditions/mesh against its successful-solve fingerprint in `MechCueSimulation` AddInsStorage. Missing/mismatched records reject result retrieval and require solving again. `nativeSolved` is the native flag, `resultsCurrent` the comparison, and `solved` requires both.
 

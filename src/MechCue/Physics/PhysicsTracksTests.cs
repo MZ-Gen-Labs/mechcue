@@ -21,7 +21,17 @@ public static partial class SelfTest
         // The engine runs in MechCue.Physics.exe (tested there); here a resting result stands in for it.
         var result = new RigidBodyResult { Engine = "test" };
         foreach (var axis in PhysicsTracks.FreeBodyAxes(model)!) result.Axes[axis] = [new() { Time = 0, Value = 0 }, new() { Time = 2, Value = 0.1 }];
+        result.FingerAxes["F1"] = [new() { Time = 0, Value = 0 }, new() { Time = 1, Value = -5 }, new() { Time = 2, Value = 0 }];
+        result.Events.Add(new() { Time = 1, Type = "finger-stopped", Detail = "F1 stopped at the workpiece" });
+        result.Warnings.Add("test warning");
         PhysicsTracks.Apply(concept, result, byId, hash);
+        var finger = tracks.Single(t => t.Name == "F1");
+        Check(finger.At(1) == -5 && finger.Points.All(p => p.Value == 0) && !finger.Derived, "actual finger travel drives playback while commands stay editable");
+        Check(PhysicsTracks.Inputs(concept, byId).Joints["F1"].All(p => p.Value == 0), "recomputation keeps the original commands");
+        Check(MotionSampling.KeyPlan([finger], 0, 2).Contains(1) && MotionBoundMath.Variation(finger, 0, 2) == 10 && MotionBoundMath.MaximumAbs(finger, 0, 2) == 5, "inspection includes actual finger reversals and travel");
+        finger.Points[1] = new(2, -10);
+        Check(finger.At(1) == -5 && ReferenceEquals(finger.PlaybackPoints, finger.Points), "editing a finger invalidates its previous actual curve");
+        finger.Points[1] = new(2, 0);
         Check(concept.Physics!.ComputedHash == hash && tracks.Single(t => t.Name == "WZ").Points.All(p => Math.Abs(p.Value) < 0.5), "a resting workpiece stays at zero");
         Check(PhysicsTracks.Hash(concept, byId, pattern) == hash, "writing physics tracks does not change the fingerprint");
         // Editing a commanded keyframe, the settings or the motion pattern makes the stored result out of date.
@@ -32,6 +42,7 @@ public static partial class SelfTest
         // The flag and settings survive a save and load.
         var settings = new DocumentSettings { Concept = concept, Tracks = tracks.Select(t => new SavedTrack { Track = t }).ToList(), Version = 2 };
         var back = System.Text.Json.JsonSerializer.Deserialize<DocumentSettings>(settings.Json())!;
+        Check(back.Tracks.Single(t => t.Track.Name == "F1").Track.At(1) == -5 && back.Concept!.Physics!.Report!.Events.Single().Type == "finger-stopped" && back.Concept.Physics.Report.Warnings.Single() == "test warning", "actual travel, events and warnings survive saving");
         Check(back.Tracks.Count(t => t.Track.Derived) == 6 && back.Concept!.Physics!.Setup.WorkpieceFriction == 0.9 && back.Concept.Physics.ComputedHash == hash, "derived flag and physics settings round-trip");
         // Moving the concept settings to the detailed assembly keeps the physics settings and the derived flag.
         foreach (var track in tracks) track.Points = [new(0, model.Values[track.Name]), new(2, model.Values[track.Name])];

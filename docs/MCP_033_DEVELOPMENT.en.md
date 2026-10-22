@@ -5,6 +5,18 @@
 
 Branched from stable 0.3.2. See [open issues](OPEN_ISSUES.en.md) for remaining work. Sections describe successive implementations; later sections supersede earlier architecture.
 
+## Priority work — 2026-10-23 development code
+
+Actual force-limited finger positions are output as `fingerAxisKeyframes`, while commands remain unchanged. CAD playback and inspection use actual positions; dashed graph overlays show them. Physics events/warnings appear in Physics results and MCP `physics.report` and persist in CAD settings.
+
+The development record reports successful app self/UI/engine and 119-tool MCP/protocol checks. With commanded finger positions −10/+10 mm, engine contact tests produced actual −2.540/+2.680 mm.
+
+Initial real-assembly support captures planar convex polyhedra with CAD density/volume mass, centre transforms, shape inertia and six free-workpiece axes. Native capture of a 20-part fixture settled with .0327 mm gap and a clear native support/workpiece check. See [convex assembly physics](CONVEX_PHYSICS.en.md) for the exact scope and validation workflow. These builds are workspace validation; installed updates and publication were not performed by that work.
+
+All 190 pairs in that fixture passed continuous inspection over 0–4 seconds without allowed-contact exclusions. CAD density 7833 kg/m³ and volume .001 m³ produced a 7.833 kg workpiece. Chart save/reconnect restored its geometry, mass and report. Physical-property computation preserves the original CAD density rather than replacing the density cache with a unit-density calculation.
+
+Simulation condition editing/deletion was also verified natively: load value/direction/name/suppression, fixed-condition name/suppression, expected-name guards and deletion of the selected condition. Changes are read back; failed edits attempt restoration.
+
 ## Alpha.01: rigid-body workpiece motion
 
 `solidedge_simulate_concept_rigid_body` computes workpiece keyframes from arm/finger joint graphs without connecting CAD or a chart. `physicsJson` controls gravity, mass, friction and floor height.

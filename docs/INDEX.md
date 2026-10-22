@@ -46,6 +46,7 @@ MechCueの公開文書を日本語・英語で読めます。各ページ冒頭�
 | アドインのアイコン資源 | [日本語](../AddIn/Resources/README.ja.md) | [English](../AddIn/Resources/README.md) |
 | 開発への参加 | [日本語](../CONTRIBUTING.md) | [English](../CONTRIBUTING.en.md) |
 | 概念検討用チャートと検査結果の軽量化（2026-10-03） | [日本語](COARSE_MOTION_INSPECTION_IMPLEMENTATION_20261003.md) | [English](COARSE_MOTION_INSPECTION_IMPLEMENTATION_20261003.en.md) |
+| 実アセンブリの凸多面体を物理計算する | [日本語](CONVEX_PHYSICS.md) | [English](CONVEX_PHYSICS.en.md) |
 | 詳細設計のMCP改善（2026-10-03） | [日本語](DETAIL_MCP_IMPROVEMENTS_20261003.md) | [English](DETAIL_MCP_IMPROVEMENTS_20261003.en.md) |
 | 新しい機構編集画面 | [日本語](INTERFACE.md) | [English](INTERFACE.en.md) |
 | 開発のノウハウ集 | [日本語](KNOWHOW.md) | [English](KNOWHOW.en.md) |

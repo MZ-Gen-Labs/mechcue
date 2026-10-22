@@ -35,6 +35,8 @@ Alpha.02 loaded Bepu into the add-in; native pools/aligned allocation/unverifiab
 
 Six workpiece axes are read-only derived tracks. `ComputedHash` covers commanded joints/setup, survives reopen and rejects stale results after concurrent edits; no recomputation during playback. Adding setup fields legitimately invalidates saved hashes. Migration must copy physics setup/hash/Auto too; omission was fixed. See `3d22449`, `6ca9be5`, [development](MCP_033_DEVELOPMENT.en.md).
 
+The finger-display limitation above describes the alpha.04 record. Development code dated 2026-10-23 now outputs actual finger positions and applies them in CAD playback/path inspection while retaining commands. See [current development](MCP_033_DEVELOPMENT.en.md) and [open issues](OPEN_ISSUES.en.md) for validation boundaries.
+
 ## Motion inspection and interference
 
 ### Sliding pairs can cause endless refinement

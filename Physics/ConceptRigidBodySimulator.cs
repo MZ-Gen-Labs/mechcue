@@ -10,7 +10,8 @@ namespace MechCue.Physics;
 public static class ConceptRigidBodySimulator
 {
     static double[] Translation(double xMm, double yMm, double zMm) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, xMm / 1000, yMm / 1000, zMm / 1000, 1];
-    static PhysicsShape ShapeOf(ConceptBody b) => b.Shape == "cylinder"
+    static PhysicsShape ShapeOf(ConceptBody b) => b.Shape == "convex"
+        ? new(PhysicsShapeKind.ConvexHull, 0, 0, 0, b.VerticesMm!.Select(p => p.Select(v => v / 1000).ToArray()).ToArray()) : b.Shape == "cylinder"
         ? new(PhysicsShapeKind.CylinderZ, b.SizeMm[0] / 1000, b.SizeMm[1] / 1000, b.SizeMm[2] / 1000)
         : new(PhysicsShapeKind.Box, b.SizeMm[0] / 1000, b.SizeMm[1] / 1000, b.SizeMm[2] / 1000);
 
@@ -118,6 +119,15 @@ public static class ConceptRigidBodySimulator
             double Unwrap(double value, ref double last) { if (!first) while (value - last > 180) value -= 360; if (!first) while (value - last < -180) value += 360; last = value; return value; }
             double yaw = Unwrap(values[yawId], ref lastYaw), pitch = Unwrap(values[pitchId], ref lastPitch), roll = Unwrap(values[rollId], ref lastRoll);
             first = false; values[yawId] = yaw; values[pitchId] = pitch; values[rollId] = roll;
+            // Project the simulated centre into the commanded parent frame. Commands remain inputs;
+            // only the measured linear travel is returned for playback.
+            var axisPoses = model.AxisPoses(model.Axes.ToDictionary(a => a.Id, a => AxisValue(a, t)));
+            foreach (var (id, axis) in fingerAxis) {
+                var finger = engine.GetPose(id); var parent = axisPoses[axis.Parent];
+                int n = axis.Direction == "X" ? 0 : axis.Direction == "Y" ? 1 : 2;
+                var body = model.Bodies.Single(b => b.Id == id);
+                values[axis.Id] = 1000 * (parent[n * 4] * (finger.X - parent[12]) + parent[n * 4 + 1] * (finger.Y - parent[13]) + parent[n * 4 + 2] * (finger.Z - parent[14])) - axis.OriginMm[n] - body.CenterMm[n];
+            }
             var m = p.ToMatrix(); double tilt = Math.Acos(Math.Clamp(m[10], -1, 1)) * 180 / Math.PI; // angle between the workpiece's Z axis and world Z
             maxTilt = Math.Max(maxTilt, tilt);
             var v = engine.GetLinearVelocity(work.Id); double speed = Math.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
@@ -137,13 +147,13 @@ public static class ConceptRigidBodySimulator
         }
         result.MaxTiltDegrees = maxTilt; result.Samples = samples.Count;
         foreach (var (id, (max, since)) in lag) if (max > 2)
-            result.Events.Add(new() { Time = Math.Max(0, since), Type = "finger-stopped", Detail = $"{id} stopped up to {max:0.#} mm short of its chart position (it presses with at most {setup.GripForceN:0.#} N); the CAD playback shows the chart position" });
+            result.Events.Add(new() { Time = Math.Max(0, since), Type = "finger-stopped", Detail = $"{id} stopped up to {max:0.#} mm short of its chart position (it presses with at most {setup.GripForceN:0.#} N); fingerAxisKeyframes contain its actual travel" });
         var final = engine.GetPose(work.Id);
         if (final.Z < home.Z - 0.4) result.Warnings.Add("The workpiece ended more than 400 mm below its start (it fell off the table).");
         double finalTilt = Math.Acos(Math.Clamp(final.ToMatrix()[10], -1, 1)) * 180 / Math.PI;
         if (finalTilt > 30) result.Events.Add(new() { Time = end, Type = "tipped", Detail = $"final tilt {finalTilt:0.#}°" });
         result.FinalState = state == "moving" ? "moving" : finalTilt > 30 ? "tipped" : "resting";
-        foreach (var axis in chain) {
+        foreach (var axis in chain.Concat(gripAxes)) {
             var raw = samples.Select(s => new JointPoint { Time = Math.Round(s.T, 6), Value = Math.Round(s.V[axis.Id], 4) }).ToList();
             var kept = new List<JointPoint> { raw[0] };
             for (int i = 1; i < raw.Count - 1; i++) {
@@ -152,7 +162,7 @@ public static class ConceptRigidBodySimulator
             }
             kept.Add(raw[^1]);
             foreach (var p in kept) if (p.Value < axis.Minimum || p.Value > axis.Maximum) { result.Warnings.Add($"{axis.Id} leaves its range [{axis.Minimum}, {axis.Maximum}] at t={p.Time:0.###}s."); break; }
-            result.Axes[axis.Id] = kept;
+            (freeAxes.Contains(axis.Id) ? result.Axes : result.FingerAxes)[axis.Id] = kept;
         }
         return result;
     }
@@ -167,10 +177,10 @@ public static partial class ConceptRigidBodyApi
         if (new FileInfo(manifestPath).Length > 1024 * 1024) throw new ArgumentException("Concept manifest exceeds 1 MB.");
         var model = System.Text.Json.JsonSerializer.Deserialize<ConceptMachine>(File.ReadAllText(manifestPath), ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid concept manifest.");
         var joints = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<JointPoint>>>(string.IsNullOrWhiteSpace(jointsJson) ? "{}" : jointsJson, ConceptMachine.JsonOptions) ?? throw new ArgumentException("jointsJson must be an object {axisId:[{time,value},...]}.");
-        var setup = string.IsNullOrWhiteSpace(physicsJson) ? new RigidBodySetup() : System.Text.Json.JsonSerializer.Deserialize<RigidBodySetup>(physicsJson, ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid physicsJson.");
+        var setup = string.IsNullOrWhiteSpace(physicsJson) ? model.PhysicsDefaults ?? new RigidBodySetup() : System.Text.Json.JsonSerializer.Deserialize<RigidBodySetup>(physicsJson, ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid physicsJson.");
         var r = ConceptRigidBodySimulator.Run(model, setup, joints);
         return new {
-            engine = r.Engine, finalState = r.FinalState, endTime = r.EndTime, samples = r.Samples, maxTiltDegrees = Math.Round(r.MaxTiltDegrees, 1), events = r.Events, warnings = r.Warnings, axisKeyframes = r.Axes,
+            engine = r.Engine, finalState = r.FinalState, endTime = r.EndTime, samples = r.Samples, maxTiltDegrees = Math.Round(r.MaxTiltDegrees, 1), events = r.Events, warnings = r.Warnings, axisKeyframes = r.Axes, fingerAxisKeyframes = r.FingerAxes,
             note = "Keyframes (mm / degrees) for the workpiece's free-body axes. Apply them with mechcue_set_keyframes after looking up each axis' trackId. Rigid-body model of boxes and cylinders; the hand's squeeze comes from the finger axes F1/F2 in the supplied trajectories."
         };
     }

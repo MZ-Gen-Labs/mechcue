@@ -45,6 +45,7 @@ public sealed class RigidBodySetup
 public sealed class RigidBodyResult
 {
     public Dictionary<string, List<JointPoint>> Axes { get; set; } = [];
+    public Dictionary<string, List<JointPoint>> FingerAxes { get; set; } = [];
     public List<PhysicsEvent> Events { get; set; } = [];
     public List<string> Warnings { get; set; } = [];
     public string Engine { get; set; } = "";

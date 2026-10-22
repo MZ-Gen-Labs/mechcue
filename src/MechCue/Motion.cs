@@ -10,6 +10,13 @@ public class Track
     /// <summary>A result computed from other tracks (the workpiece's physics axes): shown apart, read-only, recomputed on change.</summary>
     public bool Derived { get; set; }
     public List<KeyPoint> Points { get; set; } = [new(0, 0), new(2, 100), new(4, 0)];
+    /// <summary>Calculated finger motion, kept apart from editable commands.</summary>
+    public List<KeyPoint>? ActualPoints { get; set; }
+    public List<KeyPoint>? ActualSourcePoints { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool ActualMotionCurrent { get; set; } = true;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public List<KeyPoint> PlaybackPoints => ActualMotionCurrent && ActualPoints != null && ActualSourcePoints != null && Points.SequenceEqual(ActualSourcePoints) ? ActualPoints : Points;
     public void MovePoint(int index, double time, double value, double end)
     {
         if (!double.IsFinite(time) || !double.IsFinite(value)) throw new ArgumentException("時間と変位は有限の数値で指定してください。");
@@ -29,14 +36,21 @@ public class Track
     public double At(double time)
     {
         Validate();
-        if (time <= Points[0].Time) return Points[0].Value;
-        for (int i = 1; i < Points.Count; i++)
-            if (time <= Points[i].Time)
-                return Points[i - 1].Value + (Points[i].Value - Points[i - 1].Value) *
-                    (time - Points[i - 1].Time) / (Points[i].Time - Points[i - 1].Time);
-        return Points[^1].Value;
+        var points = PlaybackPoints;
+        if (time <= points[0].Time) return points[0].Value;
+        for (int i = 1; i < points.Count; i++)
+            if (time <= points[i].Time)
+                return points[i - 1].Value + (points[i].Value - points[i - 1].Value) *
+                    (time - points[i - 1].Time) / (points[i].Time - points[i - 1].Time);
+        return points[^1].Value;
     }
     public void Validate()
+    {
+        if (ActualPoints != null) ValidatePoints(ActualPoints);
+        if (ActualSourcePoints != null) ValidatePoints(ActualSourcePoints);
+        ValidatePoints(Points);
+    }
+    static void ValidatePoints(List<KeyPoint> Points)
     {
         if (Points.Count < 2 || Points.Any(p => !double.IsFinite(p.Time) || !double.IsFinite(p.Value) || p.Time < 0))
             throw new InvalidOperationException("時間と変位には有限の数値を入力し、2点以上指定してください。");

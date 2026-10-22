@@ -26,9 +26,9 @@ public readonly record struct RigidPose(double X, double Y, double Z, double Qx,
     }
 }
 
-public enum PhysicsShapeKind { Box, CylinderZ }
+public enum PhysicsShapeKind { Box, CylinderZ, ConvexHull }
 /// <summary>Collision shape in the body's local frame (metres). Box: full extents x,y,z. CylinderZ: diameter in x,y, height in z.</summary>
-public sealed record PhysicsShape(PhysicsShapeKind Kind, double SizeX, double SizeY, double SizeZ);
+public sealed record PhysicsShape(PhysicsShapeKind Kind, double SizeX, double SizeY, double SizeZ, double[][]? Vertices = null);
 /// <summary>Surface material. Restitution (0..1) is the ratio of separating to approaching speed in an impact.</summary>
 public sealed record PhysicsMaterial(double Friction = 0.5, double Restitution = 0);
 

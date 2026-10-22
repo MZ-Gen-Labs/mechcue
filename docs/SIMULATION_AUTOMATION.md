@@ -46,6 +46,8 @@ AIへの指示例：
 | `solidedge_create_simulation_study` | 新規の線形静解析を作成 |
 | `solidedge_add_simulation_fixed` | 選択面またはIDで指定した面を完全固定 |
 | `solidedge_add_simulation_load` | 力・圧力を追加 |
+| `solidedge_edit_simulation_condition` | 既存条件の名前・抑制、荷重値・力の方向を編集 |
+| `solidedge_delete_simulation_condition` | 指定した既存条件だけを削除 |
 | `solidedge_run_simulation` | メッシュ生成・解析実行 |
 | `solidedge_get_simulation_results` | 結果の最大・最小値と位置を取得 |
 | `solidedge_show_simulation_results` | 応力図・変位図を表示 |
@@ -75,7 +77,7 @@ alpha.03から通常の指定は `meshLevel`（1～10）です。1は粗く、10
 
 ## 実行とエラーの扱い
 
-- 既存のスタディ・ユーザーの条件は削除しません。同じ追加コマンドを繰り返すと新しいスタディ・条件が増えます。初期版では既存条件の編集・削除はSolid EdgeのUIを使用してください。
+- 追加コマンドは既存条件を変更しません。開発コードでは `solidedge_edit_simulation_condition` / `solidedge_delete_simulation_condition` で既存条件を編集・削除できます。`category=load/constraint`、一覧の `conditionNumber` と完全一致する一意な `expectedName` が必要です。編集項目は `name`、`suppressed`、荷重の `value`（力N／圧力MPa）、力の `directionJson`（XYZ配列、正規化）。固定条件は名前・抑制だけ対応します。面の再割り当て・荷重種類の変更は削除・追加で行います。編集値を読み直して確認し、失敗時は元へ戻します。削除後は番号が変わるので一覧を取り直してください。結果表示環境では拒否し、解析・保存は自動で行いません。
 - 保存は自動で行いません。条件・材料・形状を変更すると、以前の結果が有効でなくなることがあります。ネイティブの解析済みフラグだけでは判定せず、MechCueで解析成功時に記録した形状・材料・条件・メッシュ設定と比較します。不一致または確認記録がない場合、結果取得を拒否し、再解析を案内します。確認記録は部品の専用AddInsStorage（MechCueSimulation）に保存します。一覧の `nativeSolved` はSolid Edgeのフラグ、`resultsCurrent` はMechCueの照合結果、`solved` は両方を満たした状態です。
 - 結果表示環境のまま新規スタディ作成や別スタディのメッシュ・解析を要求した場合、処理前に拒否します。Solid Edgeの「結果を閉じる／戻る」でモデル環境に戻してから実行してください。
 - COM処理の途中で失敗すると条件の一部が残る場合があります。一覧を確認してから再試行してください。
@@ -84,6 +86,8 @@ alpha.03から通常の指定は `meshLevel`（1～10）です。1は粗く、10
 - 自動検査は条件・単位・API連動を確認するものです。メッシュ収束や実際の支持条件、材料の妥当性は解析目的に応じて判断してください。
 
 ## 検証
+
+`scripts/Test-SimulationConditionsNative.py --mcp <開発版MechCue.Mcp.exe> --output <新しいフォルダー>` は新規部品で荷重値・方向・名前・抑制、固定条件の名前・抑制、選択条件の名前照合、削除を検査します。ソルバーは起動せず、検証用文書だけを保存して閉じます。
 
 `python scripts/Test-SimulationMeshSlider.py --mcp <MCP実行ファイル> --output <新しい出力先>` は新規の200×30×10 mm部品で既定値5、端点1・10、自動サイズの変化、再生成、200 Nの解析を検証します。
 

@@ -21,6 +21,7 @@ public sealed class ConceptBody
     public string File { get; set; } = "";
     public string Occurrence { get; set; } = "";
     public double[] GeometryMatrix { get; set; } = Bridge.CadTransform(0, 0, 0, 0, 0, 0);
+    public double[][]? VerticesMm { get; set; }
 }
 public sealed class ConceptMachine
 {
@@ -30,6 +31,7 @@ public sealed class ConceptMachine
     public List<ConceptAxis> Axes { get; set; } = [];
     public List<ConceptBody> Bodies { get; set; } = [];
     public Dictionary<string, double> Values { get; set; } = [];
+    public MechCue.Physics.RigidBodySetup? PhysicsDefaults { get; set; }
     public static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true };
     /// <summary>Builds a concept machine from its template (<see cref="ConceptTemplates"/>) and validates it.</summary>
     public static ConceptMachine Create(string type, double xTravelMm, double yTravelMm, double zTravelMm)
@@ -53,7 +55,8 @@ public sealed class ConceptMachine
             Vector(axis.OriginMm); known.Add(axis.Id);
         }
         foreach (var body in Bodies) {
-            if (!known.Contains(body.Parent) || body.Shape is not ("box" or "cylinder")) throw new ArgumentException("Invalid body parent or shape.");
+            if (!known.Contains(body.Parent) || body.Shape is not ("box" or "cylinder" or "convex")) throw new ArgumentException("Invalid body parent or shape.");
+            if (body.Shape == "convex") ConvexGeometry.ValidateVertices(body.VerticesMm);
             Vector(body.CenterMm); Vector(body.SizeMm);
             if (body.SizeMm.Any(v => v <= 0) || (body.Shape == "cylinder" && body.SizeMm[0] != body.SizeMm[1])) throw new ArgumentException("Invalid body dimensions.");
             var m = body.GeometryMatrix;

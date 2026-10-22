@@ -7,7 +7,7 @@ public static class MotionSampling
     {
         if(!double.IsFinite(start)||!double.IsFinite(end)||start<0||end<start||maxSamples<2)throw new ArgumentException("Invalid key-only inspection interval");
         var tracks=source.Distinct().ToArray();foreach(var track in tracks)track.Validate();
-        var plan=tracks.SelectMany(t=>t.Points.Select(p=>p.Time)).Where(t=>t>start&&t<end).Append(start).Append(end).Distinct().Order().ToArray();
+        var plan=tracks.SelectMany(t=>t.PlaybackPoints.Select(p=>p.Time)).Where(t=>t>start&&t<end).Append(start).Append(end).Distinct().Order().ToArray();
         if(plan.Length>maxSamples)throw new InvalidOperationException("Original keyframe inspection budget exceeded; no keys were discarded");
         return plan;
     }
@@ -16,9 +16,9 @@ public static class MotionSampling
         if(!double.IsFinite(start)||!double.IsFinite(end)||!double.IsFinite(step)||start<0||end<start||step<=0||maxSamples is <2 or >100001)throw new ArgumentException("Invalid coarse inspection interval/budget");
         double count=Math.Ceiling((end-start)/step);if(count>=maxSamples)throw new InvalidOperationException("Coarse sampling budget exceeded; split the inspection interval");
         var times=Enumerable.Range(0,(int)count).Select(i=>start+i*step).Append(end).ToHashSet();
-        foreach(var track in source){track.Validate();for(int i=1;i<track.Points.Count-1;i++){
-            var p=track.Points[i];if(p.Time<=start||p.Time>=end)continue;
-            int before=Math.Sign(p.Value-track.Points[i-1].Value),after=Math.Sign(track.Points[i+1].Value-p.Value);
+        foreach(var track in source){track.Validate();for(int i=1;i<track.PlaybackPoints.Count-1;i++){
+            var p=track.PlaybackPoints[i];if(p.Time<=start||p.Time>=end)continue;
+            int before=Math.Sign(p.Value-track.PlaybackPoints[i-1].Value),after=Math.Sign(track.PlaybackPoints[i+1].Value-p.Value);
             if(before!=after)times.Add(p.Time);
         }}
         if(times.Count>maxSamples)throw new InvalidOperationException("Coarse sampling budget exceeded by reversals/stops; split the interval");
@@ -30,7 +30,7 @@ public static class MotionSampling
         if(surfaceRadiusMm<0||maxSurfaceStepMm<=0)throw new ArgumentException("Invalid surface sampling limits");
         if(start<0||end<start||maxTimeStep<=0||maxLinearStepMm<=0||maxAngularStepDeg<=0||maxSamples is <2 or >100001)throw new ArgumentException("Positive sampling limits, nonnegative ordered interval and 2..100001 total samples required");
         var tracks=source.Distinct().ToArray();foreach(var track in tracks){track.Validate();if(track.Kind is not ("距離拘束" or "角度拘束" or "部品移動" or "部品回転" or "部品座標"))throw new ArgumentException("Unsupported driven track units: "+track.Kind);}
-        var knots=tracks.SelectMany(t=>t.Points.Select(p=>p.Time)).Where(t=>t>start&&t<end).Append(start).Append(end).Distinct().Order().ToArray();
+        var knots=tracks.SelectMany(t=>t.PlaybackPoints.Select(p=>p.Time)).Where(t=>t>start&&t<end).Append(start).Append(end).Distinct().Order().ToArray();
         if(knots.Length>maxSamples)throw new InvalidOperationException("Sampling budget exceeded by key times; shorten the inspection interval");
         var plan=new List<double>{start};
         for(int i=1;i<knots.Length;i++) {
