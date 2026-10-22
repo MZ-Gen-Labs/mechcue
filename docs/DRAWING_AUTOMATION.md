@@ -1,5 +1,8 @@
 # 図面の自動構成と主要寸法
 
+<!-- mechcue-docs-language -->
+[日本語](DRAWING_AUTOMATION.md) | [English](DRAWING_AUTOMATION.en.md) | [文書一覧](INDEX.md)
+
 0.2.0-alpha.8から、保存済み3Dモデルの図面をMCPで作成できます。概略アセンブリ、箱、板、単純円筒、段差形状、円形穴を持つ部品が主な対象です。
 
 部品`.par`・板金`.psm`に加えて、アセンブリ`.asm`も既存の`solidedge_auto_drawing`で図面化できます。アセンブリをアクティブにして保存後、そのパスを`expectedDocument`、新しい`.dft`の保存先を`outputPath`に指定します。既存図面へのアセンブリビュー追加は`solidedge_add_drawing_view`を使用します。
@@ -50,11 +53,11 @@ python scripts/Test-DrawingNative.py --mcp artifacts/0.2.0-alpha.8/mcp/MechCue.M
 
 APIの根拠：[DrawingView](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgeDraft~DrawingView_members.html)、[寸法コレクション](https://support.industrysoftware.automation.siemens.com/trainings/se/107/api/SolidEdgeFrameworkSupport~Dimensions_members.html)。実機の引数と定数はSolid Edge 2026の型定義で確認しています。
 
-## Dimension placement
+## 寸法の配置
 
-Linear dimensions are arranged independently per view and direction: smallest nearest the geometry, largest outermost. Horizontal dimensions are below the view and vertical dimensions to its left, with an initial 9 mm gap and 7 mm lane spacing on the sheet. Diameter callouts retain their placement.
+直線寸法はビューと方向ごとに、短い寸法を形状の近く、長い寸法を外側に並べます。水平寸法はビューの下側、垂直寸法は左側に配置し、用紙上の初期すきまは9 mm、段の間隔は7 mmです。直径寸法の配置は保持します。
 
-Use `solidedge_arrange_drawing_dimensions(expectedDocument, viewNumber=0)` to rearrange existing MechCue dimensions without adding dimensions or saving. `0` processes all views on the active sheet. Values and model associations are preserved; manually created dimensions are untouched. Ambiguous ownership in older overlapping views is reported and left unchanged. This ordering reduces extension-line crossings for nested dimensions; it does not provide general collision avoidance for all annotations or adjacent views. Inspect the result before saving.
+`solidedge_arrange_drawing_dimensions(expectedDocument, viewNumber=0)` は、寸法を追加・保存せず既存のMechCue寸法を並べ直します。`0` はアクティブシートの全ビューが対象です。値とモデルの関連付けを保持し、手動寸法は変更しません。旧版の重なるビューなどで所属が曖昧な寸法は、そのまま残して報告します。入れ子寸法の補助線の交差を減らす配置であり、すべての注釈や隣接ビューとの重なりを解消するものではありません。結果を確認してから保存してください。
 
 
 ## 同じ穴位置寸法の重複防止（0.2.0-alpha.12）

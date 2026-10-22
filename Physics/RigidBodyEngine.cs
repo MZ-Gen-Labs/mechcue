@@ -26,10 +26,10 @@ public readonly record struct RigidPose(double X, double Y, double Z, double Qx,
     }
 }
 
-public enum PhysicsShapeKind { Box, CylinderZ }
+public enum PhysicsShapeKind { Box, CylinderZ, ConvexHull }
 /// <summary>Collision shape in the body's local frame (metres). Box: full extents x,y,z. CylinderZ: diameter in x,y, height in z.</summary>
-public sealed record PhysicsShape(PhysicsShapeKind Kind, double SizeX, double SizeY, double SizeZ);
-/// <summary>Surface material. Restitution is approximated by the engine (see backend notes).</summary>
+public sealed record PhysicsShape(PhysicsShapeKind Kind, double SizeX, double SizeY, double SizeZ, double[][]? Vertices = null);
+/// <summary>Surface material. Restitution (0..1) is the ratio of separating to approaching speed in an impact.</summary>
 public sealed record PhysicsMaterial(double Friction = 0.5, double Restitution = 0);
 
 public readonly record struct BodyContact(string Other, double Depth);
@@ -42,10 +42,21 @@ public interface IRigidBodyEngine : IDisposable
 {
     string Name { get; }
     void SetGravity(double x, double y, double z);
+    /// <summary>Contact stiffness as a spring frequency (Hz; higher = less sinking, needs a finer time step), the fastest speed (m/s) at which overlapping bodies
+    /// are pushed apart, and a skin (metres): bodies rest this far apart, so a spring's sag does not make the CAD parts overlap.</summary>
+    void SetContact(double frequencyHz, double maximumRecoveryVelocity, double skin = 0);
     void AddStatic(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material);
     /// <summary>A body moved by prescribed poses (arm links, fingers); it pushes dynamic bodies but is never pushed.</summary>
     void AddKinematic(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material);
     void AddDynamic(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material, double massKg);
+    /// <summary>
+    /// A body that slides along one world axis of a moving carrier body and is pushed toward a target travel with at most
+    /// <paramref name="maxForceN"/> (a force-limited gripper finger). Its rotation and the other two directions follow the carrier rigidly,
+    /// it does not collide with the carrier, and gravity does not act on it (the arm carries its weight).
+    /// </summary>
+    void AddSlider(string id, PhysicsShape shape, RigidPose pose, PhysicsMaterial material, double massKg, string carrierId, (double X, double Y, double Z) axis, double maxForceN);
+    /// <summary>Target travel (metres along the slider axis) measured from where the slider was added.</summary>
+    void SetSliderTarget(string id, double travel);
     /// <summary>Pose the kinematic body must have after the next <see cref="Step"/>.</summary>
     void SetKinematicTarget(string id, RigidPose pose);
     void Step(double dt);

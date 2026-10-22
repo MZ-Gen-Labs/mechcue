@@ -105,7 +105,7 @@ public partial class MainForm
     public string OpenForAutomation(string expectedDocument)
     {
         if(!bridge.Connected)ConnectDocument();
-        if(!string.Equals(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)),expectedDocument,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("MechCue is connected to another document");
+        if(!string.Equals(bridge.DocumentPath,expectedDocument,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("MechCue is connected to another document");
         aiAccess.Checked=true;Show();Activate();
         return JsonSerializer.Serialize(new {sessionId=aiEndpoint!.Session.Id,document=expectedDocument,connected=true});
     }
@@ -158,141 +158,163 @@ public partial class MainForm
         }); }catch(Exception ex){DiagnosticLog.Error("mcp", ex, DiagnosticState());completion.TrySetException(ex);}
         return completion.Task;
     }
+    /// <summary>When a command may run: always; while a video export runs (not during path inspection); or only when idle.</summary>
+    enum AiGate { Always, DuringExport, Idle }
+    sealed record AiCommand(AiGate Gate, Func<JsonElement,object> Run);
+    Dictionary<string,AiCommand>? aiCommands;
+    /// <summary>The MCP commands of the chart window, by method name.</summary>
+    Dictionary<string,AiCommand> AiCommands()=>aiCommands??=new()
+    {
+        ["get_state"]=new(AiGate.Always,_=>AiState()),
+        ["stop"]=new(AiGate.Always,_=>{PausePlayback();return AiState();}),
+        ["list_inspection_parts"]=new(AiGate.DuringExport,_=>bridge.ListMotionInspectionParts()),
+        ["get_inspection_reports"]=new(AiGate.DuringExport,InspectionReports),
+        ["set_inspection_policy"]=new(AiGate.DuringExport,SetAiInspectionPolicy),
+        ["get_video_export"]=new(AiGate.DuringExport,args=>VideoStatus(args,false)),
+        ["cancel_video_export"]=new(AiGate.DuringExport,args=>VideoStatus(args,true)),
+        ["set_playback_options"]=new(AiGate.Idle,SetPlaybackOptions),
+        ["export_video"]=new(AiGate.Idle,StartVideoExport),
+        ["place_window"]=new(AiGate.Idle,args=>PlaceWindow(args.GetProperty("position").GetInt32())),
+        ["check_motion"]=new(AiGate.Idle,CheckAiMotion),
+        ["list_patterns"]=new(AiGate.Idle,_=>{StoreActivePattern();return new { activePatternId=activePattern, patterns=patterns.Select(p=>new { id=p.Id,name=p.Name,description=p.Description,duration=p.Points.Values.Max(ps=>ps[^1].Time),speed=p.Speed,loop=p.Loop,collision=p.Collision }) };}),
+        ["switch_pattern"]=new(AiGate.Idle,args=>EditAiPattern(()=>SwitchPattern(AiPatternId(args)))),
+        ["create_pattern"]=new(AiGate.Idle,args=>EditAiPattern(()=>CreatePattern(args.GetProperty("name").GetString()!,args.TryGetProperty("duplicate",out var dup) && dup.GetBoolean()))),
+        ["rename_pattern"]=new(AiGate.Idle,args=>EditAiPattern(()=>RenamePattern(AiPatternId(args),args.GetProperty("name").GetString()!,args.TryGetProperty("description",out var desc)?desc.GetString():null))),
+        ["delete_pattern"]=new(AiGate.Idle,args=>EditAiPattern(()=>DeletePattern(AiPatternId(args)))),
+        ["set_physics"]=new(AiGate.Idle,args=>HandlePhysics(args,"set_physics")),
+        ["recompute_physics"]=new(AiGate.Idle,args=>HandlePhysics(args,"recompute_physics")),
+        ["import_concept"]=new(AiGate.Idle,args=>{if(!bridge.Connected)throw new InvalidOperationException("Connect MechCue to the concept assembly before importing axes.");ImportConceptAxes(args.GetProperty("manifestPath").GetString()!,args.TryGetProperty("unboundTracks",out var unbound)?unbound.GetString()!:"preserve");return AiState();}),
+        ["save_document"]=new(AiGate.Idle,args=>{
+            if(!bridge.Connected || !string.Equals(bridge.DocumentPath,args.GetProperty("expectedDocument").GetString(),StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Connected document differs from expectedDocument.");
+            SaveToDocument();return AiState();
+        }),
+        ["migrate_concept"]=new(AiGate.Idle,args=>{MigrateConceptSettings(args.GetProperty("expectedDocument").GetString()!,args.GetProperty("manifestPath").GetString()!,args.GetProperty("settingsJson").GetString()!,args.TryGetProperty("hideUnboundTracks",out var hide) && hide.GetBoolean());return AiState();}),
+        ["bind_nested"]=new(AiGate.Idle,BindAiNested),
+        ["play"]=new(AiGate.Idle,_=>{StartPlayback();return AiState();}),
+        ["seek"]=new(AiGate.Idle,args=>{
+            double position=AiNumber(args,"time");if(!double.IsFinite(position)||position<0||position>tracks.Max(t=>t.Points[^1].Time))throw new ArgumentOutOfRangeException("time");
+            PausePlayback();time.Value=(decimal)position;return AiState();
+        }),
+        ["undo"]=new(AiGate.Idle,_=>{using var reflection = PauseCadReflection(); PausePlayback();Undo();return AiState();}),
+        ["set_keyframes"]=new(AiGate.Idle,args=>EditAiKeyframes(()=>KeyframesBatch(args))),
+        ["delete_keyframe"]=new(AiGate.Idle,args=>EditAiKeyframes(()=>{
+            var deleted=AiTarget(args);double deletedTime=AiNumber(args,"time");
+            if(!deleted.Points.Any(p=>p.Time==deletedTime))throw new ArgumentException("Keyframe time not found");
+            return new(){[deleted]=deleted.Points.Where(p=>p.Time!=deletedTime).ToList()};
+        })),
+        ["set_keyframe"]=new(AiGate.Idle,args=>EditAiKeyframes(()=>{
+            var track=AiTarget(args);double moment=AiNumber(args,"time"),value=AiNumber(args,"value");
+            return new(){[track]=track.Points.Where(p=>p.Time!=moment).Append(new KeyPoint(moment,value)).OrderBy(p=>p.Time).ToList()};
+        })),
+        ["reset_values"]=new(AiGate.Idle,args=>EditAiKeyframes(()=>{
+            var track=AiTarget(args);double value=AiNumber(args,"value");
+            return new(){[track]=track.Points.Select(p=>p with {Value=value}).ToList()};
+        })),
+        ["resample"]=new(AiGate.Idle,args=>EditAiKeyframes(()=>Resample(AiNumber(args,"endTime"),AiNumber(args,"step")))),
+    };
     internal object HandleAi(JsonElement request)
     {
         string method=request.GetProperty("method").GetString() ?? "";
         if (method != "get_state") DiagnosticLog.Write("mcp-command", new { method, state = DiagnosticState() });
         var args=request.TryGetProperty("args",out var a)?a:JsonSerializer.SerializeToElement(new{});
-        double Number(string key)=>args.GetProperty(key).GetDouble();
-        Track Target()
+        var command=AiCommands().GetValueOrDefault(method);
+        var gate=command?.Gate??AiGate.Idle;
+        if(gate!=AiGate.Always && motionInspectionBusy)throw new InvalidOperationException("Path inspection is running. Wait or cancel before other commands.");
+        if(gate==AiGate.Idle && videoExport?.Running==true)throw new InvalidOperationException("Video export is running. Wait for completion or cancel it before editing or playing.");
+        if(command==null)throw new InvalidOperationException("Unknown MechCue command: "+method);
+        return command.Run(args);
+    }
+    static double AiNumber(JsonElement args,string key)=>args.GetProperty(key).GetDouble();
+    Track AiTarget(JsonElement args)
+    {
+        if(args.TryGetProperty("trackId",out var id) && !string.IsNullOrEmpty(id.GetString()))return tracks.Single(t=>t.Id==Guid.Parse(id.GetString()!));
+        int index=args.GetProperty("trackNumber").GetInt32();if(index<1 || index>tracks.Count)throw new ArgumentOutOfRangeException("trackNumber");return tracks[index-1];
+    }
+    object SetAiInspectionPolicy(JsonElement args)
+    {
+        if(reviewMode.Checked)throw new InvalidOperationException("Creation mode required");
+        var policy=args.GetProperty("policy").Deserialize<MotionInspectionPolicy>(new JsonSerializerOptions{PropertyNameCaseInsensitive=true})??throw new ArgumentException("Missing policy");
+        bridge.ValidateMotionInspectionPolicy(policy);PausePlayback();bridge.InspectionPolicy=policy;lastCheckedTime=null;MarkDocumentSettingsChanged();return policy;
+    }
+    object CheckAiMotion(JsonElement args)
+    {
+        double start=AiNumber(args,"startTime"),end=AiNumber(args,"endTime"),step=AiNumber(args,"step");
+        bool adaptive=args.TryGetProperty("adaptive",out var adaptiveValue)&&adaptiveValue.GetBoolean();
+        double linear=args.TryGetProperty("maxLinearStepMm",out var linearValue)?linearValue.GetDouble():5;
+        double angular=args.TryGetProperty("maxAngularStepDeg",out var angularValue)?angularValue.GetDouble():1;
+        int limit=args.TryGetProperty("maxSamples",out var limitValue)?limitValue.GetInt32():5001;
+        bool stopOnInterference=args.TryGetProperty("stopOnInterference",out var stopValue)&&stopValue.GetBoolean();
+        bool surfaceBased=!args.TryGetProperty("surfaceBased",out var surfaceValue)||surfaceValue.GetBoolean();
+        double surfaceStep=args.TryGetProperty("maxSurfaceStepMm",out var surfaceStepValue)?surfaceStepValue.GetDouble():5;
+        double clearance=args.TryGetProperty("requiredClearanceMm",out var clearanceValue)?clearanceValue.GetDouble():0;
+        if(!double.IsFinite(clearance)||clearance<0||clearance>10000)throw new ArgumentException("Clearance must be 0..10000 mm");
+        if(!double.IsFinite(start)||!double.IsFinite(end)||!double.IsFinite(step)||start<0||end<=start||end>tracks.Max(t=>t.Points[^1].Time)||step<=0)throw new ArgumentException("Use a finite positive chart interval and step");
+        using var reflection = PauseCadReflection(); PausePlayback();Commit();
+        var policy=args.TryGetProperty("inspectionPolicy",out var configuration)?configuration.Deserialize<MotionInspectionPolicy>(new JsonSerializerOptions{PropertyNameCaseInsensitive=true})??throw new ArgumentException("Missing policy"):bridge.InspectionPolicy;
+        policy.Validate();if(limit is <2 or >10001)throw new ArgumentException("maxSamples must be 2..10001 per batch");
+        int totalLimit=policy.AutoSplit?policy.MaxTotalSamples:limit;
+        double[] samples;
+        if(adaptive)samples=bridge.PlanMotionSamples(start,end,step,linear,angular,totalLimit,surfaceBased,surfaceStep);
+        else samples=bridge.PlanCoarseMotionSamples(start,end,step,totalLimit);
+        var result=bridge.CheckContinuousMotion(samples,clearance,policy,limit,stopOnInterference);
+        RecordMotionInspection(System.Text.Json.JsonSerializer.SerializeToElement(result));return InspectionOperationSummary(motionReports[^1]);
+    }
+    Guid AiPatternId(JsonElement args) => args.TryGetProperty("patternId",out var pid) && !string.IsNullOrEmpty(pid.GetString()) ? Guid.Parse(pid.GetString()!) : args.TryGetProperty("patternName",out var pn) && !string.IsNullOrEmpty(pn.GetString()) ? patterns.Single(p=>string.Equals(p.Name,pn.GetString(),StringComparison.OrdinalIgnoreCase)).Id : activePattern;
+    object EditAiPattern(Action edit){EnsurePatterns();edit();return AiState();}
+    object BindAiNested(JsonElement args)
+    {
+        using var reflection = PauseCadReflection(); PausePlayback();Commit();var track=AiTarget(args);
+        var expected=args.GetProperty("expectedDocument").GetString();
+        if(!bridge.Connected||!string.Equals(bridge.DocumentPath,expected,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Connected document differs from expectedDocument");
+        string kind=args.GetProperty("kind").GetString()!,direction=args.GetProperty("axis").GetString()!;
+        if(kind is not ("部品移動" or "部品回転" or "部品座標")||direction is not ("X" or "Y" or "Z"))throw new ArgumentException("Invalid nested drive kind/axis");
+        if(bridge.BoundLabel(track)!=null||bridge.PendingLabel(track)!=null)throw new InvalidOperationException("Choose an unassigned track");
+        string oldKind=track.Kind,oldAxis=track.Axis;track.Kind=kind;track.Axis=direction;
+        try{bridge.BindNested(track,args.GetProperty("keyPath").GetString()!,args.GetProperty("modifySharedSubassembly").GetBoolean());}
+        catch{track.Kind=oldKind;track.Axis=oldAxis;throw;}
+        plot.Hidden.Remove(track);ClearEditHistory();RefreshTracks(tracks.IndexOf(track));MarkDocumentSettingsChanged();return AiState();
+    }
+    Dictionary<Track,List<KeyPoint>> KeyframesBatch(JsonElement args)
+    {
+        var changes=new Dictionary<Track,List<KeyPoint>>();
+        var edits=args.GetProperty("tracks").EnumerateArray().ToArray();
+        if(edits.Length is <1 or >128)throw new ArgumentException("Supply 1–128 distinct tracks");
+        foreach(var edit in edits)
         {
-            if(args.TryGetProperty("trackId",out var id) && !string.IsNullOrEmpty(id.GetString()))return tracks.Single(t=>t.Id==Guid.Parse(id.GetString()!));
-            int index=args.GetProperty("trackNumber").GetInt32();if(index<1 || index>tracks.Count)throw new ArgumentOutOfRangeException("trackNumber");return tracks[index-1];
+            Track edited=edit.TryGetProperty("trackId",out var tid)?tracks.Single(t=>t.Id==Guid.Parse(tid.GetString()!)):tracks[edit.GetProperty("trackNumber").GetInt32()-1];
+            if(changes.ContainsKey(edited))throw new ArgumentException("Duplicate track in batch");
+            changes[edited]=edit.GetProperty("points").EnumerateArray().Select(p=>new KeyPoint(p.GetProperty("time").GetDouble(),p.GetProperty("value").GetDouble())).ToList();
         }
-        if(method=="get_state")return AiState();
-        if(method=="stop"){PausePlayback();return AiState();}
-        if(motionInspectionBusy)throw new InvalidOperationException("Path inspection is running. Wait or cancel before other commands.");
-        if(method=="list_inspection_parts")return bridge.ListMotionInspectionParts();
-        if(method=="get_inspection_reports")return InspectionReports(args);
-        if(method=="set_inspection_policy"){
-            if(reviewMode.Checked)throw new InvalidOperationException("Creation mode required");
-            var policy=args.GetProperty("policy").Deserialize<MotionInspectionPolicy>(new JsonSerializerOptions{PropertyNameCaseInsensitive=true})??throw new ArgumentException("Missing policy");
-            bridge.ValidateMotionInspectionPolicy(policy);PausePlayback();bridge.InspectionPolicy=policy;lastCheckedTime=null;MarkDocumentSettingsChanged();return policy;
-        }
-        if(method=="get_video_export")return VideoStatus(args,false);
-        if(method=="cancel_video_export")return VideoStatus(args,true);
-        if(videoExport?.Running==true)throw new InvalidOperationException("Video export is running. Wait for completion or cancel it before editing or playing.");
-        if(method=="set_playback_options")return SetPlaybackOptions(args);
-        if(method=="export_video")return StartVideoExport(args);
-        if(method=="place_window")return PlaceWindow(args.GetProperty("position").GetInt32());
-        if(method=="check_motion")
+        if(changes.Values.Sum(ps=>ps.Count)>100000)throw new ArgumentException("At most 100000 points per batch");
+        return changes;
+    }
+    /// <summary>Every commanded track sampled from 0 to end at a fixed step (physics tracks are left to the engine).</summary>
+    Dictionary<Track,List<KeyPoint>> Resample(double end,double step)
+    {
+        if(!double.IsFinite(end)||!double.IsFinite(step)||end<=0||end>100000||step<=0||step>end||Math.Ceiling(end/step)>10000 || (Math.Ceiling(end/step)+1)*tracks.Count>100000)throw new ArgumentException("Invalid range; at most 10001 time points per track and 100000 total points");
+        var changes=new Dictionary<Track,List<KeyPoint>>();
+        foreach(var t in tracks.Where(t=>!t.Derived))
         {
-            double start=Number("startTime"),end=Number("endTime"),step=Number("step");
-            bool adaptive=args.TryGetProperty("adaptive",out var adaptiveValue)&&adaptiveValue.GetBoolean();
-            double linear=args.TryGetProperty("maxLinearStepMm",out var linearValue)?linearValue.GetDouble():5;
-            double angular=args.TryGetProperty("maxAngularStepDeg",out var angularValue)?angularValue.GetDouble():1;
-            int limit=args.TryGetProperty("maxSamples",out var limitValue)?limitValue.GetInt32():5001;
-            bool stopOnInterference=args.TryGetProperty("stopOnInterference",out var stopValue)&&stopValue.GetBoolean();
-            bool surfaceBased=!args.TryGetProperty("surfaceBased",out var surfaceValue)||surfaceValue.GetBoolean();
-            double surfaceStep=args.TryGetProperty("maxSurfaceStepMm",out var surfaceStepValue)?surfaceStepValue.GetDouble():5;
-            double clearance=args.TryGetProperty("requiredClearanceMm",out var clearanceValue)?clearanceValue.GetDouble():0;
-            if(!double.IsFinite(clearance)||clearance<0||clearance>10000)throw new ArgumentException("Clearance must be 0..10000 mm");
-            if(!double.IsFinite(start)||!double.IsFinite(end)||!double.IsFinite(step)||start<0||end<=start||end>tracks.Max(t=>t.Points[^1].Time)||step<=0)throw new ArgumentException("Use a finite positive chart interval and step");
-            using var reflection = PauseCadReflection(); PausePlayback();Commit();
-            var policy=args.TryGetProperty("inspectionPolicy",out var configuration)?configuration.Deserialize<MotionInspectionPolicy>(new JsonSerializerOptions{PropertyNameCaseInsensitive=true})??throw new ArgumentException("Missing policy"):bridge.InspectionPolicy;
-            policy.Validate();if(limit is <2 or >10001)throw new ArgumentException("maxSamples must be 2..10001 per batch");
-            int totalLimit=policy.AutoSplit?policy.MaxTotalSamples:limit;
-            double[] samples;
-            if(adaptive)samples=bridge.PlanMotionSamples(start,end,step,linear,angular,totalLimit,surfaceBased,surfaceStep);
-            else samples=bridge.PlanCoarseMotionSamples(start,end,step,totalLimit);
-            var result=bridge.CheckContinuousMotion(samples,clearance,policy,limit,stopOnInterference);
-            RecordMotionInspection(System.Text.Json.JsonSerializer.SerializeToElement(result));return InspectionOperationSummary(motionReports[^1]);
-        }
-        if(method=="list_patterns") { StoreActivePattern(); return new { activePatternId=activePattern, patterns=patterns.Select(p=>new { id=p.Id,name=p.Name,description=p.Description,duration=p.Points.Values.Max(ps=>ps[^1].Time),speed=p.Speed,loop=p.Loop,collision=p.Collision }) }; }
-        if(method is "switch_pattern" or "create_pattern" or "rename_pattern" or "delete_pattern") {
-            EnsurePatterns();
-            Guid PatternId() => args.TryGetProperty("patternId",out var pid) && !string.IsNullOrEmpty(pid.GetString()) ? Guid.Parse(pid.GetString()!) : args.TryGetProperty("patternName",out var pn) && !string.IsNullOrEmpty(pn.GetString()) ? patterns.Single(p=>string.Equals(p.Name,pn.GetString(),StringComparison.OrdinalIgnoreCase)).Id : activePattern;
-            switch(method) {
-                case "switch_pattern": SwitchPattern(PatternId()); break;
-                case "create_pattern": CreatePattern(args.GetProperty("name").GetString()!,args.TryGetProperty("duplicate",out var dup) && dup.GetBoolean()); break;
-                case "rename_pattern": RenamePattern(PatternId(),args.GetProperty("name").GetString()!,args.TryGetProperty("description",out var desc)?desc.GetString():null); break;
-                case "delete_pattern": DeletePattern(PatternId()); break;
+            t.Validate();int segment=0;
+            double At(double position)
+            {
+                if(position<=t.Points[0].Time)return t.Points[0].Value;
+                while(segment<t.Points.Count-2 && t.Points[segment+1].Time<position)segment++;
+                var first=t.Points[segment];var last=t.Points[segment+1];
+                if(position>=last.Time)return last.Value;
+                double ratio=(position-first.Time)/(last.Time-first.Time);
+                return first.Value*(1-ratio)+last.Value*ratio;
             }
-            return AiState();
+            var sampled=new List<KeyPoint>();for(int i=0;i*step<end;i++)sampled.Add(new(i*step,At(i*step)));sampled.Add(new(end,At(end)));changes[t]=sampled;
         }
-        if(method is "set_physics" or "recompute_physics")return HandlePhysics(args,method);
-        if(method=="import_concept"){if(!bridge.Connected)throw new InvalidOperationException("Connect MechCue to the concept assembly before importing axes.");ImportConceptAxes(args.GetProperty("manifestPath").GetString()!,args.TryGetProperty("unboundTracks",out var unbound)?unbound.GetString()!:"preserve");return AiState();}
-        if(method=="save_document"){
-            var expected=args.GetProperty("expectedDocument").GetString();
-            if(!bridge.Connected || !string.Equals(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)),expected,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Connected document differs from expectedDocument.");
-            SaveToDocument();return AiState();
-        }
-        if(method=="migrate_concept"){MigrateConceptSettings(args.GetProperty("expectedDocument").GetString()!,args.GetProperty("manifestPath").GetString()!,args.GetProperty("settingsJson").GetString()!,args.TryGetProperty("hideUnboundTracks",out var hide) && hide.GetBoolean());return AiState();}
-        if(method=="bind_nested")
-        {
-            using var reflection = PauseCadReflection(); PausePlayback();Commit();var track=Target();
-            var expected=args.GetProperty("expectedDocument").GetString();
-            if(!bridge.Connected||!string.Equals(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)),expected,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Connected document differs from expectedDocument");
-            string kind=args.GetProperty("kind").GetString()!,direction=args.GetProperty("axis").GetString()!;
-            if(kind is not ("部品移動" or "部品回転" or "部品座標")||direction is not ("X" or "Y" or "Z"))throw new ArgumentException("Invalid nested drive kind/axis");
-            if(bridge.BoundLabel(track)!=null||bridge.PendingLabel(track)!=null)throw new InvalidOperationException("Choose an unassigned track");
-            string oldKind=track.Kind,oldAxis=track.Axis;track.Kind=kind;track.Axis=direction;
-            try{bridge.BindNested(track,args.GetProperty("keyPath").GetString()!,args.GetProperty("modifySharedSubassembly").GetBoolean());}
-            catch{track.Kind=oldKind;track.Axis=oldAxis;throw;}
-            plot.Hidden.Remove(track);ClearEditHistory();RefreshTracks(tracks.IndexOf(track));MarkDocumentSettingsChanged();return AiState();
-        }
-        if(method=="stop"){PausePlayback();return AiState();}
-        if(method=="play"){StartPlayback();return AiState();}
-        if(method=="seek"){
-            double position=Number("time");if(!double.IsFinite(position)||position<0||position>tracks.Max(t=>t.Points[^1].Time))throw new ArgumentOutOfRangeException("time");
-            PausePlayback();time.Value=(decimal)position;return AiState();
-        }
-        if(method=="undo"){using var reflection = PauseCadReflection(); PausePlayback();Undo();return AiState();}
-        if(method is not ("set_keyframe" or "reset_values" or "resample" or "set_keyframes" or "delete_keyframe"))throw new InvalidOperationException("Unknown MechCue command: "+method);
+        return changes;
+    }
+    /// <summary>Applies keyframe edits as one undo step after validating them (physics tracks and concept axis limits).</summary>
+    object EditAiKeyframes(Func<Dictionary<Track,List<KeyPoint>>> compute)
+    {
         using var editReflection = PauseCadReflection(); PausePlayback();Commit();
         if(bridge.Connected)_=bridge.Document;
-        var changes=new Dictionary<Track,List<KeyPoint>>();
-        switch(method)
-        {
-            case "set_keyframes":
-                var edits=args.GetProperty("tracks").EnumerateArray().ToArray();
-                if(edits.Length is <1 or >128)throw new ArgumentException("Supply 1–128 distinct tracks");
-                foreach(var edit in edits)
-                {
-                    Track edited=edit.TryGetProperty("trackId",out var tid)?tracks.Single(t=>t.Id==Guid.Parse(tid.GetString()!)):tracks[edit.GetProperty("trackNumber").GetInt32()-1];
-                    if(changes.ContainsKey(edited))throw new ArgumentException("Duplicate track in batch");
-                    changes[edited]=edit.GetProperty("points").EnumerateArray().Select(p=>new KeyPoint(p.GetProperty("time").GetDouble(),p.GetProperty("value").GetDouble())).ToList();
-                }
-                if(changes.Values.Sum(ps=>ps.Count)>100000)throw new ArgumentException("At most 100000 points per batch");
-                break;
-            case "delete_keyframe":
-                var deleted=Target();double deletedTime=Number("time");
-                if(!deleted.Points.Any(p=>p.Time==deletedTime))throw new ArgumentException("Keyframe time not found");
-                changes[deleted]=deleted.Points.Where(p=>p.Time!=deletedTime).ToList();break;
-            case "set_keyframe":
-                var track=Target();double moment=Number("time"),value=Number("value");
-                var points=track.Points.Where(p=>p.Time!=moment).Append(new KeyPoint(moment,value)).OrderBy(p=>p.Time).ToList();changes[track]=points;break;
-            case "reset_values":
-                track=Target();value=Number("value");changes[track]=track.Points.Select(p=>p with {Value=value}).ToList();break;
-            case "resample":
-                double end=Number("endTime"),step=Number("step");
-                if(!double.IsFinite(end)||!double.IsFinite(step)||end<=0||end>100000||step<=0||step>end||Math.Ceiling(end/step)>10000 || (Math.Ceiling(end/step)+1)*tracks.Count>100000)throw new ArgumentException("Invalid range; at most 10001 time points per track and 100000 total points");
-                foreach(var t in tracks.Where(t=>!t.Derived))
-                {
-                    t.Validate();int segment=0;
-                    double At(double position)
-                    {
-                        if(position<=t.Points[0].Time)return t.Points[0].Value;
-                        while(segment<t.Points.Count-2 && t.Points[segment+1].Time<position)segment++;
-                        var first=t.Points[segment];var last=t.Points[segment+1];
-                        if(position>=last.Time)return last.Value;
-                        double ratio=(position-first.Time)/(last.Time-first.Time);
-                        return first.Value*(1-ratio)+last.Value*ratio;
-                    }
-                    var sampled=new List<KeyPoint>();for(int i=0;i*step<end;i++)sampled.Add(new(i*step,At(i*step)));sampled.Add(new(end,At(end)));changes[t]=sampled;
-                }break;
-            default:throw new InvalidOperationException("Unknown MechCue command: "+method);
-        }
+        var changes=compute();
         if(changes.Keys.FirstOrDefault(t=>t.Derived) is {} derivedTrack)throw new InvalidOperationException($"Track {derivedTrack.Name} is a physics result and cannot be edited; edit the arm and finger keyframes (mechcue_set_physics / mechcue_recompute_physics control the computation).");
         foreach(var points in changes.Values){new Track{Points=points}.Validate();if(points[^1].Time>100000)throw new ArgumentOutOfRangeException("time");}
         foreach(var change in changes)bridge.ValidateConceptPoints(change.Key,change.Value);

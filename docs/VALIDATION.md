@@ -1,5 +1,8 @@
 # 公開前の確認
 
+<!-- mechcue-docs-language -->
+[日本語](VALIDATION.md) | [English](VALIDATION.en.md) | [文書一覧](INDEX.md)
+
 自動確認：補間・単位・XYZ・回転、ドラッグ・上下限超過・取消、接続喪失、
 機構別解除・再割り当て、UI起動、COM GUID／メソッド順序、配布パッケージ。
 ローカルで最小COM定義のネイティブ署名をSolid Edge 2026の定義と照合しました。
@@ -54,29 +57,26 @@ alpha.16：公式C# SDKによるstdio初期化、13ツールの列挙、実際�
 alpha.17：両版入り・アドイン専用セットアップに選択式のMCPコンポーネントを追加。MCP本体・依存DLL・ライセンス・設定例・HTML接続ガイドのコンパイラー入力と、アドイン専用版に独立版EXEが入らないことを検査します。インストール先はMCPサブフォルダーで、削除はInno Setupのアンインストール管理を使用します。実際の導入・選択画面・スタートメニュー・削除は利用者確認が必要です。
 
 
-## alpha.18: ribbon registration and version display
+## alpha.18：リボン登録とバージョン表示
 
-Commands now carry distinct GUID/local-ID names. Registration uses SetAddInInfoEx output runtime IDs, without duplicate AddCommand registration. GUI version 7 rebuilds the saved ribbon on upgrade. Native API verification on running Solid Edge 2026 registered all seven commands (runtime IDs 62004–62010) and accepted large button styles. Bitmap resources are checked in the compiled DLL. Visual appearance and persistence after closing/reopening Solid Edge still require user verification. Live check adds a separate verification group in the current session. Window titles display the informational version (excluding source hash) in standalone and add-in modes, including compact mode.
+コマンドごとに固有のGUID・ローカルID名を使い、SetAddInInfoExが返す実行時IDで登録します。AddCommandでの二重登録は行いません。GUI版7で保存済みリボンを再構築します。Solid Edge 2026の実機APIで7コマンド（実行時ID62004～62010）の登録と大きなボタン形式を確認し、DLL内のビットマップも検査しました。見た目とSolid Edge再起動後の保持は利用者確認が必要です。実機確認ではそのセッションに検証用グループを追加しました。両版の通常・最小表示のタイトルには、ソースハッシュを除いたInformationalVersionを表示します。
 
+## alpha.19：最小表示の操作欄・サイズ変更・文書の寿命
 
-## alpha.19: compact toolbar, resize, document lifetime
+グラフはResizeRedrawでサイズ変更時に全体を再描画します。最小表示の再生ボタンはヒント付きアイコンのみとし、戻る・反映・干渉・反復を短く表示します。操作欄は折り返さず、言語とDPIを含む実測幅でウィンドウの最小幅を決めます。日英の最小幅、各操作の収まり、再生アイコンと説明、対象文書のイベント振り分けをスモーク検査します。対象が閉じるか別文書へ切り替わると、アドイン画面は停止・変更設定の反映・切断・破棄を行います。独立版の動作は維持します。実際の文書閉鎖・切替と連続リサイズの見た目は実機確認が必要です。
 
-Plot enables ResizeRedraw to invalidate the full chart on resizing. Compact playback buttons are icon-only with tooltips; Back/Apply/Collision/Loop labels are shortened. The toolbar never wraps and minimum window width follows the measured control widths, including language and DPI scaling. Smoke checks exercise Japanese/English at minimum width and ensure all toolbar controls fit, playback icons and hints exist, and document lifecycle dispatch filters the correct target. Add-in windows stop, stage modified settings and disconnect/dispose when their target closes or another document becomes active; standalone windows keep their existing behavior. Native document close/switch and continuous resize appearance require user verification on Solid Edge.
+## alpha.20：再生・データメニュー・リボン群・パネル
 
+同じユーザーのローカルAI接続は既定でオン、明示的にオフへ変更可能です。両表示の再生は一時停止と切り替わり、時刻を保持してアイコンと説明を更新します。停止ボタンを省き、MCPの停止は残します。JSON・表・CAD保存をデータメニューへまとめました。8ピクセルの境界でパネルを調整し、見出しの「−」で非表示、表示メニュー・リボンで復元します。最小表示でも選択とサイズを保持します。GUI版8のリボンは接続・再生・データ・編集・機構・表示の6群34コマンドです。旧停止を省き、チェック形式と状態値をSolid Edge 2026の定数で照合しました。35アクションと一時停止の画像セットがあります。再生・再開、AI既定、パネル・境界、メニュー、日英・最小表示、MCPを検査します。導入後のリボン外観・チェック・アイコン更新は実機確認が必要です。
 
-## alpha.20: playback, data menu, ribbon groups, panels
+## alpha.21：小さい数値表での選択と診断
 
-AI access defaults on and can be disabled explicitly; communication remains local/current-user. Playback buttons in both modes toggle play/pause, retain the current time and switch icons/tooltips. The redundant Stop button is removed, while MCP Stop remains supported. JSON/table operations and CAD save are under Data. Panels resize via 8-pixel splitters, hide via header minus buttons and restore via View or native ribbon; compact mode retains hidden-panel choices and panel sizes. Native ribbon GUI version 8 registers 34 commands in six role groups (connection/playback/data/edit/mechanisms/view), omitting the legacy Stop action, with check-button styles and state flags verified against installed Solid Edge 2026 constants. There are 35 action bitmap sets plus a pause set. Tests cover play/pause/resume, AI default, panel toggles and splitter operation, menu placement, languages/compact layout and MCP. Native grouped ribbon appearance, check state and dynamic icon refresh need validation after installation.
+利用者の例外スタックから、見出ししか表示できない点の表でFirstDisplayedScrollingRowIndexが失敗すると確認しました。小さい表・非表示ではスクロールを省き、選択を保持します。見出しだけの高さ、最小表示、非表示での点選択を回帰検査します。操作・設定・サイズ・境界・選択・例外を、版と画面状態付きでローカルの `%LOCALAPPDATA%/MechCue/Logs` にJSONL記録します。約5 MBで切り替え、20ファイルを保持し、ログ失敗でも編集を続けます。「データ」→「ログフォルダー」で開けます。
 
+## alpha.22：リボン画像のマゼンタ表示
 
-## alpha.21: small-grid selection and diagnostics
+Solid Edge 2026では透過色と想定したマゼンタと縁が表示されました。背景とアンチエイリアスを白へ変更し、GUI版9でキャッシュを更新します。カラー資源に純マゼンタ画素がないことを検査します。更新後の実機の外観は利用者確認が必要です。alpha.21の小さい表の修正と診断も含みます。
 
-User exception stack confirmed FirstDisplayedScrollingRowIndex failed from graph point selection when the keyframe grid had no space below its header. Scroll is skipped for hidden/tiny grids; selection remains valid. Regression tests shrink the numeric panel to its header and select a point, and repeat while compact/hidden. Operation, option, resize/splitter, point selection and exception logs include version and layout state. JSONL diagnostics are local in %LOCALAPPDATA%/MechCue/Logs, rotate around 5 MB and retain 20 diagnostic files. Log write failures do not interrupt editing. Data > Log folder opens the directory.
-
-
-## alpha.22: visible magenta in ribbon icons
-
-Solid Edge 2026 displayed the assumed magenta bitmap transparency key and antialiased fringes. Color bitmap backgrounds and antialiasing are now neutral white. GUI version 9 invalidates cached ribbon artwork. All color bitmap resources are checked for residual pure magenta pixels. Native ribbon appearance after upgrade still needs user verification. Includes alpha.21 small-grid scroll fix and operation diagnostics.
 ## 0.2.0のSolid Edge操作MCP
 
 2026-10-01、Solid Edge 2026の実機で専用の新規文書を使って確認しました。

@@ -373,9 +373,13 @@
         }
       },
       "mechcue": {
+        "type": "Project"
+      },
+      "mechcue.physics": {
         "type": "Project",
         "dependencies": {
-          "BepuPhysics": "[2.5.0-beta.33, )"
+          "BepuPhysics": "[2.5.0-beta.33, )",
+          "MechCue": "[0.3.3-alpha.3, )"
         }
       }
     }

@@ -11,8 +11,11 @@ public partial class MainForm
 {
     readonly System.Windows.Forms.Timer physicsTimer = new() { Interval = 700 };
     readonly Button physicsButton = new() { AutoSize = true, Height = 27, Visible = false };
+    readonly Button physicsReportButton = new() { AutoSize = true, Height = 27, Visible = false };
     readonly CheckBox physicsAuto = new() { AutoSize = true, Visible = false };
     readonly Label physicsStatus = new() { AutoSize = true, Visible = false, Margin = new Padding(6, 6, 0, 0) };
+    /// <summary>The engine call; the UI tests replace it so they do not need the physics calculator.</summary>
+    internal Func<ConceptMachine, RigidBodySetup, Dictionary<string, List<JointPoint>>, RigidBodyResult> physicsRunner = (m, s, j) => PhysicsProcess.Run(m, s, j);
     int physicsGeneration;
     bool physicsBusy, updatingPhysicsControls;
 
@@ -30,7 +33,9 @@ public partial class MainForm
     void ConfigurePhysicsControls(FlowLayoutPanel row)
     {
         physicsButton.Text = PatternText("物理を再計算", "Recompute physics"); physicsAuto.Text = PatternText("自動", "Auto");
-        row.Controls.Add(physicsButton); row.Controls.Add(physicsAuto); row.Controls.Add(physicsStatus);
+        physicsReportButton.Text = PatternText("物理の結果", "Physics results");
+        row.Controls.Add(physicsButton); row.Controls.Add(physicsAuto); row.Controls.Add(physicsStatus); row.Controls.Add(physicsReportButton);
+        physicsReportButton.Click += (_, _) => Guard(ShowPhysicsReport);
         physicsButton.Click += (_, _) => Guard(() => { PausePlayback(); Commit(); RecomputePhysics(); });
         physicsAuto.CheckedChanged += (_, _) => {
             if (updatingPhysicsControls || PhysicsConcept() is not { } c) return;
@@ -45,11 +50,13 @@ public partial class MainForm
     void RefreshPhysicsControls()
     {
         var c = PhysicsConcept(); bool available = c != null;
-        physicsButton.Visible = physicsAuto.Visible = physicsStatus.Visible = available;
+        physicsButton.Visible = physicsAuto.Visible = physicsStatus.Visible = physicsReportButton.Visible = available;
+        physicsReportButton.Enabled = c?.Physics?.Report != null;
         if (c == null) return;
         updatingPhysicsControls = true;
         try { physicsAuto.Checked = c.Physics?.Auto ?? true; } finally { updatingPhysicsControls = false; }
         bool stale = PhysicsStale;
+        foreach (var id in c.Tracks.Values) tracks.Single(t => t.Id == id).ActualMotionCurrent = !stale;
         physicsStatus.Text = physicsBusy ? PatternText("物理：計算中…", "Physics: computing…") : stale ? PatternText("物理：要再計算", "Physics: out of date") : PatternText("物理：最新", "Physics: up to date");
         physicsStatus.ForeColor = physicsBusy ? Color.DimGray : stale ? Color.Firebrick : Color.SeaGreen;
     }
@@ -77,7 +84,7 @@ public partial class MainForm
         string hash = PhysicsHashNow(c); if (hash == c.Physics?.ComputedHash) return;
         var (setup, joints) = PhysicsTracks.Inputs(c, TrackMap());
         int generation = ++physicsGeneration; physicsBusy = true; RefreshPhysicsControls(); RigidBodyResult? result = null; Exception? failure = null;
-        try { result = await Task.Run(() => PhysicsTracks.Run(c, setup, joints)); } catch (Exception ex) { failure = ex; }
+        try { var model = c.Model; result = await Task.Run(() => physicsRunner(model, setup, joints)); } catch (Exception ex) { failure = ex; }
         physicsBusy = false;
         if (IsDisposed) return;
         if (failure != null) { status.Text = PatternText("物理の計算に失敗しました：", "Physics failed: ") + failure.Message; RefreshPhysicsControls(); return; }
@@ -91,7 +98,7 @@ public partial class MainForm
         var c = PhysicsConcept() ?? throw new InvalidOperationException(PatternText("この概略モデルには物理トラックがありません（arm5pが対象です）。", "This concept has no physics tracks (arm5p only)."));
         physicsTimer.Stop(); physicsGeneration++;
         string hash = PhysicsHashNow(c); var (setup, joints) = PhysicsTracks.Inputs(c, TrackMap());
-        var result = PhysicsTracks.Run(c, setup, joints);
+        var result = physicsRunner(c.Model, setup, joints);
         return ApplyPhysics(c, result, hash);
     }
 
@@ -99,7 +106,7 @@ public partial class MainForm
     {
         var warnings = PhysicsTracks.Apply(c, result, TrackMap(), hash);
         StoreActivePattern(); ClearEditHistory(); RefreshTracks(trackList.SelectedIndex, false); MarkDocumentSettingsChanged(); RefreshPhysicsControls();
-        string text = PatternText("物理を再計算しました", "Physics recomputed") + $"（{result.Engine}、{result.FinalState}）" + (warnings.Count > 0 ? " / " + warnings[0] : "");
+        string text = PatternText("物理を再計算しました", "Physics recomputed") + $"（{result.Engine}、{result.FinalState}）" + PatternText($" / イベント {result.Events.Count}件", $" / {result.Events.Count} events") + (warnings.Count > 0 ? " / " + warnings[0] : "");
         status.Text = text; return text;
     }
 
@@ -107,7 +114,30 @@ public partial class MainForm
     {
         var c = PhysicsConcept();
         if (c == null) return new { available = false };
-        return new { available = true, auto = c.Physics?.Auto ?? true, stale = PhysicsStale, busy = physicsBusy, setup = c.Physics?.Setup ?? new RigidBodySetup(), derivedAxes = PhysicsTracks.FreeBodyAxes(c.Model) };
+        return new { available = true, auto = c.Physics?.Auto ?? true, stale = PhysicsStale, busy = physicsBusy, setup = c.Physics?.Setup ?? new RigidBodySetup(), derivedAxes = PhysicsTracks.FreeBodyAxes(c.Model), report = c.Physics?.Report,
+            fingerAxisKeyframes = c.Tracks.Where(p => {var t=tracks.Single(t => t.Id == p.Value);return !ReferenceEquals(t.PlaybackPoints,t.Points);}).ToDictionary(p => p.Key, p => tracks.Single(t => t.Id == p.Value).PlaybackPoints) };
+    }
+
+    internal string PhysicsReportText()
+    {
+        var report = PhysicsConcept()?.Physics?.Report;
+        if (report == null) return PatternText("計算結果はまだありません。", "No computation results yet.");
+        var lines = new List<string> { PhysicsStale ? PatternText("要再計算：以下は前回の結果です。", "Out of date: the previous result is shown below.") : PatternText("最新の計算結果", "Current computation result"),
+            $"{report.Engine} / {report.FinalState}", PatternText($"計算時間範囲：0～{report.EndTime:0.###} 秒 / {report.Samples} 点 / 最大傾き {report.MaxTiltDegrees:0.###}°", $"Interval: 0–{report.EndTime:0.###} s / {report.Samples} samples / maximum tilt {report.MaxTiltDegrees:0.###}°"), "" };
+        foreach (var e in report.Events.OrderBy(e => e.Time)) lines.Add($"{e.Time:0.###} s / {PhysicsEventName(e.Type)} / {e.Detail}");
+        if (report.Events.Count == 0) lines.Add(PatternText("イベントなし", "No events"));
+        foreach (var warning in report.Warnings) lines.Add(PatternText("警告：", "Warning: ") + warning);
+        return string.Join(Environment.NewLine, lines);
+    }
+    string PhysicsEventName(string type) => type switch {
+        "lift-off" => PatternText("持ち上げ", "Lift-off"), "settled" => PatternText("静止", "Settled"),
+        "tipped" => PatternText("転倒", "Tipped"), "finger-stopped" => PatternText("指の停止", "Finger stopped"), _ => type
+    };
+    void ShowPhysicsReport()
+    {
+        using var dialog = new Form { Text = PatternText("物理の結果", "Physics results"), StartPosition = FormStartPosition.CenterParent, Size = new Size(760, 440), MinimumSize = new Size(420, 240) };
+        dialog.Controls.Add(new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Text = PhysicsReportText() });
+        dialog.ShowDialog(this);
     }
 
     /// <summary>MCP: change the physics settings (auto, setup) and/or recompute.</summary>

@@ -1,5 +1,8 @@
 # 搬送機械の実機検討からのMCP修正（2026-10-02）
 
+<!-- mechcue-docs-language -->
+[日本語](MCP_WORKFLOW_FIXES_20261002.md) | [English](MCP_WORKFLOW_FIXES_20261002.en.md) | [文書一覧](INDEX.md)
+
 実機検討記録: `output/Gantry-MCP-study-20261002-1900/設計検討・MCP不足機能.md`。
 本変更では、検討時にAPIへ迂回した操作とSolid Edgeライフサイクルを優先した。全ての不足機能を解消した状態ではない。バージョン変更、インストール、GitHub公開は行っていない。
 

@@ -1,7 +1,7 @@
 param(
     [switch]$WithAddIn,
     [switch]$WithMcp,
-    [string]$Version = '0.3.3-alpha.02',
+    [string]$Version = '0.3.3-alpha.04',
     [string]$OutputDirectory,
     [string]$PythonPath = 'python'
 )
@@ -13,7 +13,7 @@ $taskRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskOutput = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $taskRoot "artifacts\$Version" }
 if (Test-Path -LiteralPath $taskOutput) { throw "Use a new output directory to avoid packaging stale files: $taskOutput" }
 $taskStandalone = Join-Path $taskOutput 'standalone'
-& dotnet publish (Join-Path $taskRoot 'MechCue.csproj') -c Release --self-contained false -p:PlatformTarget=x64 -p:RestoreLockedMode=true "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskStandalone
+& dotnet publish (Join-Path $taskRoot 'MechCue.csproj') -c Release --self-contained false -p:PlatformTarget=x64 "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskStandalone
 if ($LASTEXITCODE -ne 0) { throw 'Standalone build failed' }
 foreach ($taskCheck in @('--self-test','--smoke-test')) {
     $taskCheckLog = Join-Path $taskStandalone ($taskCheck.TrimStart('-') + '-stdout.txt')
@@ -23,6 +23,18 @@ foreach ($taskCheck in @('--self-test','--smoke-test')) {
     Get-Content -LiteralPath $taskCheckLog, $taskCheckError
     if ($taskProcess.ExitCode -ne 0) { throw "Check failed: $taskCheck" }
 }
+# The physics calculator runs as its own process next to MechCue.dll, so the rigid-body engine is never loaded into Solid Edge.
+$taskPhysics = Join-Path $taskOutput 'physics'
+& dotnet restore (Join-Path $taskRoot 'Physics/MechCue.Physics.csproj') --configfile (Join-Path $taskRoot 'Physics/NuGet.Config') --locked-mode "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version"
+if ($LASTEXITCODE -ne 0) { throw 'Physics locked dependency restore failed' }
+& dotnet publish (Join-Path $taskRoot 'Physics/MechCue.Physics.csproj') -c Release --no-restore --self-contained false -p:DebugType=none -p:DebugSymbols=false "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskPhysics
+if ($LASTEXITCODE -ne 0) { throw 'Physics calculator build failed' }
+$taskPhysicsLog = Join-Path $taskOutput 'physics-self-test.txt'; $taskPhysicsError = Join-Path $taskOutput 'physics-self-test-error.txt'
+$taskProcess = Start-Process -FilePath (Join-Path $taskPhysics 'MechCue.Physics.exe') -ArgumentList '--self-test' -PassThru -Wait -WindowStyle Hidden -RedirectStandardOutput $taskPhysicsLog -RedirectStandardError $taskPhysicsError
+Get-Content -LiteralPath $taskPhysicsLog, $taskPhysicsError
+if ($taskProcess.ExitCode -ne 0) { throw 'Physics calculator self-test failed' }
+$taskPhysicsFiles = @('MechCue.Physics.exe','MechCue.Physics.dll','MechCue.Physics.deps.json','MechCue.Physics.runtimeconfig.json','BepuPhysics.dll','BepuUtilities.dll')
+foreach ($taskFile in $taskPhysicsFiles) { Copy-Item -LiteralPath (Join-Path $taskPhysics $taskFile) -Destination $taskStandalone }
 $taskDistribution = Join-Path $taskOutput 'release'
 New-Item -ItemType Directory -Path $taskDistribution -Force | Out-Null
 # Stage only runtime files; test reports and screenshots are diagnostic artifacts.
@@ -80,6 +92,7 @@ if ($WithAddIn) {
     $taskAddIn = Join-Path $taskOutput 'addin'
     & dotnet publish (Join-Path $taskRoot 'AddIn\MechCue.AddIn.csproj') -c Release --self-contained false "-p:RestoreConfigFile=$taskRoot\NuGet.Config" "-p:Version=$taskSdkVersion" "-p:MechCueReleaseVersion=$Version" -o $taskAddIn
     if ($LASTEXITCODE -ne 0) { throw 'Add-in build failed' }
+    foreach ($taskFile in $taskPhysicsFiles) { Copy-Item -LiteralPath (Join-Path $taskPhysics $taskFile) -Destination $taskAddIn }
     & dotnet run --project (Join-Path $taskRoot 'tools\ComContractCheck\ComContractCheck.csproj') -c Release "-p:RestoreConfigFile=$taskRoot\NuGet.Config"
     if ($LASTEXITCODE -ne 0) { throw 'COM contract checks failed' }
     if ($WithMcp) { & (Join-Path $PSScriptRoot 'Test-InstallerUpdate.ps1') -McpDirectory $taskMcp -OutputDirectory (Join-Path $taskOutput 'installer-update-test') }

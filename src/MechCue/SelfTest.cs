@@ -17,9 +17,9 @@ public static partial class SelfTest
         editable = new Track(); editable.ShiftSegment(0, 25);
         Assert(editable.Points.SequenceEqual(new[] { new KeyPoint(0, 25), new KeyPoint(2, 125), new KeyPoint(4, 0) }), "Segment keeps times, slope, and other endpoint");
         TestConceptMachines();
-        TestConceptPhysics();
         TestConceptArm5p();
         TestPhysicsTracks();
+        TestConvexGeometry();
         TestDetailPlanning();
         TestMotionSampling();
         TestInspectionArchive();

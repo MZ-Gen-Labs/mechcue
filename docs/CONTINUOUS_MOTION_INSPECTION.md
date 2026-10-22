@@ -1,5 +1,8 @@
 # 内部部品・接触指定・連続区間の検査
 
+<!-- mechcue-docs-language -->
+[日本語](CONTINUOUS_MOTION_INSPECTION.md) | [English](CONTINUOUS_MOTION_INSPECTION.en.md) | [文書一覧](INDEX.md)
+
 0.3.1-alpha.04で追加し、alpha.05で部品対ごとの検証、粗い初期点、結果の軽量化・自動分割を拡張した機能。
 
 ## 対応内容

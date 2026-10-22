@@ -1,5 +1,8 @@
 # MechCue アドイン
 
+<!-- mechcue-docs-language -->
+[日本語](README.md) | [English](README.en.md) | [文書一覧](../docs/INDEX.md)
+
 アドイン版はSolid Edge内、独立版は別プロセスで動きます。画面とJSONは共通です。
 比較は一方を切断してからもう一方へ接続してください。
 一般利用には[インストーラー](../Installer/README.md)を使用します。

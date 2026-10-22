@@ -1,5 +1,8 @@
 # 経路の自動細分化と干渉検査
 
+<!-- mechcue-docs-language -->
+[日本語](ADAPTIVE_MOTION_INSPECTION.md) | [English](ADAPTIVE_MOTION_INSPECTION.en.md) | [文書一覧](INDEX.md)
+
 2026-10-03 実装。0.3.1-alpha.03 に収録。既配布の 0.3.1-alpha.02 セットアップには含まれません。
 
 ## 経路全体の結果をUIで記録する

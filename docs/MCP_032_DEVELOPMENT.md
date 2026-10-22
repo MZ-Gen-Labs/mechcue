@@ -1,5 +1,8 @@
 # 0.3.2-alpha.01 開発状況
 
+<!-- mechcue-docs-language -->
+[日本語](MCP_032_DEVELOPMENT.md) | [English](MCP_032_DEVELOPMENT.en.md) | [文書一覧](INDEX.md)
+
 0.3.1正式版から分岐した開発系列の記録。0.3.2正式版としてまとめた（[0.3.2の変更点](releases/0.3.2.md)）。
 
 ## 最初の実装

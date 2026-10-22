@@ -3,14 +3,8 @@ namespace MechCue;
 public sealed partial class Bridge
 {
     public static object CadConceptTemplates() => new {
-        templates = new[] {
-            new { type="mill3", description="Vertical mill: table X on saddle Y; spindle Z", axes="XYZ", purpose="Layout, travel and motion concept" },
-            new { type="mill4", description="Vertical mill with table rotation C about local Z", axes="XYZC", purpose="Indexing and workpiece orientation" },
-            new { type="mill5", description="Vertical mill with trunnion A about local X and child table C about local Z", axes="XYZAC", purpose="Table-table five-axis motion concept; no TCP or inverse kinematics" },
-            new { type="gantry", description="Cartesian handling: Y bridge, child X carriage, child Z and simplified gripper", axes="XYZ", purpose="Handling layout and travel; gripper has no open/close joint" },
-            new { type="arm5", description="Table-mounted five-axis arm: J1 turret about Z, J2 shoulder, J3 elbow and J4 wrist pitch about local Y, J5 wrist roll about local X, two-finger hand and a workpiece on the table", axes="J1-J5", purpose="Reach, pick-and-place posture and motion concept; travel arguments do not apply, fingers have no open/close joint; the workpiece moves on its own world X/Y/Z carrier axes WX/WY/WZ (0 = resting on the table), so a chart carries it by keyframing those axes along the hand; no inverse kinematics" },
-            new { type="arm5p", description="arm5 prepared for physics runs: adds finger slide axes F1/F2 (each along the hand Y axis; F1 closes with negative values, F2 with positive) and gives the workpiece a free-body chain WX, WY, WZ then yaw WRZ, pitch WRY, roll WRX (degrees, about the workpiece centre)", axes="J1-J5, F1, F2, WX, WY, WZ, WRZ, WRY, WRX", purpose="Pick-and-place with friction grip, lift, release, drop and tipping computed by solidedge_simulate_concept_rigid_body; no inverse kinematics" }
-        }, units = new { length="mm", angle="degree" }, scope="Concept geometry and forward kinematics; not vendor replicas, machining simulation or production-ready machine design."
+        templates = ConceptTemplates.All.Select(t => new { type = t.Type, description = t.Description, axes = t.Axes, purpose = t.Purpose }).ToArray(),
+        units = new { length="mm", angle="degree" }, scope="Concept geometry and forward kinematics; not vendor replicas, machining simulation or production-ready machine design."
     };
     static double[] ConceptPlaneVector(object plane, string method) {
         object[] args = [new double[3]]; CadCallRef(plane, method, [0], args);
@@ -71,6 +65,7 @@ public sealed partial class Bridge
         var model=JsonSerializer.Deserialize<ConceptMachine>(File.ReadAllText(manifestPath),ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid concept manifest."); model.Validate();
         string directory=Path.GetDirectoryName(manifestPath)!;
         string Local(string file,params string[] extensions) {
+            if(model.Type == "convex-assembly" && Path.IsPathFullyQualified(file)) return CadPath(file, extensions);
             if(Path.GetFileName(file)!=file || string.IsNullOrEmpty(file)) throw new ArgumentException("Manifest references must be local file names.");
             return CadPath(Path.Combine(directory,file),extensions);
         }

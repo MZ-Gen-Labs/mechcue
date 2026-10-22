@@ -1,5 +1,8 @@
 # MCPでの反映設定と干渉検査
 
+<!-- mechcue-docs-language -->
+[日本語](MCP_PLAYBACK_INTERFERENCE.md) | [English](MCP_PLAYBACK_INTERFERENCE.en.md) | [文書一覧](INDEX.md)
+
 ## 操作
 
 `mechcue_set_playback_options` で、接続したアセンブリとセッションを指定し、

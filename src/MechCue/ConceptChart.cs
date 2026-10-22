@@ -109,7 +109,12 @@ public sealed partial class Bridge
         var all=tracks.ToDictionary(t=>t.Id);var bound=new Dictionary<string,Track>();var parts=new Dictionary<string,object>();
         foreach(var a in saved.Model.Axes){if(!saved.Tracks.TryGetValue(a.Id,out var id)||!all.TryGetValue(id,out var t)||t.Kind!=(a.Kind=="rotary"?"部品回転":"部品移動")||t.Axis!=a.Direction)throw new InvalidOperationException("概略軸の保存したグラフが一致しません。");bound[a.Id]=t;}
         string dir=Path.GetDirectoryName(CadName(doc!))!;var occurrences=Get(doc!,"Occurrences");
-        foreach(var b in saved.Model.Bodies){if(Path.GetFileName(b.File)!=b.File)throw new InvalidDataException("Invalid concept part path");var matches=Enumerable.Range(1,Convert.ToInt32(Get(occurrences,"Count"))).Select(i=>GetItem(occurrences,i)).Where(o=>Convert.ToString(Get(o,"Name"))==b.Occurrence&&string.Equals(CadName(Get(o,"OccurrenceDocument")),Path.Combine(dir,b.File),StringComparison.OrdinalIgnoreCase)).ToList();if(matches.Count!=1)throw new InvalidOperationException("概略部品が見つからないか変更されています："+b.Id);parts[b.Id]=matches[0];}
+        foreach(var b in saved.Model.Bodies){
+            if(Path.GetFileName(b.File)!=b.File && !(saved.Model.Type=="convex-assembly" && Path.IsPathFullyQualified(b.File)))throw new InvalidDataException("Invalid concept part path");
+            string file=Path.IsPathFullyQualified(b.File)?b.File:Path.Combine(dir,b.File);
+            var matches=Enumerable.Range(1,Convert.ToInt32(Get(occurrences,"Count"))).Select(i=>GetItem(occurrences,i)).Where(o=>Convert.ToString(Get(o,"Name"))==b.Occurrence&&string.Equals(CadName(Get(o,"OccurrenceDocument")),file,StringComparison.OrdinalIgnoreCase)).ToList();
+            if(matches.Count!=1)throw new InvalidOperationException("概略部品が見つからないか変更されています："+b.Id);parts[b.Id]=matches[0];
+        }
         concept=saved;conceptTracks.Clear();foreach(var p in bound)conceptTracks[p.Key]=p.Value;conceptParts.Clear();foreach(var p in parts)conceptParts[p.Key]=p.Value;conceptActive=false;
     }
     internal void ApplyConcept(double time) { if(concept==null)return;var values=conceptTracks.ToDictionary(p=>p.Key,p=>p.Value.At(time));concept.Model.ValidateValues(values);foreach(var a in concept.Model.Axes)if(conceptTracks[a.Id].Kind!=(a.Kind=="rotary"?"部品回転":"部品移動")||conceptTracks[a.Id].Axis!=a.Direction)throw new InvalidOperationException("概略軸の駆動方法は変更できません。");SetConceptPose(values);conceptActive=true; }
@@ -128,7 +133,7 @@ public partial class MainForm
     void ImportConceptAxes(string path="", string unboundTracks="preserve") {
         if (unboundTracks is not ("preserve" or "hide")) throw new ArgumentException("unboundTracks must be preserve or hide.");
         if(!bridge.Connected)ConnectDocument();PausePlayback();live.Checked=false;Commit();
-        if(path==""){string dir=Path.GetDirectoryName(Convert.ToString(bridge.Document.GetType().InvokeMember("FullName",System.Reflection.BindingFlags.GetProperty,null,bridge.Document,null)))!;path=Path.Combine(dir,"mechcue-concept.json");if(!File.Exists(path)){using var dialog=new OpenFileDialog{Filter="Concept JSON|*.json"};if(dialog.ShowDialog(this)!=DialogResult.OK)return;path=dialog.FileName;}}
+        if(path==""){string dir=Path.GetDirectoryName(bridge.DocumentPath)!;path=Path.Combine(dir,"mechcue-concept.json");if(!File.Exists(path)){using var dialog=new OpenFileDialog{Filter="Concept JSON|*.json"};if(dialog.ShowDialog(this)!=DialogResult.OK)return;path=dialog.FileName;}}
         var added=bridge.ImportConcept(path,tracks);foreach(var t in added)if(!tracks.Contains(t))tracks.Add(t);
         if (unboundTracks == "hide") foreach (var t in tracks)
             if (!bridge.IsConcept(t) && bridge.BoundLabel(t) == null && bridge.PendingLabel(t) == null) plot.Hidden.Add(t);

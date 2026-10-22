@@ -1,5 +1,8 @@
 # alpha.04 実5軸モデル検証結果
 
+<!-- mechcue-docs-language -->
+[日本語](MILL5_ALPHA04_ACTUAL_MODEL_VERIFICATION_20261003.md) | [English](MILL5_ALPHA04_ACTUAL_MODEL_VERIFICATION_20261003.en.md) | [文書一覧](INDEX.md)
+
 2026-10-03。インストール済み 0.3.1-alpha.04（70a6cc6）、Solid Edge 2026。
 
 ## 結論

@@ -2,44 +2,6 @@ using MechCue;
 
 namespace MechCue.Physics;
 
-public sealed class RigidBodySetup
-{
-    public string Workpiece { get; set; } = "workpiece";
-    /// <summary>World direction of gravity (any non-zero vector; normalised).</summary>
-    public double[] Gravity { get; set; } = [0, 0, -1];
-    public double GravityMps2 { get; set; } = 9.81;
-    public double WorkpieceMassKg { get; set; } = 0.5;
-    public double WorkpieceFriction { get; set; } = 0.5;
-    public double Restitution { get; set; }
-    /// <summary>Bodies moved by the arm axes (hand, fingers, links) use this friction unless overridden in <see cref="Friction"/>.</summary>
-    public double ArmFriction { get; set; } = 0.8;
-    /// <summary>Fixed bodies (table, base) use this friction unless overridden in <see cref="Friction"/>.</summary>
-    public double SupportFriction { get; set; } = 0.6;
-    /// <summary>Friction per body id; overrides the defaults above.</summary>
-    public Dictionary<string, double> Friction { get; set; } = [];
-    /// <summary>Optional floor: a large static slab whose top is at this world height (mm). Null = no floor, things fall forever.</summary>
-    public double? FloorZMm { get; set; }
-    public double EndTime { get; set; }
-    /// <summary>Spacing of the produced keyframes.</summary>
-    public double OutputStepSeconds { get; set; } = 0.02;
-    /// <summary>Physics steps per second (rounded up to a whole number of steps per output step).</summary>
-    public double PhysicsHz { get; set; } = 240;
-    /// <summary>The workpiece first rests for this long (with the arm held at t=0) so it settles before the chart starts.</summary>
-    public double PreSettleSeconds { get; set; } = 0.3;
-}
-
-public sealed class RigidBodyResult
-{
-    public Dictionary<string, List<JointPoint>> Axes { get; } = [];
-    public List<PhysicsEvent> Events { get; } = [];
-    public List<string> Warnings { get; } = [];
-    public string Engine { get; set; } = "";
-    public string FinalState { get; set; } = "";
-    public double EndTime { get; set; }
-    public int Samples { get; set; }
-    public double MaxTiltDegrees { get; set; }
-}
-
 /// <summary>
 /// Runs a pick-and-place chart through a rigid-body engine. The fixed bodies of a concept model become static colliders,
 /// the bodies moved by the arm/finger axes follow the chart as kinematic bodies, and the workpiece (a free-body axis chain,
@@ -48,7 +10,8 @@ public sealed class RigidBodyResult
 public static class ConceptRigidBodySimulator
 {
     static double[] Translation(double xMm, double yMm, double zMm) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, xMm / 1000, yMm / 1000, zMm / 1000, 1];
-    static PhysicsShape ShapeOf(ConceptBody b) => b.Shape == "cylinder"
+    static PhysicsShape ShapeOf(ConceptBody b) => b.Shape == "convex"
+        ? new(PhysicsShapeKind.ConvexHull, 0, 0, 0, b.VerticesMm!.Select(p => p.Select(v => v / 1000).ToArray()).ToArray()) : b.Shape == "cylinder"
         ? new(PhysicsShapeKind.CylinderZ, b.SizeMm[0] / 1000, b.SizeMm[1] / 1000, b.SizeMm[2] / 1000)
         : new(PhysicsShapeKind.Box, b.SizeMm[0] / 1000, b.SizeMm[1] / 1000, b.SizeMm[2] / 1000);
 
@@ -69,6 +32,17 @@ public static class ConceptRigidBodySimulator
         if (!(setup.OutputStepSeconds >= 0.005 && setup.OutputStepSeconds <= 1)) throw new ArgumentException("OutputStepSeconds must be 0.005..1.");
         if (!(setup.PhysicsHz >= 30 && setup.PhysicsHz <= 2000)) throw new ArgumentException("PhysicsHz must be 30..2000.");
         if (!(setup.PreSettleSeconds >= 0 && setup.PreSettleSeconds <= 10)) throw new ArgumentException("PreSettleSeconds must be 0..10.");
+        if (!(setup.Restitution >= 0 && setup.Restitution <= 1)) throw new ArgumentException("Restitution must be 0..1.");
+        if (!(setup.ContactHz >= 10 && setup.ContactHz <= Math.Min(1000, 2 * setup.PhysicsHz))) throw new ArgumentException($"ContactHz must be 10..{Math.Min(1000, 2 * setup.PhysicsHz):0} (at most twice PhysicsHz).");
+        if (!(setup.ContactSkinMm >= 0 && setup.ContactSkinMm <= 5)) throw new ArgumentException("ContactSkinMm must be 0..5.");
+        if (setup.GripForceN is double grip && !(grip > 0 && grip <= 10000)) throw new ArgumentException("GripForceN must be in (0, 10000] N, or null for position-driven fingers.");
+        // Force-driven fingers: the bodies on the grip axes slide on the body that carries those axes (the hand).
+        var gripAxes = setup.GripForceN == null ? [] : model.Axes.Where(a => setup.GripAxes.Contains(a.Id)).ToList();
+        foreach (var axis in gripAxes) if (axis.Kind != "linear") throw new ArgumentException("Grip axis must be linear: " + axis.Id);
+        if (setup.GripForceN != null && gripAxes.Count == 0) throw new ArgumentException("GripForceN needs finger axes (GripAxes) in the model: " + string.Join(", ", setup.GripAxes));
+        var fingerAxis = model.Bodies.Where(b => gripAxes.Any(a => a.Id == b.Parent)).ToDictionary(b => b.Id, b => gripAxes.Single(a => a.Id == b.Parent));
+        var carrierOf = fingerAxis.ToDictionary(p => p.Key, p => model.Bodies.FirstOrDefault(b => b.Parent == p.Value.Parent && b.Parent != "")?.Id
+            ?? throw new ArgumentException($"No body moves with the finger axis {p.Value.Id}'s parent to carry the finger {p.Key}."));
         foreach (var key in joints.Keys) if (!model.Axes.Any(a => a.Id == key) || freeAxes.Contains(key)) throw new ArgumentException("Trajectory for an unknown or workpiece axis: " + key);
         foreach (var points in joints.Values)
             if (points.Count == 0 || points.Any(p => !double.IsFinite(p.Time) || !double.IsFinite(p.Value) || p.Time < 0) || points.Zip(points.Skip(1)).Any(p => p.Second.Time <= p.First.Time)) throw new ArgumentException("Trajectories need strictly increasing nonnegative times.");
@@ -96,8 +70,9 @@ public static class ConceptRigidBodySimulator
         result.Engine = engine.Name;
         double gl = Math.Sqrt(setup.Gravity.Sum(v => v * v));
         engine.SetGravity(setup.Gravity[0] / gl * setup.GravityMps2, setup.Gravity[1] / gl * setup.GravityMps2, setup.Gravity[2] / gl * setup.GravityMps2);
+        engine.SetContact(setup.ContactHz, 2, setup.ContactSkinMm / 1000);
         var start = BodyFrames(0); var kinematic = new List<string>();
-        foreach (var b in model.Bodies) {
+        foreach (var b in model.Bodies.Where(b => !fingerAxis.ContainsKey(b.Id))) {
             double mu = setup.Friction.TryGetValue(b.Id, out var f) ? f : b.Id == work.Id ? setup.WorkpieceFriction : b.Parent == "" ? setup.SupportFriction : setup.ArmFriction;
             var material = new PhysicsMaterial(mu, b.Id == work.Id ? setup.Restitution : 0);
             var pose = RigidPose.FromMatrix(start[b.Id]);
@@ -105,12 +80,30 @@ public static class ConceptRigidBodySimulator
             else if (b.Parent == "") engine.AddStatic(b.Id, ShapeOf(b), pose, material);
             else { engine.AddKinematic(b.Id, ShapeOf(b), pose, material); kinematic.Add(b.Id); }
         }
+        double AxisValue(ConceptAxis a, double t) => joints.TryGetValue(a.Id, out var p) ? Lerp(p, t) : model.Values[a.Id];
+        var startAxes = model.AxisPoses(model.Axes.ToDictionary(a => a.Id, a => AxisValue(a, 0)));
+        foreach (var (id, axis) in fingerAxis) {
+            // The finger's slide direction in the world: the axis direction in its parent frame (column of the rotation).
+            var m = startAxes[axis.Parent]; int n = axis.Direction == "X" ? 0 : axis.Direction == "Y" ? 1 : 2;
+            var b = model.Bodies.Single(x => x.Id == id);
+            double mu = setup.Friction.TryGetValue(id, out var f) ? f : setup.ArmFriction;
+            // Finger mass like the workpiece's: the contact springs are mass-scaled, so a light finger would sink into the workpiece under force.
+            engine.AddSlider(id, ShapeOf(b), RigidPose.FromMatrix(start[id]), new PhysicsMaterial(mu), setup.WorkpieceMassKg, carrierOf[id], (m[n * 4], m[n * 4 + 1], m[n * 4 + 2]), setup.GripForceN!.Value);
+        }
+        var lag = fingerAxis.Keys.ToDictionary(id => id, _ => (Max: 0.0, Since: -1.0));
         if (setup.FloorZMm is double floorZ) engine.AddStatic("floor-plane", new(PhysicsShapeKind.Box, 40, 40, 0.2), RigidPose.Identity with { Z = floorZ / 1000 - 0.1 }, new(setup.SupportFriction));
         void Step(double timeAfterStep)
         {
             var frames = BodyFrames(timeAfterStep);
             foreach (var id in kinematic) engine.SetKinematicTarget(id, RigidPose.FromMatrix(frames[id]));
+            foreach (var (id, axis) in fingerAxis) engine.SetSliderTarget(id, (AxisValue(axis, timeAfterStep) - AxisValue(axis, 0)) / 1000);
             engine.Step(dt);
+            foreach (var id in fingerAxis.Keys) {
+                // How far a force-driven finger is from its chart position (it stops at the workpiece).
+                var p = engine.GetPose(id); var goal = frames[id];
+                double gap = 1000 * Math.Sqrt(Math.Pow(p.X - goal[12], 2) + Math.Pow(p.Y - goal[13], 2) + Math.Pow(p.Z - goal[14], 2));
+                var (max, since) = lag[id]; lag[id] = (Math.Max(max, gap), since < 0 && gap > 2 ? timeAfterStep : since);
+            }
         }
         for (int i = 0, n = (int)Math.Round(setup.PreSettleSeconds / dt); i < n; i++) Step(0);
 
@@ -126,6 +119,15 @@ public static class ConceptRigidBodySimulator
             double Unwrap(double value, ref double last) { if (!first) while (value - last > 180) value -= 360; if (!first) while (value - last < -180) value += 360; last = value; return value; }
             double yaw = Unwrap(values[yawId], ref lastYaw), pitch = Unwrap(values[pitchId], ref lastPitch), roll = Unwrap(values[rollId], ref lastRoll);
             first = false; values[yawId] = yaw; values[pitchId] = pitch; values[rollId] = roll;
+            // Project the simulated centre into the commanded parent frame. Commands remain inputs;
+            // only the measured linear travel is returned for playback.
+            var axisPoses = model.AxisPoses(model.Axes.ToDictionary(a => a.Id, a => AxisValue(a, t)));
+            foreach (var (id, axis) in fingerAxis) {
+                var finger = engine.GetPose(id); var parent = axisPoses[axis.Parent];
+                int n = axis.Direction == "X" ? 0 : axis.Direction == "Y" ? 1 : 2;
+                var body = model.Bodies.Single(b => b.Id == id);
+                values[axis.Id] = 1000 * (parent[n * 4] * (finger.X - parent[12]) + parent[n * 4 + 1] * (finger.Y - parent[13]) + parent[n * 4 + 2] * (finger.Z - parent[14])) - axis.OriginMm[n] - body.CenterMm[n];
+            }
             var m = p.ToMatrix(); double tilt = Math.Acos(Math.Clamp(m[10], -1, 1)) * 180 / Math.PI; // angle between the workpiece's Z axis and world Z
             maxTilt = Math.Max(maxTilt, tilt);
             var v = engine.GetLinearVelocity(work.Id); double speed = Math.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
@@ -144,12 +146,14 @@ public static class ConceptRigidBodySimulator
             samples.Add((t, Record(t)));
         }
         result.MaxTiltDegrees = maxTilt; result.Samples = samples.Count;
+        foreach (var (id, (max, since)) in lag) if (max > 2)
+            result.Events.Add(new() { Time = Math.Max(0, since), Type = "finger-stopped", Detail = $"{id} stopped up to {max:0.#} mm short of its chart position (it presses with at most {setup.GripForceN:0.#} N); fingerAxisKeyframes contain its actual travel" });
         var final = engine.GetPose(work.Id);
         if (final.Z < home.Z - 0.4) result.Warnings.Add("The workpiece ended more than 400 mm below its start (it fell off the table).");
         double finalTilt = Math.Acos(Math.Clamp(final.ToMatrix()[10], -1, 1)) * 180 / Math.PI;
         if (finalTilt > 30) result.Events.Add(new() { Time = end, Type = "tipped", Detail = $"final tilt {finalTilt:0.#}°" });
         result.FinalState = state == "moving" ? "moving" : finalTilt > 30 ? "tipped" : "resting";
-        foreach (var axis in chain) {
+        foreach (var axis in chain.Concat(gripAxes)) {
             var raw = samples.Select(s => new JointPoint { Time = Math.Round(s.T, 6), Value = Math.Round(s.V[axis.Id], 4) }).ToList();
             var kept = new List<JointPoint> { raw[0] };
             for (int i = 1; i < raw.Count - 1; i++) {
@@ -158,7 +162,7 @@ public static class ConceptRigidBodySimulator
             }
             kept.Add(raw[^1]);
             foreach (var p in kept) if (p.Value < axis.Minimum || p.Value > axis.Maximum) { result.Warnings.Add($"{axis.Id} leaves its range [{axis.Minimum}, {axis.Maximum}] at t={p.Time:0.###}s."); break; }
-            result.Axes[axis.Id] = kept;
+            (freeAxes.Contains(axis.Id) ? result.Axes : result.FingerAxes)[axis.Id] = kept;
         }
         return result;
     }
@@ -173,10 +177,10 @@ public static partial class ConceptRigidBodyApi
         if (new FileInfo(manifestPath).Length > 1024 * 1024) throw new ArgumentException("Concept manifest exceeds 1 MB.");
         var model = System.Text.Json.JsonSerializer.Deserialize<ConceptMachine>(File.ReadAllText(manifestPath), ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid concept manifest.");
         var joints = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<JointPoint>>>(string.IsNullOrWhiteSpace(jointsJson) ? "{}" : jointsJson, ConceptMachine.JsonOptions) ?? throw new ArgumentException("jointsJson must be an object {axisId:[{time,value},...]}.");
-        var setup = string.IsNullOrWhiteSpace(physicsJson) ? new RigidBodySetup() : System.Text.Json.JsonSerializer.Deserialize<RigidBodySetup>(physicsJson, ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid physicsJson.");
+        var setup = string.IsNullOrWhiteSpace(physicsJson) ? model.PhysicsDefaults ?? new RigidBodySetup() : System.Text.Json.JsonSerializer.Deserialize<RigidBodySetup>(physicsJson, ConceptMachine.JsonOptions) ?? throw new ArgumentException("Invalid physicsJson.");
         var r = ConceptRigidBodySimulator.Run(model, setup, joints);
         return new {
-            engine = r.Engine, finalState = r.FinalState, endTime = r.EndTime, samples = r.Samples, maxTiltDegrees = Math.Round(r.MaxTiltDegrees, 1), events = r.Events, warnings = r.Warnings, axisKeyframes = r.Axes,
+            engine = r.Engine, finalState = r.FinalState, endTime = r.EndTime, samples = r.Samples, maxTiltDegrees = Math.Round(r.MaxTiltDegrees, 1), events = r.Events, warnings = r.Warnings, axisKeyframes = r.Axes, fingerAxisKeyframes = r.FingerAxes,
             note = "Keyframes (mm / degrees) for the workpiece's free-body axes. Apply them with mechcue_set_keyframes after looking up each axis' trackId. Rigid-body model of boxes and cylinders; the hand's squeeze comes from the finger axes F1/F2 in the supplied trajectories."
         };
     }

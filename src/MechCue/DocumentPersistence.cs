@@ -10,6 +10,8 @@ public sealed partial class Bridge
     ApplicationEventSink? saveSink;
     int saveCookie;
     internal object Document { get { Check(false); return doc!; } }
+    /// <summary>Full path of the connected document (the chart window compares it with MCP arguments; no COM in the UI code).</summary>
+    internal string DocumentPath => Convert.ToString(Get(Document, "FullName")) ?? "";
     public string? PendingLabel(Track track) => unresolved.TryGetValue(track, out var saved) ? saved.Label : null;
     internal string? ReadSettings() { Check(); return DocumentStorage.Read(doc!); }
     internal void WriteSettings(string json) { Check(false); DocumentSettings.Parse(json); DocumentStorage.Write(doc!, json); }

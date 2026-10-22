@@ -1,5 +1,8 @@
 # MechCue：アセンブリPMIの動作追従に関する調査結果
 
+<!-- mechcue-docs-language -->
+[日本語](PMI_FOLLOW_INVESTIGATION_20261012.md) | [English](PMI_FOLLOW_INVESTIGATION_20261012.en.md) | [文書一覧](docs/INDEX.md)
+
 > **追記（2026年10月12日・解決）**：作成直後に、その寸法の作成ステップだけを「元に戻す→やり直し」すると、API作成PMIが保存・開き直し・動作中の再計算なしで追従することを確認し、`CadAutoPmi`に組み込んだ。詳細は「13. 解決」を参照。1章の「根本修正は未完了」は、この追記で更新される。
 
 調査日：2026年10月12日  

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The physics calculator. It runs as its own process so the rigid-body engine (BepuPhysics, which manages native
+       memory) is never loaded into Solid Edge: the add-in and the standalone app start it per computation. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>MechCue.Physics</AssemblyName><RootNamespace>MechCue.Physics</RootNamespace>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BepuPhysics" Version="2.5.0-beta.33" />
+    <ProjectReference Include="../MechCue.csproj" />
+  </ItemGroup>
+</Project>

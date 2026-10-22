@@ -10,13 +10,16 @@ interface ICadMessageFilter
     [PreserveSig] int MessagePending(IntPtr callee,int ticks,int pending);
 }
 [ComVisible(true)]
-sealed class CadBusyRetry:ICadMessageFilter,IDisposable
+public sealed class CadBusyRetry:ICadMessageFilter,IDisposable
 {
     [DllImport("ole32.dll")] static extern int CoRegisterMessageFilter(ICadMessageFilter? value,out ICadMessageFilter? previous);
+    [DllImport("ole32.dll")] static extern int CoInitializeEx(IntPtr reserved,uint flags);
+    [DllImport("ole32.dll")] static extern void CoUninitialize();
     readonly ICadMessageFilter? previous;
-    public CadBusyRetry(){Marshal.ThrowExceptionForHR(CoRegisterMessageFilter(this,out previous));}
+    bool disposed;
+    public CadBusyRetry(){Marshal.ThrowExceptionForHR(CoInitializeEx(IntPtr.Zero,2));try{Marshal.ThrowExceptionForHR(CoRegisterMessageFilter(this,out previous));}catch{CoUninitialize();throw;}}
     public int HandleInComingCall(int type,IntPtr caller,int ticks,IntPtr info)=>0;
     public int RetryRejectedCall(IntPtr callee,int ticks,int rejection)=>ticks<5000&&rejection is 1 or 2?100:-1;
     public int MessagePending(IntPtr callee,int ticks,int pending)=>2;
-    public void Dispose()=>CoRegisterMessageFilter(previous,out _);
+    public void Dispose(){if(disposed)return;disposed=true;CoRegisterMessageFilter(previous,out _);CoUninitialize();}
 }

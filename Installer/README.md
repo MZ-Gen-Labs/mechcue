@@ -1,5 +1,8 @@
 # MechCue セットアップ
 
+<!-- mechcue-docs-language -->
+[日本語](README.md) | [English](README.en.md) | [文書一覧](../docs/INDEX.md)
+
 `MechCue-<version>-Setup.exe`の1種類です（0.3.2-alpha.02から）。インストールの種類で構成を選びます。
 
 - 標準：Solid Edgeアドインと独立版（`MechCue.exe`）。

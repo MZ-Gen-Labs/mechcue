@@ -1,5 +1,8 @@
 # 製品名と近い製品の調査
 
+<!-- mechcue-docs-language -->
+[日本語](NAMING.md) | [English](NAMING.en.md) | [文書一覧](INDEX.md)
+
 2026-09-30。採用名：**MechCue（メックキュー）**。
 Mech（機構）とCue（合図）。時間に沿って機構へ動作を与える意味で、将来のPLC連携にも合います。
 

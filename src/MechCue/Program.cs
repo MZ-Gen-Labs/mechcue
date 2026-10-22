@@ -10,6 +10,12 @@ static class Program
     {
         if (args.Contains("--self-test") || args.Contains("--smoke-test"))
             AppContext.SetSwitch("MechCue.DisableWindowPlacement", true);
+        if (args.Length == 3 && args[0] == "--convex-physics-integration-test") {
+            AppContext.SetSwitch("MechCue.DisableWindowPlacement", true);
+            try { ApplicationConfiguration.Initialize(); Application.OleRequired(); using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyCapturedPhysics(args[1], args[2]); form.Close(); }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Contains("--persistence-integration-test"))
         {
             try { ApplicationConfiguration.Initialize(); Application.OleRequired(); Bridge.VerifyDocumentPersistenceInSolidEdge(); }
@@ -86,7 +92,7 @@ static class Program
         ApplicationConfiguration.Initialize();
         if (args.Contains("--smoke-test"))
         {
-            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface(); form.VerifyMotionPatterns(); form.VerifyConceptWorkflowFixes(); form.VerifyTimelineInterface(); form.VerifyToolbarAndReorder(); form.VerifyMotionInspectionUi();
+            using var form = new MainForm(); form.Show(); Application.DoEvents(); form.VerifyInterface(); form.VerifyMotionPatterns(); form.VerifyConceptWorkflowFixes(); form.VerifyPhysicsUi(); form.VerifyTimelineInterface(); form.VerifyToolbarAndReorder(); form.VerifyMotionInspectionUi();
             using var image = new Bitmap(form.Width, form.Height); form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size));
             image.Save(Path.Combine(AppContext.BaseDirectory, "preview.png")); form.Close(); return;
         }
@@ -419,7 +425,7 @@ partial class Plot : Control
         if (dragViewScale != null && (index == dragTrack || (Overlay && IsAngle(Tracks[index]) == IsAngle(Tracks[dragTrack])))) return dragViewScale;
         var t = Tracks[index];
         var visible = VisibleIndices.ToArray();
-        var values = Overlay ? visible.Where(i => IsAngle(Tracks[i]) == IsAngle(t)).SelectMany(i => Tracks[i].Points).ToArray() : t.Points.ToArray();
+        var values = Overlay ? visible.Where(i => IsAngle(Tracks[i]) == IsAngle(t)).SelectMany(i => Tracks[i].Points.Concat(Tracks[i].PlaybackPoints)).ToArray() : t.Points.Concat(t.PlaybackPoints).ToArray();
         double min = values.Length == 0 ? 0 : values.Min(p => p.Value), max = values.Length == 0 ? 1 : values.Max(p => p.Value);
         double padding = Math.Max((max - min) * 0.2, Math.Max(Math.Abs(max), Math.Abs(min)) * 0.001);
         padding = Math.Max(padding, 0.1);
@@ -640,6 +646,14 @@ partial class Plot : Control
             int lastVisible = firstAfter < 0 ? t.Points.Count - 1 : firstAfter;
             var visibleLine = t.Points.Skip(firstVisible).Take(lastVisible - firstVisible + 1).Select(p => new PointF(X(p.Time), Y(p.Value))).ToArray();
             if (visibleLine.Length >= 2) g.DrawLines(pen, visibleLine);
+            if (!ReferenceEquals(t.PlaybackPoints, t.Points)) {
+                var actual = t.PlaybackPoints;
+                int first = Math.Max(0, actual.FindLastIndex(p => p.Time < ViewStart));
+                int after = actual.FindIndex(p => p.Time > ViewEnd);
+                var line = actual.Skip(first).Take((after < 0 ? actual.Count - 1 : after) - first + 1).Select(p => new PointF(X(p.Time), Y(p.Value))).ToArray();
+                using var actualPen = new Pen(TrackColor(n), 2) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash };
+                if (line.Length >= 2) g.DrawLines(actualPen, line);
+            }
             if (dragTrack == n && draggingSegment)
             {
                 using var selectedPen = new Pen(Color.Crimson, 5);

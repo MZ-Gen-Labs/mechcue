@@ -1,5 +1,8 @@
 # 日時順のリリース一覧
 
+<!-- mechcue-docs-language -->
+[日本語](RELEASE_LIST.md) | [English](RELEASE_LIST.en.md) | [文書一覧](INDEX.md)
+
 GitHub標準のReleasesページの表示順とは別に、同じバージョン内を「古いもの → 新しいもの」の順に並べた一覧を開けます。日付だけでなく時刻・秒まで比較し、最新を一番下に表示します。バージョン名やタグ、公開状態は変更しません。
 
 ## 開き方

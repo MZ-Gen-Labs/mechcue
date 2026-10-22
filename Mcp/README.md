@@ -1,5 +1,8 @@
 # MechCue MCP
 
+<!-- mechcue-docs-language -->
+[日本語](README.md) | [English](README.en.md) | [文書一覧](../docs/INDEX.md)
+
 MechCueをAIから操作するローカルMCPサーバーです。独立版・アドイン版の両方に対応します。MCPサーバーは別プロセスで動作し、同じWindowsユーザーのMechCue画面と名前付きパイプで通信します。AIモデル・APIキーは同梱しません。
 
 ## 導入
@@ -45,6 +48,8 @@ MCPサーバーはAIアプリが起動します。通常はEXEをダブルクリ
 | mechcue_undo | 直前のグラフ編集を取り消し |
 | mechcue_seek | 時刻カーソルを指定 |
 | mechcue_play / mechcue_stop | 再生・停止 |
+| mechcue_set_physics | 物理トラックの自動再計算のオン・オフと、物理の設定（質量・摩擦・重力方向・床の高さなど）の変更（0.3.3） |
+| mechcue_recompute_physics | 物理トラックを今すぐ再計算（0.3.3） |
 
 番号は1から始まります。AIはまず一覧を取得し、並び替えで変わらない `trackId` を使うことを推奨します。画面が複数ある場合は `sessionId` が必要です。読み取り対象は確定済みのグラフです。グラフ編集を開始する際は数値表の保留中の編集も確定します。
 
@@ -224,7 +229,7 @@ MCP本体はAIアプリが自動起動するstdioサーバーです。常駐す�
 - 干渉レポートは `reportCreated` と `reportSource` を返します。ネイティブ結果が確実にclearで、Solid Edgeがファイルを生成しない場合は `mechcue-clear-summary` の要約を生成します。その他の結果でファイルがない場合は解析結果と警告を返し、干渉なしとは扱いません。ネイティブの部品ペア情報の欠落を補完したことにはなりません。
 - 表示設定・画像出力は `dirtyBefore` と `dirtyAfter` を返します。形状を動かさない表示操作でも、文書の保存状態が変わる場合があります。自動保存はしません。
 
-Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechcue_switch_pattern`, `mechcue_rename_pattern`, `mechcue_delete_pattern`. Chart edits affect the active pattern; targets remain shared. Switching pauses and rewinds without moving CAD, preserving the current Apply/Collision/Loop selections. Subsequent play/seek follows the retained Apply selection. Save to CAD persists all patterns.
+名前付き動作パターン：`mechcue_list_patterns`、`mechcue_create_pattern`、`mechcue_switch_pattern`、`mechcue_rename_pattern`、`mechcue_delete_pattern`。グラフ編集は選択中のパターンが対象で、駆動先は共通です。切り替えではCADを動かさず再生を停止して先頭へ戻し、反映・干渉・反復の選択を保持します。その後の再生・時刻操作は保持した反映設定に従います。CAD保存では全パターンを保存します。
 
 更新時はインストーラーが、インストール先のMCP本体とトレイ設定を終了します。更新中の自動再起動は一時停止します。AIとのMCP接続は更新後に再接続してください。トレイ設定アイコンの終了だけではMCP本体は終了しません。旧版は専用の終了通知を持たないため、インストール先を確認してMCPプロセスのみ終了します。Solid Edgeや他フォルダのMCPは対象にしません。
 
@@ -284,3 +289,20 @@ Solid Edge起動・状態・安全な終了、アドイン経由のMechCue接続
 ## 0.3.2 開発機能
 
 `solidedge_create_offset_plane` で汎用オフセット基準平面を作成し、押出し・切り欠き・穴で使用できます。`solidedge_list_metric_threads` は説明・ファミリー・呼び径の絞り込みとページ取得に対応します。詳細と残課題は [0.3.2開発状況](../docs/MCP_032_DEVELOPMENT.md) を参照してください。
+
+## 0.3.3 剛体物理（開発中）
+
+開発変更：`solidedge_capture_convex_physics` で実アセンブリの平面凸多面体を取り込めます。1個の自由ワークと固定した周囲部品、CAD材質からの質量取得、チャートでの計算・保存に対応します。曲面・凹形状・入れ子と、機構・グリッパーの動作推定は対象外です。[操作と検証](../docs/CONVEX_PHYSICS.md)。
+
+構想モデル`arm5p`（`solidedge_create_concept_machine`の`type="arm5p"`）は、`arm5`に指のスライド軸`F1`・`F2`（`F1`は負、`F2`は正の値で閉じる）と、ワークの自由物体軸`WX`・`WY`・`WZ`・`WRZ`・`WRY`・`WRX`を加えたものです。
+
+- `solidedge_simulate_concept_rigid_body(manifestPath, jointsJson, physicsJson)`：腕と指の関節キーフレームから、ワークの6軸のキーフレームを剛体物理（BepuPhysics）で計算します。Solid EdgeにもMechCue画面にも接続しません。`physicsJson`で重力方向・質量・摩擦・床の高さなどを指定できます。結果の`axisKeyframes`は確認用で、タイムチャートでは次の物理トラックが自動で計算します。
+- **物理トラック**：`arm5p`を取り込んだタイムチャートでは、ワークの6軸が物理の結果として扱われます（`mechcue_get_state`の各トラックの`derived=true`）。`mechcue_set_keyframe(s)`などで直接編集すると拒否されます。腕・指のキーフレームを編集してください。
+- 腕・指のキーフレームや物理の設定を変えると、約0.7秒後に自動で再計算します。状態は`mechcue_get_state`の`physics`（`available`・`auto`・`stale`・`busy`・`setup`）で確認できます。自動をオフにするには`mechcue_set_physics(auto=false)`、すぐに計算するには`mechcue_recompute_physics`を使います。
+- 物理の設定・計算結果・指紋はアセンブリに保存され、`mechcue_migrate_concept_settings`で詳細アセンブリへ移行しても保持されます。
+- 力で閉じる指は、編集する指令値と計算後の実位置を別に保持します。CAD再生・経路検査は実位置を使い、グラフには実位置を破線で重ねます。再計算の入力は元の指令値です。`physics.fingerAxisKeyframes`で実位置を取得できます。
+- 「物理の結果」から持ち上げ・静止・転倒・指の停止イベントと警告を確認できます。`physics.report`にも同じ結果を返し、CAD保存時に保持します。入力変更後の前回結果は「要再計算」と表示します。単独計算の`solidedge_simulate_concept_rigid_body`は`fingerAxisKeyframes`を追加で返します。
+- 計算は別プロセスの`MechCue.Physics.exe`で行うため、計算が異常終了してもMechCueとSolid Edgeは止まりません。
+- 旧ツール`solidedge_simulate_concept_physics`（`arm5`向けの幾何学的な計算、摩擦・転倒なし）は0.3.3-alpha.03で廃止しました。`arm5p`と`solidedge_simulate_concept_rigid_body`を使ってください。
+
+0.3.3-alpha.04から、接触の硬さ（`contactHz`、既定120 Hz、静止時の沈み込み約0.02 mm）、力で閉じる指（`gripForceN`）、反発係数どおりの跳ね返り（`restitution`）を`physicsJson`／`setupJson`で指定できます。衝突形状は構想モデルの箱と円柱だけで、CADの実形状での接触解析ではありません。

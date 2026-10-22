@@ -12,6 +12,18 @@ public sealed class ConceptPhysicsSettings
     public RigidBodySetup Setup { get; set; } = new();
     /// <summary>Fingerprint of the commanded tracks and settings the stored physics tracks were computed from.</summary>
     public string? ComputedHash { get; set; }
+    public PhysicsReport? Report { get; set; }
+}
+
+public sealed class PhysicsReport
+{
+    public string Engine { get; set; } = "";
+    public string FinalState { get; set; } = "";
+    public double EndTime { get; set; }
+    public int Samples { get; set; }
+    public double MaxTiltDegrees { get; set; }
+    public List<PhysicsEvent> Events { get; set; } = [];
+    public List<string> Warnings { get; set; } = [];
 }
 
 /// <summary>
@@ -39,7 +51,7 @@ public static class PhysicsTracks
         var axes = FreeBodyAxes(concept.Model); if (axes == null) return;
         var byId = tracks.ToDictionary(t => t.Id);
         foreach (var axis in axes) if (concept.Tracks.TryGetValue(axis, out var id) && byId.TryGetValue(id, out var track)) track.Derived = true;
-        concept.Physics ??= new();
+        concept.Physics ??= new() { Setup = concept.Model.PhysicsDefaults == null ? new() : JsonSerializer.Deserialize<RigidBodySetup>(JsonSerializer.Serialize(concept.Model.PhysicsDefaults))! };
     }
 
     static IEnumerable<(string Axis, Track Track)> Commanded(SavedConcept concept, IReadOnlyDictionary<Guid, Track> byId, IReadOnlyList<string> derived)
@@ -49,7 +61,8 @@ public static class PhysicsTracks
     public static string Hash(SavedConcept concept, IReadOnlyDictionary<Guid, Track> byId, Guid pattern)
     {
         var derived = FreeBodyAxes(concept.Model) ?? throw new InvalidOperationException("The concept has no physics tracks.");
-        var text = new StringBuilder().Append(pattern).Append('|').Append(JsonSerializer.Serialize(concept.Physics?.Setup ?? new RigidBodySetup()));
+        var text = new StringBuilder("actual-fingers-v1|").Append(pattern).Append('|').Append(JsonSerializer.Serialize(concept.Model, ConceptMachine.JsonOptions)).Append('|').Append(JsonSerializer.Serialize(concept.Physics?.Setup ?? new RigidBodySetup()));
+        if (concept.Model.Axes.All(a => derived.Contains(a.Id))) text.Append('|').Append(concept.Tracks.Values.Max(id => byId[id].Points[^1].Time).ToString("R", System.Globalization.CultureInfo.InvariantCulture));
         foreach (var (axis, track) in Commanded(concept, byId, derived)) {
             text.Append('|').Append(axis);
             foreach (var p in track.Points) text.Append(';').Append(p.Time.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).Append(',').Append(p.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
@@ -64,23 +77,30 @@ public static class PhysicsTracks
         var setup = JsonSerializer.Deserialize<RigidBodySetup>(JsonSerializer.Serialize(concept.Physics?.Setup ?? new RigidBodySetup()))!;
         var joints = new Dictionary<string, List<JointPoint>>();
         foreach (var (axis, track) in Commanded(concept, byId, derived)) joints[axis] = track.Points.Select(p => new JointPoint { Time = p.Time, Value = p.Value }).ToList();
-        setup.EndTime = Math.Max(0.1, joints.Values.Max(p => p[^1].Time));
+        setup.EndTime = Math.Max(0.1, joints.Values.Select(p => p[^1].Time).DefaultIfEmpty(concept.Tracks.Values.Max(id => byId[id].Points[^1].Time)).Max());
         return (setup, joints);
     }
-
-    public static RigidBodyResult Run(SavedConcept concept, RigidBodySetup setup, Dictionary<string, List<JointPoint>> joints) => ConceptRigidBodySimulator.Run(concept.Model, setup, joints);
 
     /// <summary>Writes a result into the physics tracks. Values outside an axis range are clamped and reported.</summary>
     public static List<string> Apply(SavedConcept concept, RigidBodyResult result, IReadOnlyDictionary<Guid, Track> byId, string hash)
     {
         var warnings = new List<string>(result.Warnings);
+        foreach (var id in concept.Tracks.Values) { byId[id].ActualPoints = null; byId[id].ActualSourcePoints = null; byId[id].ActualMotionCurrent = true; }
         foreach (var (axisId, points) in result.Axes) {
             var axis = concept.Model.Axes.Single(a => a.Id == axisId); var track = byId[concept.Tracks[axisId]];
             var list = points.Select(p => new KeyPoint(p.Time, Math.Clamp(p.Value, axis.Minimum, axis.Maximum))).ToList();
             if (list.Count < 2) list.Add(list[0] with { Time = list[0].Time + 1 });
             track.Points = list; track.Derived = true;
         }
+        foreach (var (axisId, points) in result.FingerAxes) {
+            var axis = concept.Model.Axes.Single(a => a.Id == axisId); var track = byId[concept.Tracks[axisId]];
+            var actual = points.Select(p => new KeyPoint(p.Time, Math.Clamp(p.Value, axis.Minimum, axis.Maximum))).ToList();
+            new Track { Points = actual }.Validate();
+            track.ActualSourcePoints = track.Points.ToList(); track.ActualPoints = actual;
+        }
         concept.Physics ??= new(); concept.Physics.ComputedHash = hash;
+        concept.Physics.Report = new() { Engine = result.Engine, FinalState = result.FinalState, EndTime = result.EndTime, Samples = result.Samples,
+            MaxTiltDegrees = result.MaxTiltDegrees, Events = result.Events.ToList(), Warnings = warnings.ToList() };
         return warnings;
     }
 }

@@ -9,12 +9,19 @@ public static class MotionBoundMath
         // that this exact inspected pair is unchanged throughout the interval.
         return Math.Max(first,second)-relativeTravel-(geometryStable&&relativeTravel==0?0:margin);
     }
+    /// <summary>
+    /// A pair within the margin of contact at both checked poses that moves in both halves of the interval (a sliding contact, such as
+    /// adjacent links turning against each other): every half keeps an endpoint closer than required+margin, so bisection can never
+    /// prove clearance and would only refine down to the depth limit. Such intervals are reported unverified at once.
+    /// </summary>
+    internal static bool SlidingContact(double first,double second,double required,double margin,double travelFirstHalf,double travelSecondHalf)
+        =>Math.Max(first,second)<required+margin&&travelFirstHalf>0&&travelSecondHalf>0;
     public static double Variation(Track track,double a,double b)
     {
-        if(b<a)(a,b)=(b,a);var times=track.Points.Select(p=>p.Time).Where(t=>t>a&&t<b).Append(a).Append(b).Distinct().Order().ToArray();
+        if(b<a)(a,b)=(b,a);var times=track.PlaybackPoints.Select(p=>p.Time).Where(t=>t>a&&t<b).Append(a).Append(b).Distinct().Order().ToArray();
         return times.Zip(times.Skip(1)).Sum(pair=>Math.Abs(track.At(pair.Second)-track.At(pair.First)));
     }
-    public static double MaximumAbs(Track track,double a,double b)=>track.Points.Where(p=>p.Time>=a&&p.Time<=b).Select(p=>Math.Abs(p.Value)).Append(Math.Abs(track.At(a))).Append(Math.Abs(track.At(b))).Max();
+    public static double MaximumAbs(Track track,double a,double b)=>track.PlaybackPoints.Where(p=>p.Time>=a&&p.Time<=b).Select(p=>Math.Abs(p.Value)).Append(Math.Abs(track.At(a))).Append(Math.Abs(track.At(b))).Max();
     public static bool Rigid(double[] m)=>m.Length==16&&m.All(double.IsFinite)&&Math.Abs(m[3])+Math.Abs(m[7])+Math.Abs(m[11])+Math.Abs(m[15]-1)<1e-9&&Enumerable.Range(0,3).All(a=>Enumerable.Range(0,3).All(b=>Math.Abs(Enumerable.Range(0,3).Sum(k=>m[4*a+k]*m[4*b+k])-(a==b?1:0))<1e-9));
     internal static double LocalRadius(double[] bounds,double[] world)
     {

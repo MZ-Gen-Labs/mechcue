@@ -1,5 +1,8 @@
 # MCPからのSolid Edge起動とライセンス設定
 
+<!-- mechcue-docs-language -->
+[日本語](SOLID_EDGE_MCP_LAUNCH_LICENSING.md) | [English](SOLID_EDGE_MCP_LAUNCH_LICENSING.en.md) | [文書一覧](INDEX.md)
+
 ## 原因と確認結果（2026-10-07）
 
 Windowsのマシン環境変数 `SE_LICENSE_SERVER` が設定されていても、

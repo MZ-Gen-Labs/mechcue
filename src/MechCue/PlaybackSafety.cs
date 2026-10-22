@@ -40,7 +40,7 @@ public partial class MainForm
         bool? subdivide = args.TryGetProperty("subdivideInspection", out var s) && s.ValueKind != JsonValueKind.Null ? s.GetBoolean() : null;
         if (apply == null && interfere == null && subdivide == null) throw new ArgumentException("Specify applyToCad, stopOnInterference or subdivideInspection");
         string expected = args.GetProperty("expectedDocument").GetString()!;
-        if (!bridge.Connected || !string.Equals(bridge.Document.GetType().InvokeMember("FullName", System.Reflection.BindingFlags.GetProperty, null, bridge.Document, null)?.ToString(), expected, StringComparison.OrdinalIgnoreCase))
+        if (!bridge.Connected || !string.Equals(bridge.DocumentPath, expected, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Connected document differs from expectedDocument");
         if (reviewMode.Checked) throw new InvalidOperationException("Creation mode required");
         PausePlayback();
