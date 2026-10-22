@@ -14,7 +14,7 @@ from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ENGLISH_ORIGINALS = {"THIRD_PARTY_NOTICES.md", "AddIn/Resources/README.md"}
+ENGLISH_ORIGINALS = {"README.md", "THIRD_PARTY_NOTICES.md", "AddIn/Resources/README.md"}
 EXCLUDED_PARTS = {"bin", "obj", "out", "artifacts", "__pycache__"}
 
 
@@ -73,6 +73,7 @@ def main():
                     if f"]({target})" not in content:
                         errors.append(f"Missing index entry: {edition.relative_to(ROOT)}")
 
+    documents.add(ROOT / "README.en.md")  # Preserve links from the former English URL.
     documents.update((ROOT / ".github/ISSUE_TEMPLATE").glob("*.md"))
     checked_links = 0
     for path in sorted(documents):

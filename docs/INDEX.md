@@ -21,7 +21,7 @@ MechCueの公開文書を日本語・英語で読めます。各ページ冒頭�
 | 操作ガイド | [日本語](USER_GUIDE.md) | [English](USER_GUIDE.en.md) |
 | タイムチャートの表示位置 | [日本語](WINDOW_PLACEMENT.md) | [English](WINDOW_PLACEMENT.en.md) |
 | MechCue セットアップ | [日本語](../Installer/README.md) | [English](../Installer/README.en.md) |
-| MechCue | [日本語](../README.md) | [English](../README.en.md) |
+| MechCue | [日本語](../README.ja.md) | [English](../README.md) |
 | 第三者情報 | [日本語](../THIRD_PARTY_NOTICES.ja.md) | [English](../THIRD_PARTY_NOTICES.md) |
 
 ## MCP・自動化

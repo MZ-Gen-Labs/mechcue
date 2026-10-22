@@ -21,7 +21,7 @@ Dated development records and release notes describe their original versions and
 | User guide | [日本語](USER_GUIDE.md) | [English](USER_GUIDE.en.md) |
 | Chart window placement | [日本語](WINDOW_PLACEMENT.md) | [English](WINDOW_PLACEMENT.en.md) |
 | MechCue setup | [日本語](../Installer/README.md) | [English](../Installer/README.en.md) |
-| MechCue | [日本語](../README.md) | [English](../README.en.md) |
+| MechCue | [日本語](../README.ja.md) | [English](../README.md) |
 | Third-party notices | [日本語](../THIRD_PARTY_NOTICES.ja.md) | [English](../THIRD_PARTY_NOTICES.md) |
 
 ## MCP and automation

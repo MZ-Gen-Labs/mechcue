@@ -287,7 +287,7 @@ MechCueの開発で見つけた不具合の原因、回避策、設計上の判�
 ### 確認の流れ：ローカルのインストーラーで先に確かめる
 
 - **判断**：GitHubにリリースする前に、ローカルでビルドしたインストーラーを入れて実機（Solid Edge 2026）で確かめる。共通ビルド`scripts/Build.ps1 -WithAddIn -WithMcp`（自己検査、画面検査、計算用プログラムの試験、MCPの各検査、COM、インストーラー）を新しい`-OutputDirectory`へ出し、最新のインストーラーを`artifacts/latest`に置く。自動検査の合格とCAD実機での確認は分けて記録する。
-- **根拠**：[未対応の課題「作業の再開」](OPEN_ISSUES.md)、[開発記録 0.3.3「インストール版での確認」](MCP_033_DEVELOPMENT.md)、コミット`bf632d6`・`b16d0a9`、[README「ビルド」](../README.md)。
+- **根拠**：[未対応の課題「作業の再開」](OPEN_ISSUES.md)、[開発記録 0.3.3「インストール版での確認」](MCP_033_DEVELOPMENT.md)、コミット`bf632d6`・`b16d0a9`、[README「ビルド」](../README.ja.md)。
 
 ## テスト・検証の方法
 

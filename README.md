@@ -1,115 +1,94 @@
 # MechCue
 
 <!-- mechcue-docs-language -->
-[日本語](README.md) | [English](README.en.md) | [文書一覧](docs/INDEX.md)
+[English](README.md) | [日本語](README.ja.md) | [Documentation](docs/INDEX.en.md)
 
-**時間と変位のグラフで、Solid Edgeのアセンブリを動かす。**
+**Drive Solid Edge assemblies with time–displacement charts.**
 
-MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート編集ツールです。
-点や線分をドラッグして動作を編集し、共通の時間カーソルで複数の機構を確認します。
-アドイン版と独立版は同じ編集画面・グラフデータを使います。0.3.2の正式版では、Solid Edge操作のMCP、寸法付きスケッチで作る構想モデル（工作機械・直交搬送・5軸ロボットアーム）、図面・3D PMI作成、単一部品のSimulation連携を利用できます。構想検討・動作確認向けのツールです。
+MechCue is a time-chart editor for Solid Edge 2026. Drag points and segments to edit motion and inspect multiple mechanisms against a shared time cursor. The add-in and standalone application share the same editor and chart format.
 
-## できること
+The released 0.3.2 series provides MCP control of Solid Edge, concept models built from dimensioned sketches (machine tools, Cartesian transfer systems and five-axis robot arms), drawings, 3D PMI and Simulation integration for single parts. It is intended for concept studies and motion checks.
 
-- 選択のみ／選択＋チェック／全機構のグラフ表示、距離/角度の左右軸。
-- グラフの点・線分のドラッグ、水平な連続部分の一括移動、数値入力、Undo／Redo、往復動作のひな形。[編集操作](docs/TIMELINE_EDITING.md)。
-- 時間軸の拡大・縮小、横スクロールと再生位置の追従。機構一覧のドラッグ並べ替えと削除。
-- 再生、停止、速度変更、繰り返し、任意時刻への移動。
-- 距離・角度拘束の駆動、自由部品・固定部品の移動・回転、選択軸の絶対座標指定。
-- CADで選択した部品から候補表示、対象の強調、機構単位の再割り当て・解除。
-- 現在値を読み込んで選択グラフの全点へ設定。
-- 干渉・解析失敗時の停止と直前の姿勢への復元（オン／オフ）。
-- 基準状態への復元、JSONの保存・読み込み。
-- CSV・Excel（.xlsx）での全機構の表出力・表読込。接続中の同一IDはCADの駆動先を維持。
-- 大きなアイコンのアドインメニュー：表示、再生・一時停止、最小表示、データ、接続、編集、機構の操作。
-- タイムチャートの位置・大きさ・最小表示を次回に復元。`Ctrl+Alt+Shift` と `UIO／JKL／M,.` で9か所へ移動。同じキーを続けて押すとフル／コンパクトを切り替え。MCPからは移動のみ指定可能。[操作方法](docs/WINDOW_PLACEMENT.md)。
-- アセンブリ内へのグラフ・駆動先・再生設定の保存と、接続時の自動復元。
-- 別プロセスのMCPサーバーによるAI操作：点の変更、全値リセット、等間隔化、Undo、再生・停止。
-- MCPからSolid Edgeの文書・部品・変数を読み取り、部品を選択。MCPのアクセスモードをタスクトレイから切り替え。
-- 0.2.0系：MCPからオーダードの押し出し・切り抜き、アセンブリ配置・平面拘束、図面ビュー・PDFを作成。
-- 図面MCP：正面候補の判定、第三角法のビュー追加、外形・円径・位置・段差の主要寸法を自動配置。[対応範囲と操作例](docs/DRAWING_AUTOMATION.md)。
+## Features
 
-- 0.3.3（開発中）：5軸ロボットアームに指とワークの自由物体軸を加えた構想モデル`arm5p`。腕・指のキーフレームから、ワークの動き（つかむ・運ぶ・落ちる・滑る・倒れる）を剛体物理で計算し、**物理トラック**としてタイムチャートに表示します。物理トラックは読み取り専用で、腕・指を編集すると自動で再計算します。計算はMechCue・Solid Edgeとは別のプロセス（`MechCue.Physics.exe`）で行います。[0.3.3の変更点](docs/releases/0.3.3.md)。
-- 3D PMIのMCP：単一ボディ部品に外形・円径・位置・段差・傾斜角の参照寸法を追加し、モデルビューで表示を切り替え。[対応範囲と操作例](docs/PMI_AUTOMATION.md)。
+- Overlay the selected track, selected and checked tracks, or all tracks, with separate distance and angle axes.
+- Drag points and segments, move adjacent horizontal sections together, edit numbers, undo/redo and insert out-and-back motion templates. See [chart editing](docs/TIMELINE_EDITING.en.md).
+- Zoom and scroll the timeline, follow playback, reorder tracks and remove tracks.
+- Play, pause, change speed, loop and seek to any time.
+- Drive distance/angle constraints, translate and rotate free or grounded parts, and set an absolute component coordinate on a chosen axis.
+- Find candidates from a CAD selection, highlight targets, and reassign or release one track without disconnecting the others.
+- Read a CAD value into every point of the selected track.
+- Optionally stop on interference or analysis failure and restore the preceding pose.
+- Restore the reference state and save/load chart JSON.
+- Import/export CSV and Excel `.xlsx` tables. Matching track IDs retain CAD targets during connected imports.
+- Use add-in ribbon commands for playback, compact view, data, connection, editing and tracks.
+- Restore chart position, size and compact mode. Place it at nine positions with `Ctrl+Alt+Shift` plus `UIO / JKL / M,.`; repeat the same key to toggle full/compact view. See [window placement](docs/WINDOW_PLACEMENT.en.md).
+- Save chart data, targets and playback settings inside the assembly and restore them on connection.
+- Use a separate MCP server for AI chart editing, resetting values, evenly spacing points, undo and playback.
+- Read Solid Edge documents, parts and variables through MCP, select parts, and control read/edit access from the tray.
+- Create ordered protrusions/cutouts, assembly placements and planar constraints, drawing views and PDFs through MCP.
+- Add third-angle views and principal overall, diameter, position and step dimensions. See [drawing automation](docs/DRAWING_AUTOMATION.en.md).
+- Add reference dimensions to single-body parts and control their display in model views. See [3D PMI](docs/PMI_AUTOMATION.en.md).
 
-PLC接続・プログラム読み込み、加減速モデル、負荷計算は未対応です。
+The 0.3.3 development series adds the `arm5p` concept model with fingers and free-body workpiece axes. Rigid-body physics computes gripping, carrying, falling, sliding and tipping from the arm/finger keyframes. Results appear as read-only **physics tracks** and can be recalculated automatically after editing. Computation runs in a separate `MechCue.Physics.exe` process. See [0.3.3 changes](docs/releases/0.3.3.en.md).
 
-MCPを使う場合はインストーラーで「MCPサーバー」をチェックし、MechCueの「AI接続」をオンにします。追加のMCP ZIPでの配布も継続します。[MCP導入・接続設定](Mcp/README.md)を参照してください。
+PLC connection/program import, acceleration/deceleration models and load calculations are not supported.
 
-[0.3.2の変更点と対応範囲](docs/releases/0.3.2.md)、[0.3.3（開発中）の変更点](docs/releases/0.3.3.md)、[チャートの操作欄](docs/CHART_MENUS.md)。
+## Get started
 
-## はじめる
+Requirements: Windows x64, Solid Edge 2026 and .NET 8 Desktop Runtime x64. Chart editing can be tried without a CAD connection.
 
-Windows x64、Solid Edge 2026、.NET 8 Desktop Runtime（x64）が必要です。
-グラフ編集だけならSolid Edgeに接続せず試せます。
+1. Close Solid Edge and run `MechCue-<version>-Setup.exe` from [GitHub Releases](https://github.com/MZ-Gen-Labs/mechcue/releases).
+2. Open MechCue from the Solid Edge assembly environment.
+3. Select a track, confirm its intended CAD target and register it.
+4. Enable CAD Apply and move the time cursor.
 
-1. [Releases](https://github.com/MZ-Gen-Labs/mechcue/releases)の`MechCue-<version>-Setup.exe`を実行します。Solid Edgeは終了しておきます。
-2. アセンブリ環境のMechCueコマンドから開きます。
-3. グラフを選び、駆動先を確認して登録します。
-4. 「Solid Edgeへ反映」をオンにして時間カーソルを動かします。
+The application and installer support Japanese and English. In Settings → Language, choose **Auto**, **日本語**, or **English**. Auto uses Japanese for a Japanese Windows display language and English otherwise. The choice is saved per user; restart Solid Edge to update add-in menu labels.
 
-アドインだけが必要な場合は、セットアップの種類で「アドインのみ」を選びます（0.3.2-alpha.01までは別の`AddIn-Setup.exe`でした）。
-**日時順のリリース一覧**：`Open-Release-List.cmd` を実行すると、同じバージョン内を時刻・秒まで比較して古い順に表示します。Draftを含む最新情報をGitHubから取得します。[起動・ログイン手順](docs/RELEASE_LIST.md)。
+Choose **Add-in only** if you do not need the standalone application. Starting with 0.3.2-alpha.02, one installer offers multiple component choices; earlier versions had a separate `AddIn-Setup.exe`. Run setup again to change components without uninstalling first. Start the standalone version with the installed `MechCue.exe` or the standalone ZIP.
 
-独立版は配置先の`MechCue.exe`、または配布ZIPで起動します。
-構成はセットアップを再実行して切り替えられます。アンインストールは不要です。
-画面の「使い方」、[操作ガイド](docs/USER_GUIDE.md)、[セットアップ手順](Installer/README.md)を参照してください。
+For AI control, select the optional MCP server in setup and enable AI connection in MechCue. A separate MCP ZIP is also available. Configure your AI client using the [MCP guide](Mcp/README.en.md).
 
-[examples/sequence.json](examples/sequence.json)を「開く」で読み込むと複数動作を試せます。
-サンプルの値は任意の例です。CADモデルに適した値へ変更し、初回は駆動先を登録してください。CAD保存後は次回接続時に復元します。
+Open `examples/sequence.json` to try several motions. Values are examples: adapt them to your CAD model and register targets before the first CAD run. CAD Save enables restoration on the next connection.
 
-## 検証範囲と制限
+Run `Open-Release-List.cmd` for a chronological release list, including drafts your account can access. Within a base version it orders releases oldest first using creation timestamps down to seconds. See [release list](docs/RELEASE_LIST.en.md).
 
-補間、単位、XYZ移動・回転、ドラッグ、接続喪失、再割り当てを自動テストしています。
-従来の付属DLL参照版では、Solid Edge 2026でアドインの表示・操作と距離拘束の駆動を確認しました。
-公開準備で付属DLLを不要にしたCOM定義へ変更し、2026の定義との署名照合とビルドを確認しています。
-Solid Edge 2026の実機で、従来形式のインストーラーによる導入、簡単なアドイン動作、アンインストールを利用者が確認しました。角度拘束・自由部品の各軸など、個別機能の実機確認は継続中です。
+## Guides
 
-距離拘束は絶対値（mm）、角度拘束は絶対値（度）です。
-部品の直接移動・回転は登録時からの変化量で、アセンブリ座標のX/Y/Zを使います。
-回転中心は部品原点です。拘束の向きはCAD側で決まります。
-部品座標は、固定拘束と他の拘束が併存するトップレベル部品も登録できます。固定拘束だけを登録中に抑制し、他の拘束は保持します。解除・切断時に元の姿勢と固定拘束の状態を復元します。
-相対移動・回転は自由部品、または固定拘束だけを持つ部品が対象です。固定拘束がなく他の拘束を持つ部品は拘束駆動を使用してください。
-部品座標は選択軸の絶対座標 [mm] で、他の軸と姿勢は登録時の値を保持します。
-同じ部品を複数グラフへ同時に登録することはできません。
-干渉は各更新姿勢で判定します。更新間の干渉は保証せず、大規模モデルでは再生が遅くなります。
-固定部品駆動・干渉API呼び出しのSolid Edge 2026実機確認は必要です。
-接続中の拘束追加・削除・部品入れ替えには対応しません。複数機構は順次更新します。
-再生中はCADファイルを自動保存しません。「CAD保存」は設定を埋め込み、基準姿勢・固定状態へ戻してCADファイルを保存します。Solid Edge側の保存操作にも連動します。アドインの切断・終了時は変更設定をファイル内へ反映しますが、ディスクへの確定にはSolid Edgeで保存が必要です。確認はモデルのコピーで行ってください。
+- [Documentation index](docs/INDEX.en.md) — user guides, automation, development records and release notes, with Japanese counterparts.
+- [User guide](docs/USER_GUIDE.en.md), [installer](Installer/README.en.md), [chart menus](docs/CHART_MENUS.en.md).
+- [0.3.2 changes and limits](docs/releases/0.3.2.en.md), [0.3.3 development](docs/releases/0.3.3.en.md).
 
-## 開発・自動ビルド
+## Validation and limitations
 
-Windows、.NET 8 SDK、Inno Setup 6があれば、Solid Edge本体・付属DLLなしで両版をビルドできます。
+Automated tests cover interpolation, units, XYZ translation/rotation, dragging, disconnection and reassignment. Basic add-in display and distance-constraint driving were verified on Solid Edge 2026. The minimal COM declarations build without Siemens interop DLLs and have been checked against the 2026 signatures. Hardware validation of individual driving methods and axes is ongoing. See [validation](docs/VALIDATION.en.md) for dated results and outstanding checks.
+
+Distance constraints use absolute millimetres and angle constraints use absolute degrees. Relative component translation/rotation is measured from registration in assembly X/Y/Z coordinates; rotation is about the component origin. Constraint directions are determined by CAD.
+
+Absolute component-coordinate driving supports top-level free parts or parts with a ground constraint, including those with other constraints. Only grounding is temporarily suppressed; other constraints are preserved. Relative translation/rotation supports free parts or parts constrained only by grounding. Use constraint driving for constrained parts without grounding. A part cannot be registered to multiple tracks simultaneously.
+
+Simple playback interference checks test updated poses; they do not guarantee that intervals between updates are clear. Large models may run slowly. Changes to constraints or replacement of parts while connected are unsupported, and tracks are updated sequentially.
+
+Playback does not automatically save CAD files. CAD Save embeds settings, restores the reference pose/ground state and saves the CAD file. Solid Edge Save also stages settings. Disconnecting or closing the add-in stages changes, but you must save in Solid Edge to commit them to disk. Verify with copies of models.
+
+## Development
+
+Windows, .NET 8 SDK and Inno Setup 6 can build the add-in and standalone application without Solid Edge or its interop DLLs:
 
 ```powershell
 ./scripts/Build.ps1 -WithAddIn -WithMcp
 ```
 
-成果物は`artifacts/0.3.0/release`です。独立版ZIP、セットアップ（独立版・MCPは選択式）、MCP ZIP、SHA256を出力します。
-再実行時は`-OutputDirectory artifacts/check-2`など新しい出力先を指定します。
-ActionsはPR・main更新で検証し、`v*`タグでドラフトのPrereleaseを作成します。
-[公開・リリース手順](docs/RELEASING.md)を参照してください。
-開発で見つけた不具合の原因・回避策・検証の方法は[開発のノウハウ集](docs/KNOWHOW.md)にまとめています。
+Packages are written under `artifacts/<version>/release`: standalone ZIP, setup with optional standalone/MCP components, MCP ZIP, and `SHA256SUMS.txt`. Use a new `-OutputDirectory` when repeating a build. PRs and main updates run validation; `v*` tags create draft prereleases. See [release procedures](docs/RELEASING.en.md), [contributing](CONTRIBUTING.en.md) and [development know-how](docs/KNOWHOW.en.md).
 
-| フォルダー | 内容 |
+| Directory | Contents |
 |---|---|
-| src/MechCue | 共通画面、グラフ、CAD連携、テスト |
-| AddIn | COMアドインと最小COM定義 |
-| Installer | 配置・登録・更新・削除 |
-| scripts | ビルド・パッケージ検証 |
-| tools/ComContractCheck | COM定義の検証 |
-| examples | CADモデルを含まないグラフ例 |
-| docs | 操作、検証、公開、製品調査 |
+| src/MechCue | Shared UI, charts, CAD integration and tests |
+| AddIn | COM add-in and minimal COM declarations |
+| Installer | Installation, registration, updates and removal |
+| scripts | Build and package validation |
+| tools/ComContractCheck | COM declaration checks |
+| examples | Chart examples without CAD models |
+| docs | User, validation, release and investigation documents |
 
-製品名・ファイル名・プロジェクト名・ProgIDをMechCueへ統一しています。CLSIDは既存のものを使用します。
-[MIT License](LICENSE)。Solid Edgeは別途ライセンスが必要です。[第三者情報](THIRD_PARTY_NOTICES.md)を参照してください。
-
-0.2.0-alpha.4はInno Setup版の導入確認が必要です。[会社での導入](docs/COMPANY_DEPLOYMENT.md)を参照してください。
-
-### 構想モデルの生成
-
-0.2.0-alpha.4では工作機械3/4/5軸と直交搬送装置の概略モデル生成・軸連動MCPを追加しています。[適用ターゲットと使い方](docs/CONCEPT_TARGETS.md)を参照してください。
-
-名前付き動作の保存・切り替え: [動作パターン](docs/MOTION_PATTERNS.md)。
-
-0.3.0では単一部品の強度・変形解析MCPを利用できます。[Simulationの操作と対応範囲](docs/SIMULATION_AUTOMATION.md)。alpha版は引き続きGitHubの下書きリリースとして保持します。
+Product names, filenames, project names and ProgID use MechCue; the existing CLSID is retained. [MIT License](LICENSE). Solid Edge requires a separate license. See [third-party notices](THIRD_PARTY_NOTICES.md) and [company deployment](docs/COMPANY_DEPLOYMENT.en.md).

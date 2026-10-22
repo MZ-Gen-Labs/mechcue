@@ -5,7 +5,7 @@ $taskTarget = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) }
 if (Test-Path -LiteralPath $taskTarget) { throw 'Use a new source output directory' }
 $taskRoots = @('Mcp','McpControl','Physics','src','AddIn','Installer','scripts','tools','docs','examples','.github')
 $taskExtensions = @('.cs','.csproj','.ps1','.bat','.md','.manifest','.res','.iss','.yml','.json','.py','.html','.txt','.Config')
-$taskSources = @('README.md','README.en.md','LICENSE','THIRD_PARTY_NOTICES.md','THIRD_PARTY_NOTICES.ja.md','CONTRIBUTING.md','CONTRIBUTING.en.md','PMI_FOLLOW_INVESTIGATION_20261012.md','PMI_FOLLOW_INVESTIGATION_20261012.en.md','.gitignore','.gitattributes','Directory.Build.props','MechCue.csproj','NuGet.Config') | ForEach-Object { Get-Item -LiteralPath (Join-Path $taskRoot $_) }
+$taskSources = @('README.md','README.ja.md','README.en.md','LICENSE','THIRD_PARTY_NOTICES.md','THIRD_PARTY_NOTICES.ja.md','CONTRIBUTING.md','CONTRIBUTING.en.md','PMI_FOLLOW_INVESTIGATION_20261012.md','PMI_FOLLOW_INVESTIGATION_20261012.en.md','.gitignore','.gitattributes','Directory.Build.props','MechCue.csproj','NuGet.Config') | ForEach-Object { Get-Item -LiteralPath (Join-Path $taskRoot $_) }
 foreach ($taskDirectory in $taskRoots) {
     $taskSources += Get-ChildItem -LiteralPath (Join-Path $taskRoot $taskDirectory) -File -Recurse -Force | Where-Object {
         $_.FullName -notmatch '[\\/](bin|obj)[\\/]' -and $_.Extension -in $taskExtensions
