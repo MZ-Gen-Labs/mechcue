@@ -1,5 +1,8 @@
 # 0.3.3-alpha.01 開発状況
 
+<!-- mechcue-docs-language -->
+[日本語](MCP_033_DEVELOPMENT.md) | [English](MCP_033_DEVELOPMENT.en.md) | [文書一覧](INDEX.md)
+
 0.3.2正式版から分岐した開発系列の記録。未対応の課題は[未対応の課題](OPEN_ISSUES.md)にまとめている。
 
 ## 剛体物理でワークを動かす

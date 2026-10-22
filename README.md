@@ -1,5 +1,8 @@
 # MechCue
 
+<!-- mechcue-docs-language -->
+[日本語](README.md) | [English](README.en.md) | [文書一覧](docs/INDEX.md)
+
 **時間と変位のグラフで、Solid Edgeのアセンブリを動かす。**
 
 MechCue（メックキュー）はSolid Edge 2026向けのタイムチャート編集ツールです。

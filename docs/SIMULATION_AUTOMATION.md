@@ -1,5 +1,8 @@
 # 単一部品の強度・変形解析（MCP）
 
+<!-- mechcue-docs-language -->
+[日本語](SIMULATION_AUTOMATION.md) | [English](SIMULATION_AUTOMATION.en.md) | [文書一覧](INDEX.md)
+
 0.3.0-alpha.01で追加した第一段階の機能です。Solid Edge 2026のネイティブSimulation APIをMCPから操作します。MechCueが独自に有限要素計算を行うわけではありません。
 
 ## 対象と前提

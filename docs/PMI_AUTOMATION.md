@@ -1,5 +1,8 @@
 # 3DモデルへのPMI作成
 
+<!-- mechcue-docs-language -->
+[日本語](PMI_AUTOMATION.md) | [English](PMI_AUTOMATION.en.md) | [文書一覧](INDEX.md)
+
 図面を作らず、Solid Edgeの部品・アセンブリモデルに関連付けられた参照寸法を追加します。PMIは対象の`.par`または`.asm`ファイル内に保存され、専用モデルビューで表示方向と寸法の表示を切り替えられます。部品PMIは0.2.0-alpha.11から、アセンブリPMIは0.3.2-alpha.01の更新版から対応しています。
 
 ## 操作例

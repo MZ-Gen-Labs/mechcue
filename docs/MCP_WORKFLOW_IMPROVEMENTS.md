@@ -1,5 +1,8 @@
 # 概念から詳細へのMCPワークフロー改善
 
+<!-- mechcue-docs-language -->
+[日本語](MCP_WORKFLOW_IMPROVEMENTS.md) | [English](MCP_WORKFLOW_IMPROVEMENTS.en.md) | [文書一覧](INDEX.md)
+
 2026-10-02。インストール後の検証で得られた５件に対するソース修正。リリース番号変更、インストーラ作成、既存インストールの更新は含まない。
 
 | 課題 | 実装した対応 |

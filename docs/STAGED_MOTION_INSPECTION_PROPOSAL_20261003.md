@@ -1,5 +1,8 @@
 # 残課題への対応案：段階的な経路検査
 
+<!-- mechcue-docs-language -->
+[日本語](STAGED_MOTION_INSPECTION_PROPOSAL_20261003.md) | [English](STAGED_MOTION_INSPECTION_PROPOSAL_20261003.en.md) | [文書一覧](INDEX.md)
+
 2026-10-03。alpha.04実モデル検証と現行コードに基づく検討。実装・版変更・CAD形状変更はまだ行っていない。
 
 ## 判断

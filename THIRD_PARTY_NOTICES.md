@@ -1,5 +1,8 @@
 # Third-party notices
 
+<!-- mechcue-docs-language -->
+[日本語](THIRD_PARTY_NOTICES.ja.md) | [English](THIRD_PARTY_NOTICES.md) | [Documentation](docs/INDEX.en.md)
+
 MechCue source is distributed under the MIT license in LICENSE.
 
 Solid Edge is a Siemens product and is separately licensed. This repository and

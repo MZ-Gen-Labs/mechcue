@@ -1,5 +1,8 @@
 # 概念検討用チャートと検査結果の軽量化（2026-10-03）
 
+<!-- mechcue-docs-language -->
+[日本語](COARSE_MOTION_INSPECTION_IMPLEMENTATION_20261003.md) | [English](COARSE_MOTION_INSPECTION_IMPLEMENTATION_20261003.en.md) | [文書一覧](INDEX.md)
+
 本書は先行段階の記録。ここに記載したソフト側の残課題とテスト失敗への対応は、その後の `MOTION_INSPECTION_COMPLETION_20261003.md` を参照。
 
 ## 完了した変更

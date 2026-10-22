@@ -1,5 +1,8 @@
 # 新しい機構編集画面
 
+<!-- mechcue-docs-language -->
+[日本語](INTERFACE.md) | [English](INTERFACE.en.md) | [文書一覧](INDEX.md)
+
 この文書は機構編集画面の設計メモです。現在の導入手順は[セットアップ](../Installer/README.md)、操作は[操作ガイド](USER_GUIDE.md)を参照してください。
 
 ## 画面

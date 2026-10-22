@@ -1,5 +1,8 @@
 # GitHub公開・リリース
 
+<!-- mechcue-docs-language -->
+[日本語](RELEASING.md) | [English](RELEASING.en.md) | [文書一覧](INDEX.md)
+
 推奨リポジトリ名：`mechcue`。表示名：MechCue。MIT License。
 説明例：Time-displacement chart editor for driving Solid Edge assemblies.
 公開リポジトリ：https://github.com/MZ-Gen-Labs/mechcue

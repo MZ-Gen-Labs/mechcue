@@ -1,5 +1,8 @@
 # 未対応の課題（0.3.3系）
 
+<!-- mechcue-docs-language -->
+[日本語](OPEN_ISSUES.md) | [English](OPEN_ISSUES.en.md) | [文書一覧](INDEX.md)
+
 0.3.3-alpha.01〜03（剛体物理・物理トラック・計算の別プロセス化）の開発で残った課題の一覧。対応したら、ここから消すか「対応済み」に移し、[開発記録](MCP_033_DEVELOPMENT.md)に経緯を書く。
 
 最終更新：2026-10-15（0.3.3-alpha.03のリリース準備）

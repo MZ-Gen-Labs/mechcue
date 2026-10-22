@@ -1,5 +1,8 @@
 # モデル以外の残課題の完了記録
 
+<!-- mechcue-docs-language -->
+[日本語](MOTION_INSPECTION_COMPLETION_20261003.md) | [English](MOTION_INSPECTION_COMPLETION_20261003.en.md) | [文書一覧](INDEX.md)
+
 対象は、画面配置・Undo/Redoのテスト失敗、異常発見後の部品対ごとの連続検証、固定部品対の測定再利用、自動分割・結果統合。これらを0.3.1-alpha.05で実装した。コミットは `b527a60`。GitHubへの送信・タグ作成・公開・インストールは行っていない。
 
 ## 実装

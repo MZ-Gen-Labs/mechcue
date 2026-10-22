@@ -1,5 +1,8 @@
 # MechCue MCP
 
+<!-- mechcue-docs-language -->
+[日本語](README.md) | [English](README.en.md) | [文書一覧](../docs/INDEX.md)
+
 MechCueをAIから操作するローカルMCPサーバーです。独立版・アドイン版の両方に対応します。MCPサーバーは別プロセスで動作し、同じWindowsユーザーのMechCue画面と名前付きパイプで通信します。AIモデル・APIキーは同梱しません。
 
 ## 導入
@@ -226,7 +229,7 @@ MCP本体はAIアプリが自動起動するstdioサーバーです。常駐す�
 - 干渉レポートは `reportCreated` と `reportSource` を返します。ネイティブ結果が確実にclearで、Solid Edgeがファイルを生成しない場合は `mechcue-clear-summary` の要約を生成します。その他の結果でファイルがない場合は解析結果と警告を返し、干渉なしとは扱いません。ネイティブの部品ペア情報の欠落を補完したことにはなりません。
 - 表示設定・画像出力は `dirtyBefore` と `dirtyAfter` を返します。形状を動かさない表示操作でも、文書の保存状態が変わる場合があります。自動保存はしません。
 
-Named motion patterns: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechcue_switch_pattern`, `mechcue_rename_pattern`, `mechcue_delete_pattern`. Chart edits affect the active pattern; targets remain shared. Switching pauses and rewinds without moving CAD, preserving the current Apply/Collision/Loop selections. Subsequent play/seek follows the retained Apply selection. Save to CAD persists all patterns.
+名前付き動作パターン：`mechcue_list_patterns`、`mechcue_create_pattern`、`mechcue_switch_pattern`、`mechcue_rename_pattern`、`mechcue_delete_pattern`。グラフ編集は選択中のパターンが対象で、駆動先は共通です。切り替えではCADを動かさず再生を停止して先頭へ戻し、反映・干渉・反復の選択を保持します。その後の再生・時刻操作は保持した反映設定に従います。CAD保存では全パターンを保存します。
 
 更新時はインストーラーが、インストール先のMCP本体とトレイ設定を終了します。更新中の自動再起動は一時停止します。AIとのMCP接続は更新後に再接続してください。トレイ設定アイコンの終了だけではMCP本体は終了しません。旧版は専用の終了通知を持たないため、インストール先を確認してMCPプロセスのみ終了します。Solid Edgeや他フォルダのMCPは対象にしません。
 

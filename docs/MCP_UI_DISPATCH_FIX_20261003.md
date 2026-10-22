@@ -1,5 +1,8 @@
 # MCPから開いたアドイン画面の応答停止修正
 
+<!-- mechcue-docs-language -->
+[日本語](MCP_UI_DISPATCH_FIX_20261003.md) | [English](MCP_UI_DISPATCH_FIX_20261003.en.md) | [文書一覧](INDEX.md)
+
 ## 観測
 
 2026-10-03、MCPで新規mill5概念アセンブリの作成と保存に成功。その後 `solidedge_open_mechcue` はsessionIdを返したが、`mechcue_import_concept_axes`、`mechcue_get_state`、`mechcue_list_patterns` がタイムアウトした。通信のpingとSolid Edge文書の読み取りは応答した。

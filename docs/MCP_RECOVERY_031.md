@@ -1,5 +1,8 @@
 # 0.3.1 MCPの保存・接続復帰
 
+<!-- mechcue-docs-language -->
+[日本語](MCP_RECOVERY_031.md) | [English](MCP_RECOVERY_031.en.md) | [文書一覧](INDEX.md)
+
 ## 文書の切替
 
 `solidedge_open_document` は、切替前にアクティブ文書と参照先の未保存状態を調べます。未保存の変更がある場合は `document_switch_requires_save` と `mutationStarted: false` を返し、文書を開いたりアクティブ化したりしません。同じ表示中文書の再選択は可能です。

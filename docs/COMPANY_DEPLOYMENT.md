@@ -1,5 +1,8 @@
 # 会社での導入・セキュリティ確認
 
+<!-- mechcue-docs-language -->
+[日本語](COMPANY_DEPLOYMENT.md) | [English](COMPANY_DEPLOYMENT.en.md) | [文書一覧](INDEX.md)
+
 MechCueはSolid Edge 2026を時間・変位グラフで制御するWindows x64向けプロトタイプです。
 発行元表示はMZ-Gen-Labs、ソースコードはMITライセンスで公開しています。
 

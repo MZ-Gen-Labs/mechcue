@@ -1,5 +1,8 @@
 # 適用ターゲットと構想モデルMCP
 
+<!-- mechcue-docs-language -->
+[日本語](CONCEPT_TARGETS.md) | [English](CONCEPT_TARGETS.en.md) | [文書一覧](INDEX.md)
+
 ## ターゲット製品
 
 | 製品 | MechCueで検討する項目 | 優先度 |

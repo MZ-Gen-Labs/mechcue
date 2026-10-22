@@ -1,5 +1,8 @@
 # 操作ガイド
 
+<!-- mechcue-docs-language -->
+[日本語](USER_GUIDE.md) | [English](USER_GUIDE.en.md) | [文書一覧](INDEX.md)
+
 接続せず`examples/sequence.json`を開くとグラフ操作を試せます。
 左は機構一覧、中央はチャートと表、右は選択機構の設定です。右側はスクロールできます。
 

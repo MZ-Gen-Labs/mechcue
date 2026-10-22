@@ -1,5 +1,8 @@
 # 詳細設計のMCP改善（2026-10-03）
 
+<!-- mechcue-docs-language -->
+[日本語](DETAIL_MCP_IMPROVEMENTS_20261003.md) | [English](DETAIL_MCP_IMPROVEMENTS_20261003.en.md) | [文書一覧](INDEX.md)
+
 5軸機の実設計調査 `output/Mill5-detail-study-20261003-1007/設計検討・MCP不足機能.md` を受けた開発版の改善記録。既存の86ツールに6ツールを追加し、合計92ツール。バージョン変更、インストール済み環境への配置、リリースは行っていない。
 
 ## 実装した範囲

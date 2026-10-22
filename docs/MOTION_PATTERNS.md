@@ -1,5 +1,8 @@
 # 名前付き動作パターン / Named motion patterns
 
+<!-- mechcue-docs-language -->
+[日本語](MOTION_PATTERNS.md) | [English](MOTION_PATTERNS.en.md) | [文書一覧](INDEX.md)
+
 通常・コンパクト表示とも、タイムチャートのタイトル右側で動作を選択できます。［⋯］に新規作成・複製・名前変更・削除・管理があります。Solid EdgeのMechCueタブにも「動作」グループがあります。
 
 編集は選択中の動作に保持されます。切り替えると再生を停止し、反映をオフにして時刻0秒へ戻ります。CADの姿勢は選択だけでは変更しません。再生・時刻操作を行う前に反映を有効にしてください。新規作成は現在時刻のグラフ値を一定値にし、複製は全点をコピーします。
@@ -10,6 +13,6 @@ CAD保存は全動作と共通の駆動先をアセンブリに保存します�
 
 MCP: `mechcue_list_patterns`, `mechcue_create_pattern`, `mechcue_switch_pattern`, `mechcue_rename_pattern`, `mechcue_delete_pattern`。名前または安定IDで選択できます。`mechcue_get_state` に `activePatternId` と `patternName` を追加しました。グラフ編集コマンドは選択中の動作を編集します。切り替え時にUndo履歴をクリアします。
 
-Both full and compact views expose a named motion selector beside the chart title. The menu supports creation, duplication, renaming, deletion and management. Switching retains edits, pauses, disables CAD reflection and rewinds without moving CAD. Track metadata and targets are shared; keyframes, speed, loop and interference options belong to each motion. Save to CAD persists all motions and bindings. JSON exports all motions without bindings; CSV/Excel exports only the active motion. Legacy settings migrate to one motion.
+現在の切替時の反映・干渉・反復設定の保持は、[チャートの操作欄](CHART_MENUS.md)と[MCPガイド](../Mcp/README.md)を参照してください。初期導入時の反映オフの記述とは区別します。
 
 保存形式はVersion 2です。旧Version 1の設定は読み込めます。Version 2は旧アプリでの上書きによるパターン消失を防ぐため、対応版で開いてください。
